@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Partner {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contacts Contact[]
+  meetings Meeting[]
+
+  @@map("partners")
+}
+
+model Company {
+  id            String @id @default(uuid())
+  name          String @unique
+  industry      String
+  description   String
+  employeeCount Int    @map("employee_count")
+  website       String
+
+  contacts Contact[]
+  signals  ExternalSignal[]
+
+  @@map("companies")
+}
+
+model Contact {
+  id            String   @id @default(uuid())
+  partnerId     String   @map("partner_id")
+  companyId     String   @map("company_id")
+  name          String
+  email         String
+  title         String
+  phone         String?
+  importance    String   @default("MEDIUM")
+  notes         String?
+  lastContacted DateTime? @map("last_contacted")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  partner      Partner          @relation(fields: [partnerId], references: [id])
+  company      Company          @relation(fields: [companyId], references: [id])
+  interactions Interaction[]
+  signals      ExternalSignal[]
+  nudges       Nudge[]
+  meetings     MeetingAttendee[]
+  events       EventRegistration[]
+  articles     ArticleEngagement[]
+  campaigns    CampaignOutreach[]
+
+  @@index([partnerId])
+  @@index([companyId])
+  @@map("contacts")
+}
+
+model Interaction {
+  id        String   @id @default(uuid())
+  contactId String   @map("contact_id")
+  type      String
+  date      DateTime
+  summary   String
+  sentiment String   @default("NEUTRAL")
+  nextStep  String?  @map("next_step")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([contactId])
+  @@index([date])
+  @@map("interactions")
+}
+
+model ExternalSignal {
+  id         String   @id @default(uuid())
+  contactId  String?  @map("contact_id")
+  companyId  String?  @map("company_id")
+  type       String
+  date       DateTime
+  content    String
+  url        String?
+  confidence Float    @default(0.8)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  contact Contact? @relation(fields: [contactId], references: [id])
+  company Company? @relation(fields: [companyId], references: [id])
+  nudges  Nudge[]
+
+  @@index([contactId])
+  @@index([companyId])
+  @@index([date])
+  @@map("external_signals")
+}
+
+model Nudge {
+  id             String   @id @default(uuid())
+  contactId      String   @map("contact_id")
+  signalId       String?  @map("signal_id")
+  ruleType       String   @map("rule_type")
+  reason         String
+  priority       String   @default("MEDIUM")
+  status         String   @default("OPEN")
+  generatedEmail String?  @map("generated_email")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  contact Contact         @relation(fields: [contactId], references: [id])
+  signal  ExternalSignal? @relation(fields: [signalId], references: [id])
+
+  @@index([contactId])
+  @@index([status])
+  @@index([priority])
+  @@map("nudges")
+}
+
+model Meeting {
+  id             String   @id @default(uuid())
+  partnerId      String   @map("partner_id")
+  startTime      DateTime @map("start_time")
+  title          String
+  purpose        String?
+  notes          String?
+  generatedBrief String?  @map("generated_brief")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  partner   Partner           @relation(fields: [partnerId], references: [id])
+  attendees MeetingAttendee[]
+
+  @@index([partnerId])
+  @@index([startTime])
+  @@map("meetings")
+}
+
+model MeetingAttendee {
+  id        String @id @default(uuid())
+  meetingId String @map("meeting_id")
+  contactId String @map("contact_id")
+
+  meeting Meeting @relation(fields: [meetingId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@unique([meetingId, contactId])
+  @@map("meeting_attendees")
+}
+
+model EventRegistration {
+  id        String   @id @default(uuid())
+  contactId String   @map("contact_id")
+  name      String
+  status    String   @default("Registered")
+  eventDate DateTime @map("event_date")
+  practice  String
+  type      String   @default("In-person")
+  eventSize String?  @map("event_size")
+  location  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([contactId])
+  @@map("event_registrations")
+}
+
+model ArticleEngagement {
+  id          String    @id @default(uuid())
+  contactId   String    @map("contact_id")
+  name        String
+  articleSent String    @default("Y") @map("article_sent")
+  views       Int       @default(0)
+  sentFrom    String?   @map("sent_from")
+  lastViewDate DateTime? @map("last_view_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([contactId])
+  @@map("article_engagements")
+}
+
+model CampaignOutreach {
+  id         String   @id @default(uuid())
+  contactId  String   @map("contact_id")
+  name       String
+  status     String   @default("Sent")
+  statusDate DateTime @map("status_date")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([contactId])
+  @@map("campaign_outreaches")
+}

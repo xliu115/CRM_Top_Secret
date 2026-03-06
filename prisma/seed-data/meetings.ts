@@ -1,0 +1,149 @@
+import { partners } from "./partners";
+import { companies } from "./companies";
+
+interface ContactRef {
+  id: string;
+  name: string;
+  companyId: string;
+  partnerId: string;
+  title: string;
+}
+
+function seededRandom(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return s / 2147483647;
+  };
+}
+
+const meetingTitles = [
+  "Quarterly Business Review with {company}",
+  "Strategy Alignment: {company} Partnership",
+  "{company} – Executive Check-in",
+  "Technical Deep Dive: {area} with {company}",
+  "{company} Contract Renewal Discussion",
+  "Innovation Workshop with {company}",
+  "{company} – Relationship Planning Session",
+  "Deal Review: {company} Expansion",
+  "{company} Onboarding Kickoff",
+  "Pipeline Review with {company} Team",
+];
+
+const purposes = [
+  "Review Q1 performance metrics and discuss expansion opportunities.",
+  "Align on strategic priorities for the next 12 months.",
+  "Executive-level relationship building and trust deepening.",
+  "Deep dive into technical requirements for upcoming initiative.",
+  "Negotiate terms for contract renewal and potential upsell.",
+  "Collaborative workshop to explore innovation use cases.",
+  "Annual relationship health check and planning.",
+  "Review active deals and identify acceleration opportunities.",
+  "Kick off new engagement stream with introductions.",
+  "Review pipeline health and forecast for the quarter.",
+];
+
+const areas = [
+  "AI/ML",
+  "Cloud Migration",
+  "Data Platform",
+  "Digital Transformation",
+  "Cybersecurity",
+  "Enterprise Architecture",
+];
+
+export function generateMeetings(contacts: ContactRef[]) {
+  const rand = seededRandom(789);
+  const meetings: {
+    id: string;
+    partnerId: string;
+    startTime: Date;
+    title: string;
+    purpose: string;
+    notes: string | null;
+    attendeeContactIds: string[];
+  }[] = [];
+
+  const now = new Date();
+  let idx = 0;
+
+  // Group contacts by partner
+  const contactsByPartner: Record<string, ContactRef[]> = {};
+  for (const c of contacts) {
+    if (!contactsByPartner[c.partnerId]) contactsByPartner[c.partnerId] = [];
+    contactsByPartner[c.partnerId].push(c);
+  }
+
+  for (const partner of partners) {
+    const pContacts = contactsByPartner[partner.id] || [];
+    if (pContacts.length === 0) continue;
+
+    // Past meetings
+    const pastCount = 6 + Math.floor(rand() * 8);
+    for (let i = 0; i < pastCount; i++) {
+      const daysAgo = 1 + Math.floor(rand() * 180);
+      const hour = 9 + Math.floor(rand() * 8);
+      const date = new Date(now.getTime() - daysAgo * 86400000);
+      date.setHours(hour, 0, 0, 0);
+
+      const attendeeCount = 1 + Math.floor(rand() * 3);
+      const shuffled = [...pContacts].sort(() => rand() - 0.5);
+      const attendees = shuffled.slice(0, Math.min(attendeeCount, shuffled.length));
+      const primaryContact = attendees[0];
+      const company = companies.find((c) => c.id === primaryContact.companyId)!;
+      const area = areas[Math.floor(rand() * areas.length)];
+
+      const titleTemplate =
+        meetingTitles[Math.floor(rand() * meetingTitles.length)];
+      const title = titleTemplate
+        .replace(/{company}/g, company.name)
+        .replace(/{area}/g, area);
+
+      meetings.push({
+        id: `mtg-${String(idx).padStart(3, "0")}`,
+        partnerId: partner.id,
+        startTime: date,
+        title,
+        purpose: purposes[Math.floor(rand() * purposes.length)],
+        notes: `Meeting went well. Discussed ${area.toLowerCase()} initiatives. ${primaryContact.name} was engaged and receptive.`,
+        attendeeContactIds: attendees.map((a) => a.id),
+      });
+      idx++;
+    }
+
+    // Upcoming meetings
+    const upcomingCount = 3 + Math.floor(rand() * 5);
+    for (let i = 0; i < upcomingCount; i++) {
+      const daysAhead = 1 + Math.floor(rand() * 30);
+      const hour = 9 + Math.floor(rand() * 8);
+      const date = new Date(now.getTime() + daysAhead * 86400000);
+      date.setHours(hour, 0, 0, 0);
+
+      const attendeeCount = 1 + Math.floor(rand() * 3);
+      const shuffled = [...pContacts].sort(() => rand() - 0.5);
+      const attendees = shuffled.slice(0, Math.min(attendeeCount, shuffled.length));
+      const primaryContact = attendees[0];
+      const company = companies.find((c) => c.id === primaryContact.companyId)!;
+      const area = areas[Math.floor(rand() * areas.length)];
+
+      const titleTemplate =
+        meetingTitles[Math.floor(rand() * meetingTitles.length)];
+      const title = titleTemplate
+        .replace(/{company}/g, company.name)
+        .replace(/{area}/g, area);
+
+      meetings.push({
+        id: `mtg-${String(idx).padStart(3, "0")}`,
+        partnerId: partner.id,
+        startTime: date,
+        title,
+        purpose: purposes[Math.floor(rand() * purposes.length)],
+        notes: null,
+        attendeeContactIds: attendees.map((a) => a.id),
+      });
+      idx++;
+    }
+  }
+
+  return meetings;
+}

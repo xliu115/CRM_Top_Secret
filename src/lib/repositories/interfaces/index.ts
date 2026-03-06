@@ -1,0 +1,16 @@
+export type { IPartnerRepository } from "./partner-repository";
+export type { IContactRepository, ContactWithCompany } from "./contact-repository";
+export type {
+  IInteractionRepository,
+  InteractionWithContact,
+} from "./interaction-repository";
+export type {
+  ISignalRepository,
+  SignalWithRelations,
+} from "./signal-repository";
+export type { INudgeRepository, NudgeWithRelations } from "./nudge-repository";
+export type {
+  IMeetingRepository,
+  MeetingWithAttendees,
+} from "./meeting-repository";
+export type { IEngagementRepository } from "./engagement-repository";
