@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 
-type Source = { type: string; content: string; date?: string; id?: string };
+type Source = { type: string; content: string; date?: string; id?: string; url?: string };
 
 type Message = {
   role: "user" | "assistant";
@@ -16,11 +16,11 @@ type Message = {
 };
 
 const SUGGESTED_QUESTIONS = [
-  "What's the latest news about my Microsoft contacts?",
+  "What's the latest news about Microsoft?",
   "Who changed jobs recently among my accounts?",
   "Summarize my relationship with the CIO at Amazon",
   "Which contacts haven't I spoken to in 60+ days?",
-  "What McKinsey events have my contacts attended recently?",
+  "What's happening with Nvidia stock and AI strategy?",
   "Which contacts have been reading our articles?",
 ];
 
@@ -60,7 +60,10 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, history }),
       });
-      if (!res.ok) throw new Error("Failed to get response");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Failed to get response");
+      }
       const { answer, sources } = await res.json();
       setMessages((prev) => [
         ...prev,
@@ -104,8 +107,8 @@ export default function ChatPage() {
               Ask Anything
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Chat with your client data — ask about contacts, interactions,
-              signals, events, and more
+              Chat with your client data and live web — ask about contacts,
+              news, interactions, signals, and more
             </p>
           </div>
           {!isEmpty && (
@@ -136,7 +139,8 @@ export default function ChatPage() {
                   <p className="mt-1 max-w-md text-sm text-muted-foreground">
                     I can answer questions about your contacts, companies,
                     interactions, meetings, nudges, events, and article
-                    engagement. Ask me anything!
+                    engagement — plus search the web for live news and data.
+                    Ask me anything!
                   </p>
                 </div>
                 <div className="grid max-w-2xl gap-2 sm:grid-cols-2">
@@ -207,6 +211,16 @@ export default function ChatPage() {
                                   <span className="line-clamp-2 text-muted-foreground">
                                     {s.content}
                                   </span>
+                                  {s.url && (
+                                    <a
+                                      href={s.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="truncate text-primary hover:underline"
+                                    >
+                                      {s.url}
+                                    </a>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -223,7 +237,7 @@ export default function ChatPage() {
                     <div className="flex items-center gap-2 pt-2">
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
                       <span className="text-sm text-muted-foreground">
-                        Searching your data...
+                        Searching your data & the web...
                       </span>
                     </div>
                   </div>
@@ -274,8 +288,8 @@ export default function ChatPage() {
               </Button>
             </form>
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              Chirp searches your contacts, interactions, signals, events, and
-              articles to answer questions.
+              Chirp searches your CRM data and the live web to answer
+              questions.
               {!process.env.NEXT_PUBLIC_HAS_OPENAI && (
                 <span>
                   {" "}

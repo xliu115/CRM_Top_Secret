@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -19,23 +18,6 @@ type Contact = {
   lastContacted: string | null;
   company: { name: string };
 };
-
-function getImportanceBadgeVariant(
-  importance: string
-): "destructive" | "warning" | "secondary" | "outline" {
-  switch (importance) {
-    case "CRITICAL":
-      return "destructive";
-    case "HIGH":
-      return "warning";
-    case "MEDIUM":
-      return "secondary";
-    case "LOW":
-      return "outline";
-    default:
-      return "secondary";
-  }
-}
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -128,16 +110,9 @@ export default function ContactsPage() {
                   >
                     <Avatar name={contact.name} size="md" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">
-                          {contact.name}
-                        </span>
-                        <Badge
-                          variant={getImportanceBadgeVariant(contact.importance)}
-                        >
-                          {contact.importance}
-                        </Badge>
-                      </div>
+                      <span className="font-medium text-foreground">
+                        {contact.name}
+                      </span>
                       <p className="text-sm text-muted-foreground">
                         {contact.title} at {contact.company.name}
                       </p>

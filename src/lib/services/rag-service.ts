@@ -6,12 +6,14 @@ import {
   meetingRepo,
   engagementRepo,
 } from "@/lib/repositories";
+import { tavily } from "@tavily/core";
 
 export interface RetrievedDoc {
   type: string;
   content: string;
   date?: string;
   id?: string;
+  url?: string;
 }
 
 /**
@@ -194,4 +196,47 @@ function extractKeywords(query: string): string[] {
   }
 
   return [...new Set(words)];
+}
+
+/**
+ * Search the web using Tavily for real-time information.
+ * Returns results as RetrievedDoc[] so they can be mixed with CRM data.
+ */
+export async function searchWeb(
+  query: string,
+  maxResults = 5
+): Promise<RetrievedDoc[]> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const client = tavily({ apiKey });
+    const response = await client.search(query, {
+      maxResults,
+      searchDepth: "basic",
+      includeAnswer: true,
+    });
+
+    const docs: RetrievedDoc[] = [];
+
+    if (response.answer) {
+      docs.push({
+        type: "Web Summary",
+        content: response.answer,
+      });
+    }
+
+    for (const result of response.results ?? []) {
+      docs.push({
+        type: "Web Result",
+        content: `${result.title}: ${result.content}`,
+        url: result.url,
+      });
+    }
+
+    return docs;
+  } catch (err) {
+    console.error("[web-search] Tavily search failed:", err);
+    return [];
+  }
 }

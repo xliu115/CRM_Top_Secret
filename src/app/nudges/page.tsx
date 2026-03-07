@@ -49,37 +49,28 @@ const PRIORITY_OPTIONS = [
   { value: "LOW", label: "Low" },
 ];
 
-function getPriorityBadgeVariant(
-  priority: string
-): "destructive" | "warning" | "secondary" | "outline" {
+const PRIORITY_ORDER: Record<string, number> = {
+  URGENT: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+};
+
+function getPriorityClassName(priority: string): string {
   switch (priority) {
     case "URGENT":
-      return "destructive";
+      return "border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400";
     case "HIGH":
-      return "warning";
+      return "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400";
     case "MEDIUM":
-      return "secondary";
+      return "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400";
     case "LOW":
-      return "outline";
+      return "border-border bg-muted/50 text-muted-foreground";
     default:
-      return "secondary";
+      return "border-border bg-muted/50 text-muted-foreground";
   }
 }
 
-function getStatusBadgeVariant(
-  status: string
-): "default" | "secondary" | "outline" | "success" {
-  switch (status) {
-    case "OPEN":
-      return "default";
-    case "SNOOZED":
-      return "secondary";
-    case "DONE":
-      return "success";
-    default:
-      return "outline";
-  }
-}
 
 export default function NudgesPage() {
   const [statusFilter, setStatusFilter] = useState("");
@@ -227,7 +218,7 @@ export default function NudgesPage() {
               </CardContent>
             </Card>
           ) : (
-            nudges.map((nudge) => (
+            [...nudges].sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99)).map((nudge) => (
               <Card key={nudge.id}>
                 <CardHeader className="pb-3">
                   <div className="flex items-start gap-4">
@@ -237,11 +228,8 @@ export default function NudgesPage() {
                         <CardTitle className="text-lg">
                           {nudge.contact.name}
                         </CardTitle>
-                        <Badge variant={getPriorityBadgeVariant(nudge.priority)}>
+                        <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
                           {nudge.priority}
-                        </Badge>
-                        <Badge variant={getStatusBadgeVariant(nudge.status)}>
-                          {nudge.status}
                         </Badge>
                       </div>
                       <CardDescription>
