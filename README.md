@@ -6,7 +6,7 @@ A proactive relationship management platform that helps Partners manage contacts
 
 ## Features
 
-- **Dashboard** — Summary metrics, today's top nudges, and recent activity
+- **Dashboard** — Summary metrics, today's top nudges, and recent activity.
 - **Nudges** — Proactive alerts explaining why you should reach out, with priority and signal context
 - **Contacts** — Full contact directory with search, interaction timeline, and signals
 - **Email Drafting** — AI-generated outreach emails using relationship context and signals
