@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Users,
@@ -49,25 +50,24 @@ type Nudge = {
   signal?: { type: string; content: string; url?: string | null } | null;
 };
 
-function getPriorityBadgeVariant(
-  priority: string
-): "destructive" | "warning" | "secondary" | "outline" {
+function getPriorityClassName(priority: string): string {
   switch (priority) {
     case "URGENT":
-      return "destructive";
+      return "border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400";
     case "HIGH":
-      return "warning";
+      return "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400";
     case "MEDIUM":
-      return "secondary";
+      return "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400";
     case "LOW":
-      return "outline";
+      return "border-border bg-muted/50 text-muted-foreground";
     default:
-      return "secondary";
+      return "border-border bg-muted/50 text-muted-foreground";
   }
 }
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [topNudges, setTopNudges] = useState<Nudge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -211,46 +211,45 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-4">
                   {topNudges.map((nudge) => (
-                    <Link
+                    <div
                       key={nudge.id}
-                      href={`/contacts/${nudge.contact.id}`}
-                      className="block"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(`/contacts/${nudge.contact.id}`)}
+                      onKeyDown={(e) => { if (e.key === "Enter") router.push(`/contacts/${nudge.contact.id}`); }}
+                      className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/50"
                     >
-                      <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/50">
-                        <Avatar name={nudge.contact.name} size="sm" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground">
-                              {nudge.contact.name}
-                            </span>
-                            <Badge
-                              variant={getPriorityBadgeVariant(nudge.priority)}
-                            >
-                              {nudge.priority}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {nudge.contact.company.name}
-                          </p>
-                          <p className="mt-1 text-sm text-foreground">
-                            {nudge.reason}
-                          </p>
-                          {nudge.signal?.url && (
-                            <a
-                              href={nudge.signal.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                              Read article
-                            </a>
-                          )}
+                      <Avatar name={nudge.contact.name} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">
+                            {nudge.contact.name}
+                          </span>
+                          <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                            {nudge.priority}
+                          </Badge>
                         </div>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          {nudge.contact.company.name}
+                        </p>
+                        <p className="mt-1 text-sm text-foreground">
+                          {nudge.reason}
+                        </p>
+                        {nudge.signal?.url && (
+                          <a
+                            href={nudge.signal.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Read article
+                          </a>
+                        )}
                       </div>
-                    </Link>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </div>
                   ))}
                 </div>
               )}

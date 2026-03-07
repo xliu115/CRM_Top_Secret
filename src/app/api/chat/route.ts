@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { partnerRepo } from "@/lib/repositories";
-import { retrieveContext } from "@/lib/services/rag-service";
+import { retrieveContext, searchWeb } from "@/lib/services/rag-service";
 import { generateChatAnswer } from "@/lib/services/llm-service";
 
 export async function POST(request: NextRequest) {
@@ -32,16 +32,40 @@ export async function POST(request: NextRequest) {
     const partner = await partnerRepo.findById(partnerId);
     const partnerName = partner?.name ?? "User";
 
-    const sources = await retrieveContext(message, partnerId);
-    const answer = await generateChatAnswer({
-      question: message,
-      retrievedDocs: sources,
-      partnerName,
-      history: body.history ?? [],
-    });
+    // Run CRM search and web search in parallel; don't let one failure break the other
+    const [crmSources, webSources] = await Promise.all([
+      retrieveContext(message, partnerId).catch((err) => {
+        console.error("[chat] CRM retrieval failed:", err);
+        return [] as Awaited<ReturnType<typeof retrieveContext>>;
+      }),
+      searchWeb(message, 5).catch((err) => {
+        console.error("[chat] Web search failed:", err);
+        return [] as Awaited<ReturnType<typeof searchWeb>>;
+      }),
+    ]);
+
+    const sources = [...crmSources, ...webSources];
+
+    let answer: string;
+    try {
+      answer = await generateChatAnswer({
+        question: message,
+        retrievedDocs: sources,
+        partnerName,
+        history: body.history ?? [],
+      });
+    } catch (llmErr) {
+      console.error("[chat] LLM generation failed:", llmErr);
+      answer =
+        "I found some relevant information but had trouble generating a response. " +
+        (sources.length > 0
+          ? "Please check the sources below for details."
+          : "Please try again in a moment.");
+    }
 
     return NextResponse.json({ answer, sources });
   } catch (err) {
+    console.error("[chat] Error:", err);
     if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
