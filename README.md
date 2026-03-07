@@ -7,11 +7,11 @@ A proactive relationship management platform that helps Partners manage contacts
 ## Features
 
 - **Dashboard** — Summary metrics, today's top nudges, and recent activity.
-- **Nudges** — Proactive alerts explaining why you should reach out, with priority and signal context
-- **Contacts** — Full contact directory with search, interaction timeline, and signals
-- **Email Drafting** — AI-generated outreach emails using relationship context and signals
-- **Meeting Briefs** — Structured 1-pager briefs with attendee insights, agenda, and suggested questions
-- **Ask Anything** — RAG-powered chat to query your client data with source citations
+- **Nudges** — Proactive alerts explaining why you should reach out, with priority and signal context.
+- **Contacts** — Full contact directory with search, interaction timeline, and signals.
+- **Email Drafting** — AI-generated outreach emails using relationship context and signals.
+- **Meeting Briefs** — Structured 1-pager briefs with attendee insights, agenda, and suggested questions.
+- **Ask Anything** — RAG-powered chat to query your client data with source citations.
 
 ## Quick Start
 
