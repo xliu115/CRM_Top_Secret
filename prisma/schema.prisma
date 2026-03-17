@@ -116,6 +116,7 @@ model Nudge {
   @@index([contactId])
   @@index([status])
   @@index([priority])
+  @@index([contactId, status])
   @@map("nudges")
 }
 
@@ -134,6 +135,7 @@ model Meeting {
 
   @@index([partnerId])
   @@index([startTime])
+  @@index([partnerId, startTime])
   @@map("meetings")
 }
 
@@ -146,6 +148,7 @@ model MeetingAttendee {
   contact Contact @relation(fields: [contactId], references: [id])
 
   @@unique([meetingId, contactId])
+  @@index([contactId])
   @@map("meeting_attendees")
 }
 

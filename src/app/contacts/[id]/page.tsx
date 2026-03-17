@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MarkdownPreview } from "@/components/ui/markdown-preview";
 import { format } from "date-fns";
 
 type Contact = {
@@ -165,31 +166,19 @@ export default function ContactDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const [contactRes, interactionsRes, signalsRes, engagementsRes, meetingsRes] =
-          await Promise.all([
-            fetch(`/api/contacts/${id}`),
-            fetch(`/api/contacts/${id}/interactions`),
-            fetch(`/api/contacts/${id}/signals`),
-            fetch(`/api/contacts/${id}/engagements`),
-            fetch(`/api/contacts/${id}/meetings`),
-          ]);
-
-        if (!contactRes.ok) {
-          if (contactRes.status === 404) throw new Error("Contact not found");
+        const res = await fetch(`/api/contacts/${id}/full`);
+        if (!res.ok) {
+          if (res.status === 404) throw new Error("Contact not found");
           throw new Error("Failed to fetch contact");
         }
-        setContact(await contactRes.json());
-        setInteractions(
-          interactionsRes.ok ? await interactionsRes.json() : []
-        );
-        setSignals(signalsRes.ok ? await signalsRes.json() : []);
-        if (engagementsRes.ok) {
-          const eng = await engagementsRes.json();
-          setEvents(eng.events ?? []);
-          setArticles(eng.articles ?? []);
-          setCampaigns(eng.campaigns ?? []);
-        }
-        setMeetings(meetingsRes.ok ? await meetingsRes.json() : []);
+        const data = await res.json();
+        setContact(data.contact);
+        setInteractions(data.interactions ?? []);
+        setSignals(data.signals ?? []);
+        setEvents(data.engagements?.events ?? []);
+        setArticles(data.engagements?.articles ?? []);
+        setCampaigns(data.engagements?.campaigns ?? []);
+        setMeetings(data.meetings ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
@@ -1014,8 +1003,8 @@ function MeetingCard({
       {/* Expanded brief */}
       {briefExpanded && brief && (
         <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
-          <div className="whitespace-pre-wrap rounded-md border border-border bg-background p-4 text-sm text-foreground">
-            {brief}
+          <div className="rounded-md border border-border bg-background p-4">
+            <MarkdownPreview content={brief} />
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={handleCopyBrief}>

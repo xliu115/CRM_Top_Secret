@@ -9,8 +9,9 @@ type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 async function callLLM(
   systemPrompt: string,
   userPrompt: string
-): Promise<string> {
-  if (openai) {
+): Promise<string | null> {
+  if (!openai) return null;
+  try {
     const res = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -21,15 +22,18 @@ async function callLLM(
       max_tokens: 2000,
     });
     return res.choices[0]?.message?.content ?? "";
+  } catch (err) {
+    console.error("[llm-service] OpenAI call failed, falling back to template:", err instanceof Error ? err.message : err);
+    return null;
   }
-  return "";
 }
 
 async function callLLMWithHistory(
   systemPrompt: string,
   messages: ChatMessage[]
-): Promise<string> {
-  if (openai) {
+): Promise<string | null> {
+  if (!openai) return null;
+  try {
     const res = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "system", content: systemPrompt }, ...messages],
@@ -37,8 +41,10 @@ async function callLLMWithHistory(
       max_tokens: 2000,
     });
     return res.choices[0]?.message?.content ?? "";
+  } catch (err) {
+    console.error("[llm-service] OpenAI call failed, falling back to template:", err instanceof Error ? err.message : err);
+    return null;
   }
-  return "";
 }
 
 // ── Email Drafting ──────────────────────────────────────────────────
@@ -65,10 +71,9 @@ export async function generateEmail(ctx: EmailContext): Promise<{
     ? `Relevant signals:\n${ctx.signals.map((s) => `- ${s}`).join("\n")}`
     : "";
 
-  if (openai) {
-    const result = await callLLM(
-      `You are an expert relationship manager drafting outreach emails. Write professional, warm, concise emails. Return JSON with "subject" and "body" keys only.`,
-      `Draft an outreach email from ${ctx.partnerName} to ${ctx.contactName} (${ctx.contactTitle} at ${ctx.companyName}).
+  const result = await callLLM(
+    `You are an expert relationship manager drafting outreach emails. Write professional, warm, concise emails. Return JSON with "subject" and "body" keys only.`,
+    `Draft an outreach email from ${ctx.partnerName} to ${ctx.contactName} (${ctx.contactTitle} at ${ctx.companyName}).
 
 Reason for outreach: ${ctx.nudgeReason}
 
@@ -77,7 +82,8 @@ ${interactionContext}
 ${signalContext}
 
 Write a personalized email that references the reason and past context naturally. Keep it under 200 words. Return valid JSON: {"subject": "...", "body": "..."}`
-    );
+  );
+  if (result) {
     try {
       const cleaned = result.replace(/```json\n?|\n?```/g, "").trim();
       return JSON.parse(cleaned);
@@ -148,17 +154,16 @@ export interface MeetingBriefContext {
 export async function generateMeetingBrief(
   ctx: MeetingBriefContext
 ): Promise<string> {
-  if (openai) {
-    const attendeeDetails = ctx.attendees
-      .map(
-        (a) =>
-          `## ${a.name} – ${a.title}, ${a.company}\nRecent interactions: ${a.recentInteractions.join("; ") || "None"}\nSignals: ${a.signals.join("; ") || "None"}`
-      )
-      .join("\n\n");
+  const attendeeDetails = ctx.attendees
+    .map(
+      (a) =>
+        `## ${a.name} – ${a.title}, ${a.company}\nRecent interactions: ${a.recentInteractions.join("; ") || "None"}\nSignals: ${a.signals.join("; ") || "None"}`
+    )
+    .join("\n\n");
 
-    return callLLM(
-      `You are an expert meeting preparation assistant. Generate structured, actionable meeting briefs.`,
-      `Generate a meeting brief for: "${ctx.meetingTitle}"
+  const result = await callLLM(
+    `You are an expert meeting preparation assistant. Generate structured, actionable meeting briefs.`,
+    `Generate a meeting brief for: "${ctx.meetingTitle}"
 
 Purpose: ${ctx.meetingPurpose}
 
@@ -172,10 +177,9 @@ Structure the brief with these sections:
 4. **Suggested Questions** – 3-5 strategic questions to ask
 5. **Risks & Watch-outs** – Potential concerns to be aware of
 6. **Preparation Checklist** – 2-3 things to prepare before the meeting`
-    );
-  }
+  );
 
-  return generateBriefTemplate(ctx);
+  return result ?? generateBriefTemplate(ctx);
 }
 
 function generateBriefTemplate(ctx: MeetingBriefContext): string {
@@ -265,31 +269,24 @@ export async function generateChatAnswer(ctx: ChatContext): Promise<string> {
     )
     .join("\n\n");
 
-  if (openai) {
-    try {
-      const contextMessage = docsText
-        ? `Here is the relevant context from ${ctx.partnerName}'s CRM data:\n\n${docsText}`
-        : `No relevant context was found in ${ctx.partnerName}'s CRM data for this query.`;
+  const contextMessage = docsText
+    ? `Here is the relevant context from ${ctx.partnerName}'s CRM data:\n\n${docsText}`
+    : `No relevant context was found in ${ctx.partnerName}'s CRM data for this query.`;
 
-      const messages: ChatMessage[] = [];
+  const messages: ChatMessage[] = [];
 
-      const recentHistory = (ctx.history ?? []).slice(-10);
-      for (const msg of recentHistory) {
-        messages.push({ role: msg.role, content: msg.content });
-      }
-
-      messages.push({
-        role: "user",
-        content: `${contextMessage}\n\n${ctx.partnerName}'s question: ${ctx.question}`,
-      });
-
-      return await callLLMWithHistory(CHAT_SYSTEM_PROMPT, messages);
-    } catch (err) {
-      console.error("[llm] OpenAI call failed, falling back to template:", err);
-    }
+  const recentHistory = (ctx.history ?? []).slice(-10);
+  for (const msg of recentHistory) {
+    messages.push({ role: msg.role, content: msg.content });
   }
 
-  return generateChatTemplate(ctx);
+  messages.push({
+    role: "user",
+    content: `${contextMessage}\n\n${ctx.partnerName}'s question: ${ctx.question}`,
+  });
+
+  const result = await callLLMWithHistory(CHAT_SYSTEM_PROMPT, messages);
+  return result ?? generateChatTemplate(ctx);
 }
 
 function generateChatTemplate(ctx: ChatContext): string {

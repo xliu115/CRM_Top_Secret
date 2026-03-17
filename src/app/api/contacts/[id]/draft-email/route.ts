@@ -31,15 +31,14 @@ export async function POST(
 
     const nudgeReason = requestBody?.nudgeReason ?? "General check-in";
 
-    const partner = await partnerRepo.findById(partnerId);
-    if (!partner) {
-      return NextResponse.json({ error: "Partner not found" }, { status: 404 });
-    }
-
-    const [interactions, signals] = await Promise.all([
+    const [partner, interactions, signals] = await Promise.all([
+      partnerRepo.findById(partnerId),
       interactionRepo.findByContactId(id),
       signalRepo.findByContactId(id),
     ]);
+    if (!partner) {
+      return NextResponse.json({ error: "Partner not found" }, { status: 404 });
+    }
 
     const recentInteractions = interactions
       .slice(0, 5)

@@ -1,5 +1,6 @@
 import { contactRepo, interactionRepo, signalRepo, nudgeRepo, meetingRepo, engagementRepo } from "@/lib/repositories";
 import { differenceInDays } from "date-fns";
+import { prisma } from "@/lib/db/prisma";
 
 interface NudgeCandidate {
   contactId: string;
@@ -9,16 +10,75 @@ interface NudgeCandidate {
   priority: string;
 }
 
+function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    const arr = map.get(k);
+    if (arr) arr.push(item);
+    else map.set(k, [item]);
+  }
+  return map;
+}
+
 export async function refreshNudgesForPartner(partnerId: string) {
   const contacts = await contactRepo.findByPartnerId(partnerId);
   const now = new Date();
   const candidates: NudgeCandidate[] = [];
 
+  if (contacts.length === 0) {
+    await nudgeRepo.deleteOpenByPartnerId(partnerId);
+    return 0;
+  }
+
+  const contactIds = contacts.map((c) => c.id);
+  const companyIds = [...new Set(contacts.map((c) => c.companyId))];
+
+  const [allInteractions, allContactSignals, allCompanySignals, allMeetings, allEvents, allArticles] =
+    await Promise.all([
+      interactionRepo.findByContactIds(contactIds),
+      prisma.externalSignal.findMany({
+        where: { contactId: { in: contactIds } },
+        orderBy: { date: "desc" },
+      }),
+      prisma.externalSignal.findMany({
+        where: { companyId: { in: companyIds } },
+        orderBy: { date: "desc" },
+      }),
+      prisma.meeting.findMany({
+        where: { attendees: { some: { contactId: { in: contactIds } } } },
+        include: { attendees: { select: { contactId: true } } },
+        orderBy: { startTime: "desc" },
+      }),
+      prisma.eventRegistration.findMany({
+        where: { contactId: { in: contactIds } },
+        orderBy: { eventDate: "desc" },
+      }),
+      prisma.articleEngagement.findMany({
+        where: { contactId: { in: contactIds } },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+  const interactionsByContact = groupBy(allInteractions, (i) => i.contactId);
+  const contactSignalsByContact = groupBy(allContactSignals, (s) => s.contactId ?? "");
+  const companySignalsByCompany = groupBy(allCompanySignals, (s) => s.companyId ?? "");
+  const meetingsByContact = new Map<string, typeof allMeetings>();
+  for (const m of allMeetings) {
+    for (const a of m.attendees) {
+      const arr = meetingsByContact.get(a.contactId);
+      if (arr) arr.push(m);
+      else meetingsByContact.set(a.contactId, [m]);
+    }
+  }
+  const eventsByContact = groupBy(allEvents, (e) => e.contactId);
+  const articlesByContact = groupBy(allArticles, (a) => a.contactId);
+
   for (const contact of contacts) {
-    const interactions = await interactionRepo.findByContactId(contact.id);
-    const signals = await signalRepo.findByContactId(contact.id);
-    const companySignals = await signalRepo.findByCompanyId(contact.companyId);
-    const meetings = await meetingRepo.findByContactId(contact.id);
+    const interactions = interactionsByContact.get(contact.id) ?? [];
+    const signals = contactSignalsByContact.get(contact.id) ?? [];
+    const companySignals = companySignalsByCompany.get(contact.companyId) ?? [];
+    const meetings = meetingsByContact.get(contact.id) ?? [];
     const allSignals = [...signals, ...companySignals];
 
     const lastInteraction = interactions[0];
@@ -125,7 +185,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // Rule: Recent event attendance — follow up with attendees
-    const events = await engagementRepo.findEventsByContactId(contact.id);
+    const events = eventsByContact.get(contact.id) ?? [];
     const recentAttendedEvent = events.find(
       (e) =>
         e.status === "Attended" &&
@@ -157,7 +217,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // Rule: Article engagement — contact read your content
-    const articles = await engagementRepo.findArticlesByContactId(contact.id);
+    const articles = articlesByContact.get(contact.id) ?? [];
     const recentArticleView = articles.find(
       (a) =>
         a.views > 0 &&

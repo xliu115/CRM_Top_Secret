@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MarkdownPreview } from "@/components/ui/markdown-preview";
 
 type Meeting = {
   id: string;
@@ -183,11 +184,8 @@ export default function MeetingDetailPage() {
           <CardContent className="space-y-4">
             {meeting.generatedBrief ? (
               <>
-                <div
-                  className="whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-4 text-sm text-foreground"
-                  style={{ whiteSpace: "pre-wrap" }}
-                >
-                  {meeting.generatedBrief}
+                <div className="rounded-md border border-border bg-muted/30 p-4">
+                  <MarkdownPreview content={meeting.generatedBrief} />
                 </div>
                 <Button
                   variant="secondary"

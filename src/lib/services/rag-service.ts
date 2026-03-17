@@ -42,13 +42,14 @@ export async function retrieveContext(
     });
   }
 
-  // Search interactions
-  for (const kw of keywords.slice(0, 3)) {
-    const interactions = await interactionRepo.searchByContent(
-      kw,
-      partnerId,
-      5
-    );
+  // Search interactions and signals in parallel across all keywords
+  const kwSlice = keywords.slice(0, 3);
+  const [interactionResults, signalResults] = await Promise.all([
+    Promise.all(kwSlice.map((kw) => interactionRepo.searchByContent(kw, partnerId, 5))),
+    Promise.all(kwSlice.map((kw) => signalRepo.searchByContent(kw, partnerId, 5))),
+  ]);
+
+  for (const interactions of interactionResults) {
     for (const i of interactions) {
       if (docs.some((d) => d.id === i.id)) continue;
       docs.push({
@@ -60,9 +61,7 @@ export async function retrieveContext(
     }
   }
 
-  // Search signals
-  for (const kw of keywords.slice(0, 3)) {
-    const signals = await signalRepo.searchByContent(kw, partnerId, 5);
+  for (const signals of signalResults) {
     for (const s of signals) {
       if (docs.some((d) => d.id === s.id)) continue;
       const entity = s.contact
@@ -119,10 +118,19 @@ export async function retrieveContext(
     });
   }
 
-  // Search engagement data (events, articles, campaigns)
-  for (const c of contacts.slice(0, 5)) {
-    const events = await engagementRepo.findEventsByContactId(c.id);
-    const relevantEvents = events.filter((e) =>
+  // Batch-load engagement data for all matched contacts
+  const engagementContacts = contacts.slice(0, 5);
+  const engagementContactIds = engagementContacts.map((c) => c.id);
+  const contactById = new Map(engagementContacts.map((c) => [c.id, c]));
+
+  const [allEvents, allArticles] = await Promise.all([
+    Promise.all(engagementContactIds.map((cid) => engagementRepo.findEventsByContactId(cid))),
+    Promise.all(engagementContactIds.map((cid) => engagementRepo.findArticlesByContactId(cid))),
+  ]);
+
+  for (let idx = 0; idx < engagementContactIds.length; idx++) {
+    const c = contactById.get(engagementContactIds[idx])!;
+    const relevantEvents = allEvents[idx].filter((e) =>
       keywords.some(
         (kw) =>
           e.name.toLowerCase().includes(kw.toLowerCase()) ||
@@ -139,8 +147,7 @@ export async function retrieveContext(
       });
     }
 
-    const articles = await engagementRepo.findArticlesByContactId(c.id);
-    const relevantArticles = articles.filter((a) =>
+    const relevantArticles = allArticles[idx].filter((a) =>
       keywords.some((kw) => a.name.toLowerCase().includes(kw.toLowerCase()))
     );
     for (const a of relevantArticles.slice(0, 2)) {
