@@ -233,7 +233,7 @@ export interface ChatContext {
   history?: { role: "user" | "assistant"; content: string }[];
 }
 
-const CHAT_SYSTEM_PROMPT = `You are Chirp, an AI assistant for a client relationship management platform. You help Partners (senior professionals) manage their client relationships.
+const CHAT_SYSTEM_PROMPT = `You are Activate, an AI assistant for a client relationship management platform. You help Partners (senior professionals) manage their client relationships.
 
 Your capabilities:
 - Answer questions about contacts, companies, interactions, meetings, signals, nudges, events, articles, and campaigns from the CRM

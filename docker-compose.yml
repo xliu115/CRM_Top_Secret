@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: chirp
+      POSTGRES_DB: activate
     ports:
       - "5432:5432"
     volumes:

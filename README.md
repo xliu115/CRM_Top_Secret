@@ -1,4 +1,4 @@
-# Chirp
+# Activate
 
 A proactive relationship management platform that helps Partners manage contacts, receive AI-powered nudges, generate meeting briefs, draft outreach emails, and ask anything about their clients.
 
@@ -58,7 +58,7 @@ For production or team development, use PostgreSQL with pgvector:
 
 ```bash
 # Update .env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/chirp"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/activate"
 
 # Start PostgreSQL
 docker compose up -d
@@ -78,7 +78,7 @@ npx prisma db seed
 | `NEXTAUTH_URL` | Yes | Application URL (default: http://localhost:3000) |
 | `OPENAI_API_KEY` | No | OpenAI API key for AI features (falls back to templates) |
 | `RESEND_API_KEY` | No | [Resend](https://resend.com) API key for nudge digest emails |
-| `RESEND_FROM` | No | Sender address (default: `Chirp <onboarding@resend.dev>`) |
+| `RESEND_FROM` | No | Sender address (default: `Activate <onboarding@resend.dev>`) |
 | `NUDGE_EMAIL_TO` | No | Override recipient for all nudge emails (useful for demo) |
 
 ## Architecture

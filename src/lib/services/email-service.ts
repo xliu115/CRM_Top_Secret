@@ -6,7 +6,7 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const NUDGE_RECIPIENT = process.env.NUDGE_EMAIL_TO || "";
-const FROM_ADDRESS = process.env.RESEND_FROM || "Chirp <onboarding@resend.dev>";
+const FROM_ADDRESS = process.env.RESEND_FROM || "Activate <onboarding@resend.dev>";
 
 function priorityColor(priority: string): string {
   switch (priority) {
@@ -127,7 +127,7 @@ function buildDigestHtml(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chirp — Nudge Digest</title>
+  <title>Activate — Nudge Digest</title>
 </head>
 <body style="margin: 0; padding: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: #f8fafc;">
@@ -139,7 +139,7 @@ function buildDigestHtml(
           <tr>
             <td style="background: #0f172a; border-radius: 12px 12px 0 0; padding: 32px 24px; text-align: center;">
               <div style="display: inline-block; width: 44px; height: 44px; border-radius: 10px; background: #2563eb; color: white; font-weight: 700; font-size: 22px; line-height: 44px; text-align: center; margin-bottom: 12px;">
-                🐦
+                🚀
               </div>
               <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700;">
                 Your Nudge Digest
@@ -188,7 +188,7 @@ function buildDigestHtml(
           <tr>
             <td style="background: #ffffff; padding: 24px; text-align: center; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
               <a href="${appUrl}/nudges" style="display: inline-block; padding: 12px 32px; background: #2563eb; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 8px;">
-                View All Nudges in Chirp
+                View All Nudges in Activate
               </a>
             </td>
           </tr>
@@ -197,7 +197,7 @@ function buildDigestHtml(
           <tr>
             <td style="background: #f8fafc; border-radius: 0 0 12px 12px; padding: 20px 24px; text-align: center; border: 1px solid #e2e8f0; border-top: none;">
               <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
-                This is an automated digest from Chirp.<br />
+                This is an automated digest from Activate.<br />
                 All company names, contacts, and data shown are entirely fictional and for demonstration purposes only.
               </p>
             </td>
@@ -238,8 +238,8 @@ export async function sendNudgeDigest(
   const urgentCount = nudges.filter((n) => n.priority === "URGENT").length;
   const subject =
     urgentCount > 0
-      ? `🔴 ${urgentCount} urgent + ${nudges.length - urgentCount} more nudges — Chirp`
-      : `${nudges.length} nudge${nudges.length !== 1 ? "s" : ""} to review — Chirp`;
+      ? `🔴 ${urgentCount} urgent + ${nudges.length - urgentCount} more nudges — Activate`
+      : `${nudges.length} nudge${nudges.length !== 1 ? "s" : ""} to review — Activate`;
 
   try {
     const { error } = await resend.emails.send({

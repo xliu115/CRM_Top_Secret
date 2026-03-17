@@ -174,7 +174,7 @@ export default function ChatPage() {
                     <div className="min-w-0 flex-1 space-y-2">
                       <p className="text-xs font-medium text-muted-foreground">
                         {msg.role === "assistant"
-                          ? "Chirp"
+                          ? "Activate"
                           : session?.user?.name || "You"}
                       </p>
                       <div
@@ -288,7 +288,7 @@ export default function ChatPage() {
               </Button>
             </form>
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              Chirp searches your CRM data and the live web to answer
+              Activate searches your CRM data and the live web to answer
               questions.
               {!process.env.NEXT_PUBLIC_HAS_OPENAI && (
                 <span>

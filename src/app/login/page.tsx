@@ -33,10 +33,10 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8 px-4">
         <div className="text-center">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground mb-4 text-4xl">
-            🐦
+            🚀
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Chirp
+            Activate
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Select a partner to sign in

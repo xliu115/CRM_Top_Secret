@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Chirp",
+  title: "Activate",
   description: "Proactive relationship management with AI-powered nudges",
 };
 
