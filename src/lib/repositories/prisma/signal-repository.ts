@@ -70,4 +70,27 @@ export class PrismaSignalRepository implements ISignalRepository {
       take: limit,
     });
   }
+
+  async createMany(
+    signals: {
+      companyId?: string;
+      contactId?: string;
+      type: string;
+      date: Date;
+      content: string;
+      url?: string;
+      confidence?: number;
+    }[]
+  ) {
+    if (signals.length === 0) return 0;
+    const result = await prisma.externalSignal.createMany({ data: signals });
+    return result.count;
+  }
+
+  async deleteByCompanyIdAndType(companyId: string, type: string) {
+    const result = await prisma.externalSignal.deleteMany({
+      where: { companyId, type },
+    });
+    return result.count;
+  }
 }

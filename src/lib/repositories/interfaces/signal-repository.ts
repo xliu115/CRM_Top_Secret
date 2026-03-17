@@ -18,4 +18,16 @@ export interface ISignalRepository {
     partnerId: string,
     limit?: number
   ): Promise<SignalWithRelations[]>;
+  createMany(
+    signals: {
+      companyId?: string;
+      contactId?: string;
+      type: string;
+      date: Date;
+      content: string;
+      url?: string;
+      confidence?: number;
+    }[]
+  ): Promise<number>;
+  deleteByCompanyIdAndType(companyId: string, type: string): Promise<number>;
 }

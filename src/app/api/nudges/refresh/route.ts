@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
+import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import { nudgeRepo, partnerRepo } from "@/lib/repositories";
 import { sendNudgeDigest } from "@/lib/services/email-service";
 
@@ -8,9 +9,14 @@ export async function POST() {
   try {
     const partnerId = await requirePartnerId();
 
+    // 1. Fetch real news from Tavily and store as ExternalSignal records
+    const newsCount = await ingestNewsForPartner(partnerId);
+    console.log(`[nudge-refresh] Ingested ${newsCount} news signals`);
+
+    // 2. Generate nudges from all signals (including freshly fetched news)
     const count = await refreshNudgesForPartner(partnerId);
 
-    // Send digest email in the background (don't block the response)
+    // 3. Send digest email in the background
     const partner = await partnerRepo.findById(partnerId);
     if (partner && count > 0) {
       const nudges = await nudgeRepo.findByPartnerId(partnerId, {
@@ -21,7 +27,7 @@ export async function POST() {
       );
     }
 
-    return NextResponse.json({ count });
+    return NextResponse.json({ count, newsIngested: newsCount });
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

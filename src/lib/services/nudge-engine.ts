@@ -69,18 +69,24 @@ export async function refreshNudgesForPartner(partnerId: string) {
       });
     }
 
-    // Rule: Company news
-    const recentNews = allSignals.find(
+    // Rule: Company news — generate a nudge per recent news signal
+    const recentNewsSignals = allSignals.filter(
       (s) =>
         s.type === "NEWS" &&
         differenceInDays(now, new Date(s.date)) < 14
     );
-    if (recentNews) {
+    const newsUsed = new Set<string>();
+    for (const newsSignal of recentNewsSignals) {
+      if (newsUsed.has(newsSignal.id)) continue;
+      newsUsed.add(newsSignal.id);
+      const snippet = newsSignal.content.length > 200
+        ? newsSignal.content.slice(0, 200) + "…"
+        : newsSignal.content;
       candidates.push({
         contactId: contact.id,
-        signalId: recentNews.id,
+        signalId: newsSignal.id,
         ruleType: "COMPANY_NEWS",
-        reason: `${contact.company.name} in the news: "${recentNews.content}". Reach out to ${contact.name} with a relevant point of view.`,
+        reason: `${contact.company.name} in the news: "${snippet}". Reach out to ${contact.name} with a relevant point of view.`,
         priority: "MEDIUM",
       });
     }
