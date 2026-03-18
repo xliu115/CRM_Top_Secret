@@ -14,3 +14,7 @@ export type {
   MeetingWithAttendees,
 } from "./meeting-repository";
 export type { IEngagementRepository } from "./engagement-repository";
+export type {
+  INudgeRuleConfigRepository,
+  NudgeRuleConfig,
+} from "./nudge-rule-config-repository";

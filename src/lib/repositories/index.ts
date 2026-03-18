@@ -5,6 +5,7 @@ import { PrismaSignalRepository } from "./prisma/signal-repository";
 import { PrismaNudgeRepository } from "./prisma/nudge-repository";
 import { PrismaMeetingRepository } from "./prisma/meeting-repository";
 import { PrismaEngagementRepository } from "./prisma/engagement-repository";
+import { PrismaNudgeRuleConfigRepository } from "./prisma/nudge-rule-config-repository";
 
 export const partnerRepo = new PrismaPartnerRepository();
 export const contactRepo = new PrismaContactRepository();
@@ -13,6 +14,7 @@ export const signalRepo = new PrismaSignalRepository();
 export const nudgeRepo = new PrismaNudgeRepository();
 export const meetingRepo = new PrismaMeetingRepository();
 export const engagementRepo = new PrismaEngagementRepository();
+export const nudgeRuleConfigRepo = new PrismaNudgeRuleConfigRepository();
 
 export type {
   IPartnerRepository,
@@ -27,4 +29,6 @@ export type {
   IMeetingRepository,
   MeetingWithAttendees,
   IEngagementRepository,
+  INudgeRuleConfigRepository,
+  NudgeRuleConfig,
 } from "./interfaces";

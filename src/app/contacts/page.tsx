@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Search, X } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -19,7 +22,10 @@ type Contact = {
   company: { name: string };
 };
 
-export default function ContactsPage() {
+function ContactsPageContent() {
+  const searchParams = useSearchParams();
+  const importanceFilter = searchParams.get("importance");
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -29,19 +35,21 @@ export default function ContactsPage() {
   const fetchContacts = useCallback(async () => {
     setLoading(true);
     try {
-      const url = search
-        ? `/api/contacts?q=${encodeURIComponent(search)}`
-        : "/api/contacts";
+      const params = new URLSearchParams();
+      if (search) params.set("q", search);
+      if (importanceFilter) params.set("importance", importanceFilter);
+      const qs = params.toString();
+      const url = qs ? `/api/contacts?${qs}` : "/api/contacts";
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch contacts");
       const data = await res.json();
       setContacts(data);
-    } catch (err) {
+    } catch {
       setContacts([]);
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, importanceFilter]);
 
   useEffect(() => {
     fetchContacts();
@@ -68,6 +76,19 @@ export default function ContactsPage() {
             Manage your contact relationships
           </p>
         </div>
+
+        {importanceFilter && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Filtered by tier:</span>
+            <Badge variant="secondary">{importanceFilter.toUpperCase()}</Badge>
+            <Button variant="ghost" size="sm" className="h-7 px-2" asChild>
+              <Link href="/contacts">
+                <X className="h-3.5 w-3.5" />
+                Clear filter
+              </Link>
+            </Button>
+          </div>
+        )}
 
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -133,5 +154,20 @@ export default function ContactsPage() {
         )}
       </div>
     </DashboardShell>
+  );
+}
+
+export default function ContactsPage() {
+  return (
+    <Suspense fallback={
+      <DashboardShell>
+        <div className="space-y-6">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-96 w-full" />
+        </div>
+      </DashboardShell>
+    }>
+      <ContactsPageContent />
+    </Suspense>
   );
 }

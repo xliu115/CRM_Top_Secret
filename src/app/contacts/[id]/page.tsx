@@ -47,6 +47,7 @@ type Contact = {
   phone: string | null;
   notes: string | null;
   importance: string;
+  staleThresholdDays: number | null;
   company: { name: string };
 };
 
@@ -153,6 +154,10 @@ export default function ContactDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [editingThreshold, setEditingThreshold] = useState(false);
+  const [thresholdInput, setThresholdInput] = useState("");
+  const [savingThreshold, setSavingThreshold] = useState(false);
+
   const [showDraftPanel, setShowDraftPanel] = useState(false);
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
@@ -215,6 +220,25 @@ export default function ContactDetailPage() {
     setTimeout(() => setCopySuccess(false), 2000);
   }
 
+  async function handleSaveThreshold(days: number | null) {
+    setSavingThreshold(true);
+    try {
+      const res = await fetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staleThresholdDays: days }),
+      });
+      if (!res.ok) throw new Error("Failed to update threshold");
+      const updated = await res.json();
+      setContact((prev) => prev ? { ...prev, staleThresholdDays: updated.staleThresholdDays } : prev);
+      setEditingThreshold(false);
+    } catch {
+      setError("Failed to save staleness threshold");
+    } finally {
+      setSavingThreshold(false);
+    }
+  }
+
   const sortedInteractions = [...interactions].sort(
     (a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -274,6 +298,72 @@ export default function ContactDetailPage() {
                   <Badge variant={getImportanceBadgeVariant(contact.importance)}>
                     {contact.importance}
                   </Badge>
+                  {editingThreshold ? (
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        type="number"
+                        min={1}
+                        max={365}
+                        className="h-7 w-20 text-xs"
+                        value={thresholdInput}
+                        onChange={(e) => setThresholdInput(e.target.value)}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const val = parseInt(thresholdInput, 10);
+                            if (!isNaN(val) && val >= 1 && val <= 365) handleSaveThreshold(val);
+                          }
+                          if (e.key === "Escape") setEditingThreshold(false);
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">days</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        disabled={savingThreshold}
+                        onClick={() => {
+                          const val = parseInt(thresholdInput, 10);
+                          if (!isNaN(val) && val >= 1 && val <= 365) handleSaveThreshold(val);
+                        }}
+                      >
+                        {savingThreshold ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                      </Button>
+                      {contact.staleThresholdDays !== null && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          disabled={savingThreshold}
+                          onClick={() => handleSaveThreshold(null)}
+                        >
+                          Use default
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-1"
+                        onClick={() => setEditingThreshold(false)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </span>
+                  ) : (
+                    <button
+                      className="flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors"
+                      onClick={() => {
+                        setThresholdInput(contact.staleThresholdDays?.toString() ?? "");
+                        setEditingThreshold(true);
+                      }}
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      {contact.staleThresholdDays !== null
+                        ? `${contact.staleThresholdDays}d stale threshold`
+                        : "Set stale threshold"}
+                    </button>
+                  )}
                 </div>
                 <CardDescription>
                   {contact.title} at {contact.company.name}

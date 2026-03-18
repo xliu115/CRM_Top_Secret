@@ -7,4 +7,5 @@ export interface IContactRepository {
   findById(id: string, partnerId: string): Promise<ContactWithCompany | null>;
   search(query: string, partnerId: string): Promise<ContactWithCompany[]>;
   countByPartnerId(partnerId: string): Promise<number>;
+  updateStaleThreshold(id: string, partnerId: string, days: number | null): Promise<ContactWithCompany>;
 }

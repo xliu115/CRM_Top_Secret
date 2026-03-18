@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { RefreshCw, User, Moon, Check, ExternalLink } from "lucide-react";
+import { RefreshCw, User, Moon, Check, ExternalLink, Settings } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -157,16 +157,24 @@ export default function NudgesPage() {
               Action items and reminders for your contacts
             </p>
           </div>
-          <Button
-            onClick={handleRefreshNudges}
-            disabled={refreshing}
-            variant="secondary"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-            />
-            Refresh Nudges
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href="/nudges/settings">
+                <Settings className="h-4 w-4" />
+                Nudge Preferences
+              </Link>
+            </Button>
+            <Button
+              onClick={handleRefreshNudges}
+              disabled={refreshing}
+              variant="secondary"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              />
+              Refresh Nudges
+            </Button>
+          </div>
         </div>
 
         {error && (

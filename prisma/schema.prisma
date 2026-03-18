@@ -13,8 +13,9 @@ model Partner {
   avatarUrl String?  @map("avatar_url")
   createdAt DateTime @default(now()) @map("created_at")
 
-  contacts Contact[]
-  meetings Meeting[]
+  contacts        Contact[]
+  meetings        Meeting[]
+  nudgeRuleConfig NudgeRuleConfig?
 
   @@map("partners")
 }
@@ -41,10 +42,11 @@ model Contact {
   email         String
   title         String
   phone         String?
-  importance    String   @default("MEDIUM")
-  notes         String?
-  lastContacted DateTime? @map("last_contacted")
-  createdAt     DateTime @default(now()) @map("created_at")
+  importance         String   @default("MEDIUM")
+  notes              String?
+  lastContacted      DateTime? @map("last_contacted")
+  staleThresholdDays Int?      @map("stale_threshold_days")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   partner      Partner          @relation(fields: [partnerId], references: [id])
   company      Company          @relation(fields: [companyId], references: [id])
@@ -198,4 +200,29 @@ model CampaignOutreach {
 
   @@index([contactId])
   @@map("campaign_outreaches")
+}
+
+model NudgeRuleConfig {
+  id        String   @id @default(uuid())
+  partnerId String   @unique @map("partner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  staleContactEnabled    Boolean @default(true) @map("stale_contact_enabled")
+  jobChangeEnabled       Boolean @default(true) @map("job_change_enabled")
+  companyNewsEnabled     Boolean @default(true) @map("company_news_enabled")
+  upcomingEventEnabled   Boolean @default(true) @map("upcoming_event_enabled")
+  meetingPrepEnabled     Boolean @default(true) @map("meeting_prep_enabled")
+  eventAttendedEnabled   Boolean @default(true) @map("event_attended_enabled")
+  eventRegisteredEnabled Boolean @default(true) @map("event_registered_enabled")
+  articleReadEnabled     Boolean @default(true) @map("article_read_enabled")
+
+  staleDaysCritical Int @default(30) @map("stale_days_critical")
+  staleDaysHigh     Int @default(45) @map("stale_days_high")
+  staleDaysMedium   Int @default(60) @map("stale_days_medium")
+  staleDaysLow      Int @default(90) @map("stale_days_low")
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@map("nudge_rule_configs")
 }
