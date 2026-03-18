@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Save, RotateCcw, Loader2, Check, Users } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { getTierColors } from "@/lib/utils/tier-colors";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -303,14 +304,17 @@ export default function NudgeSettingsPage() {
             <CardContent>
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 {([
-                  { key: "staleDaysCritical" as const, label: "Critical", tier: "CRITICAL", priority: "URGENT", color: "text-red-600" },
-                  { key: "staleDaysHigh" as const, label: "High", tier: "HIGH", priority: "HIGH", color: "text-orange-600" },
-                  { key: "staleDaysMedium" as const, label: "Medium", tier: "MEDIUM", priority: "MEDIUM", color: "text-yellow-600" },
-                  { key: "staleDaysLow" as const, label: "Low", tier: "LOW", priority: "MEDIUM", color: "text-muted-foreground" },
-                ]).map((tier) => (
+                  { key: "staleDaysCritical" as const, label: "Critical", tier: "CRITICAL", priority: "URGENT" },
+                  { key: "staleDaysHigh" as const, label: "High", tier: "HIGH", priority: "HIGH" },
+                  { key: "staleDaysMedium" as const, label: "Medium", tier: "MEDIUM", priority: "MEDIUM" },
+                  { key: "staleDaysLow" as const, label: "Low", tier: "LOW", priority: "MEDIUM" },
+                ]).map((tier) => {
+                  const colors = getTierColors(tier.tier);
+                  return (
                   <div key={tier.key} className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
-                      <span className={tier.color}>{tier.label}</span> contacts
+                    <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <span className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
+                      <span className={colors.text}>{tier.label}</span> contacts
                     </label>
                     <p className="text-xs text-muted-foreground">
                       Alert after N days — {tier.priority} priority
@@ -330,7 +334,8 @@ export default function NudgeSettingsPage() {
                       View &amp; manage {tier.label.toLowerCase()} contacts
                     </Link>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

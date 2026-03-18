@@ -37,6 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownPreview } from "@/components/ui/markdown-preview";
+import { getTierColors } from "@/lib/utils/tier-colors";
 import { format } from "date-fns";
 
 type Contact = {
@@ -112,21 +113,13 @@ type ContactMeeting = {
   }[];
 };
 
-function getImportanceBadgeVariant(
-  importance: string
-): "destructive" | "warning" | "secondary" | "outline" {
-  switch (importance) {
-    case "CRITICAL":
-      return "destructive";
-    case "HIGH":
-      return "warning";
-    case "MEDIUM":
-      return "secondary";
-    case "LOW":
-      return "outline";
-    default:
-      return "secondary";
-  }
+function TierBadge({ importance }: { importance: string }) {
+  const colors = getTierColors(importance);
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${colors.badge}`}>
+      {importance}
+    </span>
+  );
 }
 
 function getSentimentColor(sentiment: string): string {
@@ -295,9 +288,7 @@ export default function ContactDetailPage() {
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-2xl">{contact.name}</CardTitle>
-                  <Badge variant={getImportanceBadgeVariant(contact.importance)}>
-                    {contact.importance}
-                  </Badge>
+                  <TierBadge importance={contact.importance} />
                   {editingThreshold ? (
                     <span className="flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5 text-muted-foreground" />
