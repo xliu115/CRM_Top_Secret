@@ -23,6 +23,15 @@ import {
   Building2,
   Settings,
   BellOff,
+  Moon,
+  Send,
+  RotateCcw,
+  Briefcase,
+  Newspaper,
+  ClipboardList,
+  Ticket,
+  CalendarCheck,
+  Linkedin,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -117,6 +126,49 @@ type ContactMeeting = {
   }[];
 };
 
+type ContactNudge = {
+  id: string;
+  ruleType: string;
+  reason: string;
+  priority: string;
+  status: string;
+  metadata?: string | null;
+  contact: {
+    id: string;
+    name: string;
+    email: string;
+    title: string;
+    company: { name: string };
+  };
+  signal?: {
+    type: string;
+    content: string;
+    url?: string | null;
+  } | null;
+};
+
+type InsightData = {
+  type: string;
+  reason: string;
+  priority: string;
+  signalId?: string;
+  signalContent?: string;
+  signalUrl?: string | null;
+  relatedPartners?: { partnerId: string; partnerName: string }[];
+  personName?: string;
+};
+
+type NudgeMetadata = {
+  insights?: InsightData[];
+  relatedPartners?: { partnerId: string; partnerName: string }[];
+  personName?: string;
+};
+
+function parseMetadata(metadata?: string | null): NudgeMetadata | null {
+  if (!metadata) return null;
+  try { return JSON.parse(metadata); } catch { return null; }
+}
+
 type FirmRelationship = {
   partnerId: string;
   partnerName: string;
@@ -172,6 +224,44 @@ const NUDGE_TYPES = [
   { key: "LINKEDIN_ACTIVITY", label: "LinkedIn Activity" },
 ] as const;
 
+interface NudgeTypeConfig {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  ctaLabel: string;
+  ctaIcon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bgColor: string;
+}
+
+const NUDGE_TYPE_CONFIG: Record<string, NudgeTypeConfig> = {
+  STALE_CONTACT: { icon: Clock, label: "Reconnect", ctaLabel: "Draft Check-in", ctaIcon: Mail, color: "text-orange-600", bgColor: "bg-orange-50 dark:bg-orange-950/30" },
+  JOB_CHANGE: { icon: Briefcase, label: "Executive Transition", ctaLabel: "Draft Congratulations", ctaIcon: Mail, color: "text-purple-600", bgColor: "bg-purple-50 dark:bg-purple-950/30" },
+  COMPANY_NEWS: { icon: Newspaper, label: "Company News", ctaLabel: "Draft News Email", ctaIcon: Mail, color: "text-blue-600", bgColor: "bg-blue-50 dark:bg-blue-950/30" },
+  UPCOMING_EVENT: { icon: CalendarDays, label: "Upcoming Event", ctaLabel: "Draft Pre-Event Email", ctaIcon: Mail, color: "text-teal-600", bgColor: "bg-teal-50 dark:bg-teal-950/30" },
+  MEETING_PREP: { icon: ClipboardList, label: "Meeting Prep", ctaLabel: "Generate Brief", ctaIcon: FileText, color: "text-indigo-600", bgColor: "bg-indigo-50 dark:bg-indigo-950/30" },
+  EVENT_ATTENDED: { icon: Ticket, label: "Event Follow-Up", ctaLabel: "Draft Follow-Up", ctaIcon: Mail, color: "text-green-600", bgColor: "bg-green-50 dark:bg-green-950/30" },
+  EVENT_REGISTERED: { icon: CalendarCheck, label: "Event Outreach", ctaLabel: "Draft Pre-Event Note", ctaIcon: Mail, color: "text-cyan-600", bgColor: "bg-cyan-50 dark:bg-cyan-950/30" },
+  ARTICLE_READ: { icon: BookOpen, label: "Content Follow-Up", ctaLabel: "Draft Content Email", ctaIcon: Mail, color: "text-rose-600", bgColor: "bg-rose-50 dark:bg-rose-950/30" },
+  LINKEDIN_ACTIVITY: { icon: Linkedin, label: "LinkedIn Activity", ctaLabel: "Draft LinkedIn Email", ctaIcon: Mail, color: "text-sky-600", bgColor: "bg-sky-50 dark:bg-sky-950/30" },
+};
+
+const DEFAULT_TYPE_CONFIG: NudgeTypeConfig = {
+  icon: Send, label: "Nudge", ctaLabel: "Reach Out", ctaIcon: Send, color: "text-muted-foreground", bgColor: "bg-muted/50",
+};
+
+function getTypeConfig(ruleType: string): NudgeTypeConfig {
+  return NUDGE_TYPE_CONFIG[ruleType] ?? DEFAULT_TYPE_CONFIG;
+}
+
+function getPriorityClassName(priority: string): string {
+  switch (priority) {
+    case "URGENT": return "border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400";
+    case "HIGH": return "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400";
+    case "MEDIUM": return "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400";
+    default: return "border-border bg-muted/50 text-muted-foreground";
+  }
+}
+
 function getIntensityStyle(intensity: string): string {
   switch (intensity) {
     case "Very High":
@@ -206,6 +296,7 @@ export default function ContactDetailPage() {
   const [articles, setArticles] = useState<ArticleEngagement[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOutreach[]>([]);
   const [meetings, setMeetings] = useState<ContactMeeting[]>([]);
+  const [nudges, setNudges] = useState<ContactNudge[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -246,6 +337,7 @@ export default function ContactDetailPage() {
         setArticles(data.engagements?.articles ?? []);
         setCampaigns(data.engagements?.campaigns ?? []);
         setMeetings(data.meetings ?? []);
+        setNudges(data.nudges ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
@@ -298,6 +390,20 @@ export default function ContactDetailPage() {
       setError("Failed to save staleness threshold");
     } finally {
       setSavingThreshold(false);
+    }
+  }
+
+  async function handleNudgeStatusUpdate(nudgeId: string, status: string) {
+    try {
+      const res = await fetch(`/api/nudges/${nudgeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Failed to update nudge");
+      setNudges((prev) => prev.filter((n) => n.id !== nudgeId));
+    } catch {
+      setError("Failed to update nudge status");
     }
   }
 
@@ -664,6 +770,23 @@ export default function ContactDetailPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Open nudges */}
+        {nudges.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Send className="h-4 w-4 text-primary" />
+              Open Nudges ({nudges.length})
+            </h2>
+            {nudges.map((nudge) => (
+              <ContactNudgeCard
+                key={nudge.id}
+                nudge={nudge}
+                onUpdateStatus={handleNudgeStatusUpdate}
+              />
+            ))}
+          </div>
         )}
 
         <Tabs defaultValue="timeline" className="w-full">
@@ -1376,6 +1499,253 @@ function MeetingCard({
             </Button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Contact Nudge Card ───────────────────────────────────────────────
+
+function ContactNudgeInsightItem({ insight }: { insight: InsightData }) {
+  const cfg = getTypeConfig(insight.type);
+  const Icon = cfg.icon;
+  const linkLabel = insight.type === "LINKEDIN_ACTIVITY" ? "View on LinkedIn"
+    : insight.type === "JOB_CHANGE" ? "View on LinkedIn"
+    : insight.type === "COMPANY_NEWS" ? "Read article"
+    : "View source";
+
+  return (
+    <div className="flex gap-2.5">
+      <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${cfg.bgColor}`}>
+        <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
+          {insight.signalUrl && (
+            <a href={insight.signalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline">
+              <ExternalLink className="h-2.5 w-2.5" />
+              {linkLabel}
+            </a>
+          )}
+        </div>
+        <p className="text-sm text-foreground/80 leading-snug mt-0.5">{insight.reason}</p>
+        {insight.relatedPartners && insight.relatedPartners.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <Users className="h-3 w-3 text-purple-500" />
+            <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+              {insight.relatedPartners.map((p) => p.partnerName).join(", ")} know{insight.relatedPartners.length === 1 ? "s" : ""} {insight.personName ?? "this person"}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ContactNudgeCard({
+  nudge,
+  onUpdateStatus,
+}: {
+  nudge: ContactNudge;
+  onUpdateStatus: (id: string, status: string) => void;
+}) {
+  const [showDraft, setShowDraft] = useState(false);
+  const [showAllInsights, setShowAllInsights] = useState(false);
+  const meta = parseMetadata(nudge.metadata);
+  const insights = meta?.insights ?? [];
+  const cfg = getTypeConfig(nudge.ruleType);
+  const CtaIcon = cfg.ctaIcon;
+  const Icon = cfg.icon;
+
+  const MAX_VISIBLE = 3;
+  const visibleInsights = showAllInsights ? insights : insights.slice(0, MAX_VISIBLE);
+  const hiddenCount = insights.length - MAX_VISIBLE;
+
+  return (
+    <Card className="overflow-hidden">
+      <div className={`h-1 w-full ${cfg.color.replace("text-", "bg-")}`} />
+      <CardContent className="pt-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cfg.bgColor}`}>
+            <Icon className={`h-4 w-4 ${cfg.color}`} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
+              <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                {nudge.priority}
+              </Badge>
+            </div>
+            <p className="mt-1 text-sm text-foreground leading-relaxed">{nudge.reason}</p>
+          </div>
+        </div>
+
+        {insights.length > 0 && (
+          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+            {visibleInsights.map((insight, i) => (
+              <ContactNudgeInsightItem key={`${insight.type}-${i}`} insight={insight} />
+            ))}
+            {hiddenCount > 0 && !showAllInsights && (
+              <button
+                onClick={() => setShowAllInsights(true)}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                +{hiddenCount} more
+              </button>
+            )}
+            {showAllInsights && hiddenCount > 0 && (
+              <button
+                onClick={() => setShowAllInsights(false)}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+              >
+                Show less
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => setShowDraft(!showDraft)}>
+            <CtaIcon className="h-4 w-4" />
+            {cfg.ctaLabel}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "SNOOZED")}>
+            <Moon className="h-4 w-4" />
+            Snooze
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+            <Check className="h-4 w-4" />
+            Done
+          </Button>
+        </div>
+
+        {showDraft && (
+          <ContactNudgeDraftPanel nudge={nudge} onClose={() => setShowDraft(false)} />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ContactNudgeDraftPanel({
+  nudge,
+  onClose,
+}: {
+  nudge: ContactNudge;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<{ subject: string; body: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchDraft() {
+      setLoading(true);
+      setDraftError(null);
+      try {
+        const res = await fetch(`/api/nudges/${nudge.id}/draft-email`, { method: "POST" });
+        if (!res.ok) throw new Error("Failed to generate draft");
+        const data = await res.json();
+        if (!cancelled) setDraft(data);
+      } catch (err) {
+        if (!cancelled) setDraftError(err instanceof Error ? err.message : "Something went wrong");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchDraft();
+    return () => { cancelled = true; };
+  }, [nudge.id]);
+
+  async function handleCopy() {
+    if (!draft) return;
+    const text = `Subject: ${draft.subject}\n\n${draft.body}`;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleRegenerate() {
+    setLoading(true);
+    setDraftError(null);
+    try {
+      const res = await fetch(`/api/nudges/${nudge.id}/draft-email`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to generate draft");
+      setDraft(await res.json());
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-card p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Mail className="h-4 w-4 text-primary" />
+          Email Draft
+        </h4>
+        <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Generating personalized draft...</span>
+        </div>
+      )}
+
+      {draftError && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {draftError}
+        </div>
+      )}
+
+      {draft && !loading && (
+        <>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Subject</label>
+              <input
+                type="text"
+                value={draft.subject}
+                onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Body</label>
+              <textarea
+                value={draft.body}
+                onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+                rows={8}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" asChild>
+              <a href={`mailto:${nudge.contact.email}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`}>
+                <Send className="h-3.5 w-3.5" />
+                Open in Email
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleCopy}>
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? "Copied!" : "Copy"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRegenerate} disabled={loading}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Regenerate
+            </Button>
+          </div>
+        </>
       )}
     </div>
   );

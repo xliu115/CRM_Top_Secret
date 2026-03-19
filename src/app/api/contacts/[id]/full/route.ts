@@ -4,6 +4,7 @@ import {
   contactRepo,
   interactionRepo,
   signalRepo,
+  nudgeRepo,
   meetingRepo,
   engagementRepo,
 } from "@/lib/repositories";
@@ -21,7 +22,7 @@ export async function GET(
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
 
-    const [interactions, contactSignals, companySignals, engagements, meetings] =
+    const [interactions, contactSignals, companySignals, engagements, meetings, nudges] =
       await Promise.all([
         interactionRepo.findByContactId(id),
         signalRepo.findByContactId(id),
@@ -32,11 +33,14 @@ export async function GET(
           engagementRepo.findCampaignsByContactId(id),
         ]),
         meetingRepo.findByContactId(id),
+        nudgeRepo.findByContactId(id),
       ]);
 
     const signals = [...contactSignals, ...companySignals].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
+
+    const openNudges = nudges.filter((n) => n.status === "OPEN");
 
     return NextResponse.json({
       contact,
@@ -48,6 +52,7 @@ export async function GET(
         campaigns: engagements[2],
       },
       meetings,
+      nudges: openNudges,
     });
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {
