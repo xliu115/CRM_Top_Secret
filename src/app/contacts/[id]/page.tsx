@@ -20,6 +20,9 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  Building2,
+  Settings,
+  BellOff,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -49,6 +52,7 @@ type Contact = {
   notes: string | null;
   importance: string;
   staleThresholdDays: number | null;
+  disabledNudgeTypes: string | null;
   company: { name: string };
 };
 
@@ -113,6 +117,29 @@ type ContactMeeting = {
   }[];
 };
 
+type FirmRelationship = {
+  partnerId: string;
+  partnerName: string;
+  partnerEmail: string;
+  contactId: string;
+  isCurrentUser: boolean;
+  interactionCount: number;
+  lastInteractionDate: string | null;
+  lastInteractionType: string | null;
+  lastInteractionSummary: string | null;
+  daysSinceLastInteraction: number | null;
+  intensity: "Very High" | "High" | "Medium" | "Light";
+  intensityScore: number;
+  contactsAtCompany: number;
+};
+
+type FirmRelationshipData = {
+  contactName: string;
+  companyName: string;
+  totalPartners: number;
+  relationships: FirmRelationship[];
+};
+
 function TierBadge({ importance }: { importance: string }) {
   const colors = getTierColors(importance);
   return (
@@ -133,6 +160,41 @@ function getSentimentColor(sentiment: string): string {
   }
 }
 
+const NUDGE_TYPES = [
+  { key: "STALE_CONTACT", label: "Reconnect" },
+  { key: "JOB_CHANGE", label: "Executive Transition" },
+  { key: "COMPANY_NEWS", label: "Company News" },
+  { key: "UPCOMING_EVENT", label: "Upcoming Event" },
+  { key: "MEETING_PREP", label: "Meeting Prep" },
+  { key: "EVENT_ATTENDED", label: "Event Follow-Up" },
+  { key: "EVENT_REGISTERED", label: "Event Outreach" },
+  { key: "ARTICLE_READ", label: "Content Follow-Up" },
+  { key: "LINKEDIN_ACTIVITY", label: "LinkedIn Activity" },
+] as const;
+
+function getIntensityStyle(intensity: string): string {
+  switch (intensity) {
+    case "Very High":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "High":
+      return "bg-blue-100 text-blue-800 border-blue-200";
+    case "Medium":
+      return "bg-amber-100 text-amber-800 border-amber-200";
+    default:
+      return "bg-slate-100 text-slate-600 border-slate-200";
+  }
+}
+
+function formatDaysAgo(days: number | null): string {
+  if (days === null) return "No interactions";
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+  if (days < 60) return `${Math.floor(days / 7)} weeks ago`;
+  if (days < 365) return `${Math.floor(days / 30)} months ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
 export default function ContactDetailPage() {
   const params = useParams();
   const id = params?.id as string;
@@ -150,6 +212,13 @@ export default function ContactDetailPage() {
   const [editingThreshold, setEditingThreshold] = useState(false);
   const [thresholdInput, setThresholdInput] = useState("");
   const [savingThreshold, setSavingThreshold] = useState(false);
+
+  const [firmRelData, setFirmRelData] = useState<FirmRelationshipData | null>(null);
+  const [firmRelLoading, setFirmRelLoading] = useState(false);
+  const [firmRelFetched, setFirmRelFetched] = useState(false);
+
+  const [showNudgePrefs, setShowNudgePrefs] = useState(false);
+  const [savingNudgePrefs, setSavingNudgePrefs] = useState(false);
 
   const [showDraftPanel, setShowDraftPanel] = useState(false);
   const [draftSubject, setDraftSubject] = useState("");
@@ -232,6 +301,59 @@ export default function ContactDetailPage() {
     }
   }
 
+  async function fetchFirmRelationships() {
+    if (firmRelFetched) return;
+    setFirmRelLoading(true);
+    try {
+      const res = await fetch(`/api/contacts/${id}/firm-relationships`);
+      if (res.ok) {
+        const data = await res.json();
+        setFirmRelData(data);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setFirmRelLoading(false);
+      setFirmRelFetched(true);
+    }
+  }
+
+  function getDisabledTypes(): Set<string> {
+    if (!contact?.disabledNudgeTypes) return new Set();
+    try {
+      return new Set(JSON.parse(contact.disabledNudgeTypes) as string[]);
+    } catch {
+      return new Set();
+    }
+  }
+
+  async function handleToggleNudgeType(typeKey: string) {
+    if (!contact) return;
+    setSavingNudgePrefs(true);
+    const disabled = getDisabledTypes();
+    if (disabled.has(typeKey)) {
+      disabled.delete(typeKey);
+    } else {
+      disabled.add(typeKey);
+    }
+    const newDisabled = Array.from(disabled);
+    try {
+      const res = await fetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ disabledNudgeTypes: newDisabled.length > 0 ? newDisabled : null }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setContact((prev) => prev ? { ...prev, disabledNudgeTypes: updated.disabledNudgeTypes } : prev);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setSavingNudgePrefs(false);
+    }
+  }
+
   const sortedInteractions = [...interactions].sort(
     (a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -289,72 +411,6 @@ export default function ContactDetailPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-2xl">{contact.name}</CardTitle>
                   <TierBadge importance={contact.importance} />
-                  {editingThreshold ? (
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                      <Input
-                        type="number"
-                        min={1}
-                        max={365}
-                        className="h-7 w-20 text-xs"
-                        value={thresholdInput}
-                        onChange={(e) => setThresholdInput(e.target.value)}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const val = parseInt(thresholdInput, 10);
-                            if (!isNaN(val) && val >= 1 && val <= 365) handleSaveThreshold(val);
-                          }
-                          if (e.key === "Escape") setEditingThreshold(false);
-                        }}
-                      />
-                      <span className="text-xs text-muted-foreground">days</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        disabled={savingThreshold}
-                        onClick={() => {
-                          const val = parseInt(thresholdInput, 10);
-                          if (!isNaN(val) && val >= 1 && val <= 365) handleSaveThreshold(val);
-                        }}
-                      >
-                        {savingThreshold ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                      </Button>
-                      {contact.staleThresholdDays !== null && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs text-muted-foreground"
-                          disabled={savingThreshold}
-                          onClick={() => handleSaveThreshold(null)}
-                        >
-                          Use default
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-1"
-                        onClick={() => setEditingThreshold(false)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </span>
-                  ) : (
-                    <button
-                      className="flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors"
-                      onClick={() => {
-                        setThresholdInput(contact.staleThresholdDays?.toString() ?? "");
-                        setEditingThreshold(true);
-                      }}
-                    >
-                      <Clock className="h-3.5 w-3.5" />
-                      {contact.staleThresholdDays !== null
-                        ? `${contact.staleThresholdDays}d stale threshold`
-                        : "Set stale threshold"}
-                    </button>
-                  )}
                 </div>
                 <CardDescription>
                   {contact.title} at {contact.company.name}
@@ -375,6 +431,131 @@ export default function ContactDetailPage() {
                     {contact.notes}
                   </p>
                 )}
+                {/* Nudge preferences — stale threshold + type toggles */}
+                <div className="mt-2">
+                  <button
+                    className="flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors"
+                    onClick={() => setShowNudgePrefs(!showNudgePrefs)}
+                  >
+                    {getDisabledTypes().size > 0 ? (
+                      <BellOff className="h-3.5 w-3.5 text-amber-500" />
+                    ) : (
+                      <Settings className="h-3.5 w-3.5" />
+                    )}
+                    <span>Nudge preferences</span>
+                    {(contact.staleThresholdDays !== null || getDisabledTypes().size > 0) && (
+                      <span className="text-muted-foreground/70">
+                        ({[
+                          contact.staleThresholdDays !== null ? `${contact.staleThresholdDays}d stale` : null,
+                          getDisabledTypes().size > 0 ? `${getDisabledTypes().size} muted` : null,
+                        ].filter(Boolean).join(", ")})
+                      </span>
+                    )}
+                  </button>
+                  {showNudgePrefs && (
+                    <div className="mt-2 rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                      {/* Stale threshold */}
+                      <div>
+                        <p className="text-xs font-medium text-foreground mb-1.5">Stale threshold</p>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          {editingThreshold ? (
+                            <span className="flex items-center gap-1.5">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={365}
+                                className="h-7 w-20 text-xs"
+                                value={thresholdInput}
+                                onChange={(e) => setThresholdInput(e.target.value)}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    const val = parseInt(thresholdInput, 10);
+                                    if (!isNaN(val) && val >= 1 && val <= 365) handleSaveThreshold(val);
+                                  }
+                                  if (e.key === "Escape") setEditingThreshold(false);
+                                }}
+                              />
+                              <span className="text-xs text-muted-foreground">days</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                disabled={savingThreshold}
+                                onClick={() => {
+                                  const val = parseInt(thresholdInput, 10);
+                                  if (!isNaN(val) && val >= 1 && val <= 365) handleSaveThreshold(val);
+                                }}
+                              >
+                                {savingThreshold ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              </Button>
+                              {contact.staleThresholdDays !== null && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs text-muted-foreground"
+                                  disabled={savingThreshold}
+                                  onClick={() => handleSaveThreshold(null)}
+                                >
+                                  Use default
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-1"
+                                onClick={() => setEditingThreshold(false)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </span>
+                          ) : (
+                            <button
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={() => {
+                                setThresholdInput(contact.staleThresholdDays?.toString() ?? "");
+                                setEditingThreshold(true);
+                              }}
+                            >
+                              {contact.staleThresholdDays !== null
+                                ? `${contact.staleThresholdDays} days (custom)`
+                                : "Using tier default — click to customize"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {/* Type toggles */}
+                      <div>
+                        <p className="text-xs font-medium text-foreground mb-1.5">Nudge types</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {NUDGE_TYPES.map((nt) => {
+                            const isDisabled = getDisabledTypes().has(nt.key);
+                            return (
+                              <button
+                                key={nt.key}
+                                disabled={savingNudgePrefs}
+                                onClick={() => handleToggleNudgeType(nt.key)}
+                                className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                                  isDisabled
+                                    ? "border-border bg-muted text-muted-foreground line-through opacity-60"
+                                    : "border-primary/20 bg-primary/5 text-foreground"
+                                } hover:border-primary/40`}
+                              >
+                                <span
+                                  className={`h-2 w-2 rounded-full shrink-0 ${
+                                    isDisabled ? "bg-muted-foreground/30" : "bg-primary"
+                                  }`}
+                                />
+                                {nt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <Button
                 onClick={() => {
@@ -490,6 +671,9 @@ export default function ContactDetailPage() {
             <TabsTrigger value="timeline">Interactions</TabsTrigger>
             <TabsTrigger value="signals">External Signals</TabsTrigger>
             <TabsTrigger value="engagement">Reach & Engagement</TabsTrigger>
+            <TabsTrigger value="firm-relationship" onClick={fetchFirmRelationships}>
+              Firm Relationship
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="timeline" className="mt-4 space-y-6">
@@ -590,6 +774,83 @@ export default function ContactDetailPage() {
                             View source
                           </a>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="firm-relationship" className="mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
+                    <Building2 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">
+                      Firm Relationship
+                    </CardTitle>
+                    <CardDescription>
+                      {firmRelData
+                        ? `${firmRelData.totalPartners} partner${firmRelData.totalPartners !== 1 ? "s" : ""} have ${firmRelData.contactName} in their contacts`
+                        : "McKinsey partners with relationships to this contact"}
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {firmRelLoading ? (
+                  <div className="flex items-center gap-2 py-8 justify-center text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading firm relationships...
+                  </div>
+                ) : !firmRelData || firmRelData.relationships.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    No other partners have this contact in their CRM.
+                  </p>
+                ) : (
+                  <div className="space-y-0 divide-y divide-border">
+                    {firmRelData.relationships.map((rel) => (
+                      <div
+                        key={rel.partnerId}
+                        className="flex items-center gap-4 py-4 first:pt-0 last:pb-0"
+                      >
+                        <Avatar name={rel.partnerName} size="md" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-sm text-foreground">
+                              {rel.isCurrentUser ? "You" : rel.partnerName}
+                            </span>
+                            {rel.isCurrentUser && (
+                              <span className="text-xs text-muted-foreground">
+                                ({rel.partnerName})
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {rel.contactsAtCompany} contact{rel.contactsAtCompany !== 1 ? "s" : ""} at {firmRelData.companyName}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <span
+                            className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${getIntensityStyle(rel.intensity)}`}
+                          >
+                            {rel.intensity}
+                          </span>
+                          <div className="text-right min-w-[100px]">
+                            <p className="text-sm text-muted-foreground">
+                              {formatDaysAgo(rel.daysSinceLastInteraction)}
+                            </p>
+                            {rel.interactionCount > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                {rel.interactionCount} interaction{rel.interactionCount !== 1 ? "s" : ""}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
