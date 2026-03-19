@@ -1,6 +1,10 @@
 export type { IPartnerRepository } from "./partner-repository";
 export type { IContactRepository, ContactWithCompany } from "./contact-repository";
 export type {
+  ICompanyRepository,
+  CompanyWithContacts,
+} from "./company-repository";
+export type {
   IInteractionRepository,
   InteractionWithContact,
 } from "./interaction-repository";

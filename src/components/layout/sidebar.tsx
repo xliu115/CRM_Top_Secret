@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Bell,
   Users,
+  Building2,
   Calendar,
   MessageSquare,
   LogOut,
@@ -18,8 +19,9 @@ import { ActivateLogo } from "@/components/ui/activate-logo";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/nudges", label: "Nudges", icon: Bell },
-  { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/meetings", label: "Meetings", icon: Calendar },
+  { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/companies", label: "Institutions", icon: Building2 },
   { href: "/chat", label: "Ask Anything", icon: MessageSquare },
 ];
 
