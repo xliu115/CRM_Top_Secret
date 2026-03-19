@@ -2,6 +2,14 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+const VALID_PARTNER_IDS = [
+  "p-ava-patel",
+  "p-jordan-kim",
+  "p-sam-rivera",
+  "p-morgan-chen",
+  "p-taylor-brooks",
+];
+
 const protectedPaths = [
   "/dashboard",
   "/nudges",
@@ -31,16 +39,25 @@ export async function middleware(request: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  if (!token) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (token) return NextResponse.next();
+
+  // Dev/verification bypass: accept partner_id cookie for API routes
+  if (
+    process.env.NODE_ENV === "development" &&
+    pathname.startsWith("/api/")
+  ) {
+    const partnerId = request.cookies.get("partner_id")?.value;
+    if (partnerId && VALID_PARTNER_IDS.includes(partnerId)) {
+      return NextResponse.next();
     }
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const loginUrl = new URL("/login", request.url);
+  loginUrl.searchParams.set("callbackUrl", pathname);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {

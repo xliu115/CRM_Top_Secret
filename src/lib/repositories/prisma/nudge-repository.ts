@@ -51,6 +51,7 @@ export class PrismaNudgeRepository implements INudgeRepository {
       ruleType: string;
       reason: string;
       priority: string;
+      metadata?: string;
     }[]
   ) {
     const result = await prisma.nudge.createMany({
@@ -61,6 +62,7 @@ export class PrismaNudgeRepository implements INudgeRepository {
         reason: n.reason,
         priority: n.priority,
         status: "OPEN",
+        metadata: n.metadata || null,
       })),
     });
     return result.count;

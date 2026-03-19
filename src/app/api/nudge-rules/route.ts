@@ -27,6 +27,7 @@ const BOOLEAN_FIELDS = [
   "eventAttendedEnabled",
   "eventRegisteredEnabled",
   "articleReadEnabled",
+  "linkedinActivityEnabled",
 ] as const;
 
 const INT_FIELDS = [

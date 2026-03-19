@@ -110,6 +110,7 @@ model Nudge {
   priority       String   @default("MEDIUM")
   status         String   @default("OPEN")
   generatedEmail String?  @map("generated_email")
+  metadata       String?  @map("metadata")
   createdAt      DateTime @default(now()) @map("created_at")
 
   contact Contact         @relation(fields: [contactId], references: [id])
@@ -216,6 +217,7 @@ model NudgeRuleConfig {
   eventAttendedEnabled   Boolean @default(true) @map("event_attended_enabled")
   eventRegisteredEnabled Boolean @default(true) @map("event_registered_enabled")
   articleReadEnabled     Boolean @default(true) @map("article_read_enabled")
+  linkedinActivityEnabled Boolean @default(true) @map("linkedin_activity_enabled")
 
   staleDaysCritical Int @default(30) @map("stale_days_critical")
   staleDaysHigh     Int @default(45) @map("stale_days_high")

@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { RefreshCw, User, Moon, Check, ExternalLink, Settings } from "lucide-react";
+import {
+  RefreshCw, Send, Moon, Check, ExternalLink, Settings, Clock, Briefcase, Newspaper,
+  CalendarDays, ClipboardList, Ticket, CalendarCheck, BookOpen, Linkedin,
+  Copy, RotateCcw, X, Loader2, Mail, FileText, Users,
+} from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -18,12 +18,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 type Nudge = {
   id: string;
+  ruleType: string;
   reason: string;
   priority: string;
   status: string;
+  generatedEmail?: string | null;
+  metadata?: string | null;
   contact: {
     id: string;
     name: string;
+    email: string;
     title: string;
     company: { name: string };
   };
@@ -33,6 +37,30 @@ type Nudge = {
     url?: string | null;
   } | null;
 };
+
+type InsightData = {
+  type: string;
+  reason: string;
+  priority: string;
+  signalId?: string;
+  signalContent?: string;
+  signalUrl?: string | null;
+  relatedPartners?: { partnerId: string; partnerName: string }[];
+  personName?: string;
+};
+
+type NudgeMetadata = {
+  insights?: InsightData[];
+  relatedPartners?: { partnerId: string; partnerName: string }[];
+  personName?: string;
+};
+
+function parseMetadata(metadata?: string | null): NudgeMetadata | null {
+  if (!metadata) return null;
+  try { return JSON.parse(metadata); } catch { return null; }
+}
+
+type DraftEmail = { subject: string; body: string };
 
 const STATUS_OPTIONS = [
   { value: "", label: "All" },
@@ -49,32 +77,427 @@ const PRIORITY_OPTIONS = [
   { value: "LOW", label: "Low" },
 ];
 
-const PRIORITY_ORDER: Record<string, number> = {
-  URGENT: 0,
-  HIGH: 1,
-  MEDIUM: 2,
-  LOW: 3,
-};
+const PRIORITY_ORDER: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
 function getPriorityClassName(priority: string): string {
   switch (priority) {
-    case "URGENT":
-      return "border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400";
-    case "HIGH":
-      return "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400";
-    case "MEDIUM":
-      return "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400";
-    case "LOW":
-      return "border-border bg-muted/50 text-muted-foreground";
-    default:
-      return "border-border bg-muted/50 text-muted-foreground";
+    case "URGENT": return "border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400";
+    case "HIGH": return "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400";
+    case "MEDIUM": return "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400";
+    default: return "border-border bg-muted/50 text-muted-foreground";
   }
+}
+
+interface NudgeTypeConfig {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  ctaLabel: string;
+  ctaIcon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bgColor: string;
+}
+
+const NUDGE_TYPE_CONFIG: Record<string, NudgeTypeConfig> = {
+  STALE_CONTACT: { icon: Clock, label: "Reconnect", ctaLabel: "Draft Check-in", ctaIcon: Mail, color: "text-orange-600", bgColor: "bg-orange-50 dark:bg-orange-950/30" },
+  JOB_CHANGE: { icon: Briefcase, label: "Executive Transition", ctaLabel: "Draft Congratulations", ctaIcon: Mail, color: "text-purple-600", bgColor: "bg-purple-50 dark:bg-purple-950/30" },
+  COMPANY_NEWS: { icon: Newspaper, label: "Company News", ctaLabel: "Draft News Email", ctaIcon: Mail, color: "text-blue-600", bgColor: "bg-blue-50 dark:bg-blue-950/30" },
+  UPCOMING_EVENT: { icon: CalendarDays, label: "Upcoming Event", ctaLabel: "Draft Pre-Event Email", ctaIcon: Mail, color: "text-teal-600", bgColor: "bg-teal-50 dark:bg-teal-950/30" },
+  MEETING_PREP: { icon: ClipboardList, label: "Meeting Prep", ctaLabel: "Generate Brief", ctaIcon: FileText, color: "text-indigo-600", bgColor: "bg-indigo-50 dark:bg-indigo-950/30" },
+  EVENT_ATTENDED: { icon: Ticket, label: "Event Follow-Up", ctaLabel: "Draft Follow-Up", ctaIcon: Mail, color: "text-green-600", bgColor: "bg-green-50 dark:bg-green-950/30" },
+  EVENT_REGISTERED: { icon: CalendarCheck, label: "Event Outreach", ctaLabel: "Draft Pre-Event Note", ctaIcon: Mail, color: "text-cyan-600", bgColor: "bg-cyan-50 dark:bg-cyan-950/30" },
+  ARTICLE_READ: { icon: BookOpen, label: "Content Follow-Up", ctaLabel: "Draft Content Email", ctaIcon: Mail, color: "text-rose-600", bgColor: "bg-rose-50 dark:bg-rose-950/30" },
+  LINKEDIN_ACTIVITY: { icon: Linkedin, label: "LinkedIn Activity", ctaLabel: "Draft LinkedIn Email", ctaIcon: Mail, color: "text-sky-600", bgColor: "bg-sky-50 dark:bg-sky-950/30" },
+};
+
+const DEFAULT_TYPE_CONFIG: NudgeTypeConfig = {
+  icon: Send, label: "Nudge", ctaLabel: "Reach Out", ctaIcon: Send, color: "text-muted-foreground", bgColor: "bg-muted/50",
+};
+
+function getTypeConfig(ruleType: string): NudgeTypeConfig {
+  return NUDGE_TYPE_CONFIG[ruleType] ?? DEFAULT_TYPE_CONFIG;
+}
+
+function NudgeTypeBadge({ ruleType }: { ruleType: string }) {
+  const cfg = getTypeConfig(ruleType);
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.bgColor} ${cfg.color}`}>
+      <Icon className="h-3 w-3" />
+      {cfg.label}
+    </span>
+  );
+}
+
+function DraftEmailPanel({
+  nudge, onClose,
+}: { nudge: Nudge; onClose: () => void }) {
+  const [draft, setDraft] = useState<DraftEmail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const fetchDraft = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/nudges/${nudge.id}/draft-email`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to generate draft");
+      const data = await res.json();
+      setDraft(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }, [nudge.id]);
+
+  useEffect(() => { fetchDraft(); }, [fetchDraft]);
+
+  async function handleCopy() {
+    if (!draft) return;
+    const text = `Subject: ${draft.subject}\n\n${draft.body}`;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div ref={panelRef} className="mt-4 rounded-lg border border-primary/20 bg-card p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Mail className="h-4 w-4 text-primary" />
+          Email Draft
+        </h4>
+        <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Generating personalized draft...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {draft && !loading && (
+        <>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Subject</label>
+              <input
+                type="text"
+                value={draft.subject}
+                onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Body</label>
+              <textarea
+                value={draft.body}
+                onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+                rows={8}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" asChild>
+              <a href={`mailto:${nudge.contact.email}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`}>
+                <Send className="h-3.5 w-3.5" />
+                Open in Email
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleCopy}>
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? "Copied!" : "Copy"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={fetchDraft} disabled={loading}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Regenerate
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PartnerRelationsPanel({ metadata }: { metadata: NudgeMetadata }) {
+  if (!metadata.relatedPartners || metadata.relatedPartners.length === 0) return null;
+  return (
+    <div className="rounded-md border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Users className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+        <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+          McK Partners who know {metadata.personName ?? "this person"}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {metadata.relatedPartners.map((p) => (
+          <span
+            key={p.partnerId}
+            className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 dark:bg-purple-900/40 px-3 py-1 text-xs font-medium text-purple-700 dark:text-purple-300"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-200 dark:bg-purple-800 text-[10px] font-bold text-purple-700 dark:text-purple-300">
+              {p.partnerName.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+            </span>
+            {p.partnerName}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type MeetingBriefData = {
+  meetingTitle: string;
+  meetingTime: string | null;
+  attendeeCount: number;
+  brief: string;
+};
+
+function MeetingBriefPanel({
+  nudge, onClose,
+}: { nudge: Nudge; onClose: () => void }) {
+  const [data, setData] = useState<MeetingBriefData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const fetchBrief = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/nudges/${nudge.id}/meeting-brief`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to generate brief");
+      setData(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }, [nudge.id]);
+
+  useEffect(() => { fetchBrief(); }, [fetchBrief]);
+
+  async function handleCopy() {
+    if (!data) return;
+    await navigator.clipboard.writeText(data.brief);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-card p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 text-indigo-600" />
+          Meeting Brief
+        </h4>
+        <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Generating meeting brief...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {data && !loading && (
+        <>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-1 font-medium text-indigo-600 dark:text-indigo-400">
+              <CalendarDays className="h-3 w-3" />
+              {data.meetingTitle}
+            </span>
+            {data.meetingTime && (
+              <span>{new Date(data.meetingTime).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+            )}
+            <span>{data.attendeeCount} attendee{data.attendeeCount !== 1 ? "s" : ""}</span>
+          </div>
+
+          <div className="prose prose-sm dark:prose-invert max-w-none rounded-md border border-border bg-muted/30 p-4 overflow-auto max-h-[500px]">
+            {data.brief.split("\n").map((line, i) => {
+              if (line.startsWith("# ")) return <h2 key={i} className="text-base font-bold mt-0 mb-2">{line.slice(2)}</h2>;
+              if (line.startsWith("## ")) return <h3 key={i} className="text-sm font-semibold mt-4 mb-1 text-indigo-700 dark:text-indigo-400">{line.slice(3)}</h3>;
+              if (line.startsWith("### ")) return <h4 key={i} className="text-sm font-medium mt-3 mb-1">{line.slice(4)}</h4>;
+              if (line.startsWith("- [ ] ")) return <label key={i} className="flex items-start gap-2 text-sm my-1"><input type="checkbox" className="mt-0.5 rounded" /><span>{line.slice(6)}</span></label>;
+              if (line.startsWith("- ")) return <p key={i} className="text-sm my-0.5 pl-4 before:content-['•'] before:mr-2 before:text-muted-foreground">{line.slice(2)}</p>;
+              if (/^\d+\.\s/.test(line)) return <p key={i} className="text-sm my-0.5 pl-4">{line}</p>;
+              if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="text-sm font-semibold mt-2 mb-0.5">{line.replace(/\*\*/g, "")}</p>;
+              if (line.trim() === "") return <div key={i} className="h-2" />;
+              return <p key={i} className="text-sm my-0.5 leading-relaxed">{line}</p>;
+            })}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleCopy}>
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? "Copied!" : "Copy Brief"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={fetchBrief} disabled={loading}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Regenerate
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function InsightItem({ insight }: { insight: InsightData }) {
+  const cfg = getTypeConfig(insight.type);
+  const Icon = cfg.icon;
+  const linkLabel = insight.type === "LINKEDIN_ACTIVITY" ? "View on LinkedIn"
+    : insight.type === "JOB_CHANGE" ? "View on LinkedIn"
+    : insight.type === "COMPANY_NEWS" ? "Read article"
+    : "View source";
+
+  return (
+    <div className="flex gap-2.5">
+      <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${cfg.bgColor}`}>
+        <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
+          {insight.signalUrl && (
+            <a href={insight.signalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline">
+              <ExternalLink className="h-2.5 w-2.5" />
+              {linkLabel}
+            </a>
+          )}
+        </div>
+        <p className="text-sm text-foreground/80 leading-snug mt-0.5">{insight.reason}</p>
+        {insight.relatedPartners && insight.relatedPartners.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <Users className="h-3 w-3 text-purple-500" />
+            <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+              {insight.relatedPartners.map((p) => p.partnerName).join(", ")} know{insight.relatedPartners.length === 1 ? "s" : ""} {insight.personName ?? "this person"}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NudgeCard({
+  nudge,
+  onUpdateStatus,
+}: {
+  nudge: Nudge;
+  onUpdateStatus: (id: string, status: string) => void;
+}) {
+  const [showDraft, setShowDraft] = useState(false);
+  const meta = parseMetadata(nudge.metadata);
+  const insights = meta?.insights ?? [];
+  const cfg = getTypeConfig(nudge.ruleType);
+  const CtaIcon = cfg.ctaIcon;
+  const hasMeetingPrep = insights.some((i) => i.type === "MEETING_PREP");
+  const insightTypes = [...new Set(insights.map((i) => i.type))];
+
+  return (
+    <Card className="overflow-hidden">
+      <div className={`h-1 w-full ${cfg.color.replace("text-", "bg-")}`} />
+      <CardHeader className="pb-3 pt-4">
+        <div className="flex items-start gap-4">
+          <Avatar name={nudge.contact.name} size="md" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-lg">
+                <Link href={`/contacts/${nudge.contact.id}`} className="hover:text-primary hover:underline transition-colors">
+                  {nudge.contact.name}
+                </Link>
+              </CardTitle>
+              <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                {nudge.priority}
+              </Badge>
+            </div>
+            <CardDescription>
+              {nudge.contact.title} at {nudge.contact.company.name}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-foreground leading-relaxed">{nudge.reason}</p>
+
+        {insights.length > 0 && (
+          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+            {insights.map((insight, i) => (
+              <InsightItem key={`${insight.type}-${i}`} insight={insight} />
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          {hasMeetingPrep && (
+            <Button size="sm" onClick={() => setShowDraft(!showDraft)}>
+              <FileText className="h-4 w-4" />
+              Generate Brief
+            </Button>
+          )}
+          <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} onClick={() => setShowDraft(!showDraft)}>
+            <CtaIcon className="h-4 w-4" />
+            {hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
+          </Button>
+
+          {nudge.status === "OPEN" && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "SNOOZED")}>
+                <Moon className="h-4 w-4" />
+                Snooze
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+                <Check className="h-4 w-4" />
+                Done
+              </Button>
+            </>
+          )}
+          {nudge.status === "SNOOZED" && (
+            <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+              <Check className="h-4 w-4" />
+              Done
+            </Button>
+          )}
+        </div>
+
+        {showDraft && hasMeetingPrep && (
+          <MeetingBriefPanel nudge={nudge} onClose={() => setShowDraft(false)} />
+        )}
+        {showDraft && !hasMeetingPrep && (
+          <DraftEmailPanel nudge={nudge} onClose={() => setShowDraft(false)} />
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 
 export default function NudgesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [nudges, setNudges] = useState<Nudge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,9 +521,7 @@ export default function NudgesPage() {
     }
   }, [statusFilter, priorityFilter]);
 
-  useEffect(() => {
-    fetchNudges();
-  }, [fetchNudges]);
+  useEffect(() => { fetchNudges(); }, [fetchNudges]);
 
   async function handleRefreshNudges() {
     setRefreshing(true);
@@ -129,6 +550,27 @@ export default function NudgesPage() {
     }
   }
 
+  const filteredNudges = typeFilter
+    ? nudges.filter((n) => {
+        if (n.ruleType === typeFilter) return true;
+        const meta = parseMetadata(n.metadata);
+        return meta?.insights?.some((i) => i.type === typeFilter) ?? false;
+      })
+    : nudges;
+
+  const sortedNudges = [...filteredNudges].sort(
+    (a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99)
+  );
+
+  const typeCounts = nudges.reduce<Record<string, number>>((acc, n) => {
+    const meta = parseMetadata(n.metadata);
+    const types = meta?.insights?.map((i) => i.type) ?? [n.ruleType];
+    for (const t of new Set(types)) {
+      acc[t] = (acc[t] ?? 0) + 1;
+    }
+    return acc;
+  }, {});
+
   if (loading && nudges.length === 0) {
     return (
       <DashboardShell>
@@ -136,9 +578,7 @@ export default function NudgesPage() {
           <Skeleton className="h-10 w-48" />
           <Skeleton className="h-12 w-full" />
           <div className="space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-40" />
-            ))}
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-40" />)}
           </div>
         </div>
       </DashboardShell>
@@ -150,12 +590,8 @@ export default function NudgesPage() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              Nudges
-            </h1>
-            <p className="mt-1 text-muted-foreground">
-              Action items and reminders for your contacts
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Nudges</h1>
+            <p className="mt-1 text-muted-foreground">Action items and reminders for your contacts</p>
           </div>
           <div className="flex items-center gap-2">
             <Button asChild variant="outline">
@@ -164,153 +600,72 @@ export default function NudgesPage() {
                 Nudge Preferences
               </Link>
             </Button>
-            <Button
-              onClick={handleRefreshNudges}
-              disabled={refreshing}
-              variant="secondary"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />
+            <Button onClick={handleRefreshNudges} disabled={refreshing} variant="secondary">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               Refresh Nudges
             </Button>
           </div>
         </div>
 
         {error && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
-            {error}
-          </div>
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">{error}</div>
         )}
 
         {/* Filter bar */}
-        <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">
-              Status:
-            </span>
-            {STATUS_OPTIONS.map((opt) => (
-              <Button
-                key={opt.value}
-                variant={statusFilter === opt.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter(opt.value)}
-              >
-                {opt.label}
-              </Button>
-            ))}
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-card p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Status:</span>
+              {STATUS_OPTIONS.map((opt) => (
+                <Button key={opt.value} variant={statusFilter === opt.value ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(opt.value)}>
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Priority:</span>
+              {PRIORITY_OPTIONS.map((opt) => (
+                <Button key={opt.value} variant={priorityFilter === opt.value ? "default" : "outline"} size="sm" onClick={() => setPriorityFilter(opt.value)}>
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">
-              Priority:
-            </span>
-            {PRIORITY_OPTIONS.map((opt) => (
-              <Button
-                key={opt.value}
-                variant={priorityFilter === opt.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => setPriorityFilter(opt.value)}
-              >
-                {opt.label}
+
+          {/* Type filter chips */}
+          {Object.keys(typeCounts).length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Type:</span>
+              <Button variant={typeFilter === "" ? "default" : "outline"} size="sm" onClick={() => setTypeFilter("")}>
+                All ({nudges.length})
               </Button>
-            ))}
-          </div>
+              {Object.entries(typeCounts)
+                .sort(([, a], [, b]) => b - a)
+                .map(([type, count]) => {
+                  const cfg = getTypeConfig(type);
+                  const Icon = cfg.icon;
+                  return (
+                    <Button key={type} variant={typeFilter === type ? "default" : "outline"} size="sm" onClick={() => setTypeFilter(type)}>
+                      <Icon className="h-3.5 w-3.5" />
+                      {cfg.label} ({count})
+                    </Button>
+                  );
+                })}
+            </div>
+          )}
         </div>
 
         {/* Nudge list */}
         <div className="space-y-4">
-          {nudges.length === 0 ? (
+          {sortedNudges.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
                 No nudges found. Try adjusting your filters or refresh to generate new nudges.
               </CardContent>
             </Card>
           ) : (
-            [...nudges].sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99)).map((nudge) => (
-              <Card key={nudge.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-start gap-4">
-                    <Avatar name={nudge.contact.name} size="md" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-lg">
-                          {nudge.contact.name}
-                        </CardTitle>
-                        <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
-                          {nudge.priority}
-                        </Badge>
-                      </div>
-                      <CardDescription>
-                        {nudge.contact.title} at {nudge.contact.company.name}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-foreground">{nudge.reason}</p>
-                  {nudge.signal && (
-                    <div className="rounded-md border border-border bg-muted/50 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          Signal ({nudge.signal.type})
-                        </p>
-                        {nudge.signal.url && (
-                          <a
-                            href={nudge.signal.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            View source
-                          </a>
-                        )}
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm text-foreground">
-                        {nudge.signal.content}
-                      </p>
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <Button asChild variant="default" size="sm">
-                      <Link href={`/contacts/${nudge.contact.id}`}>
-                        <User className="h-4 w-4" />
-                        View Contact
-                      </Link>
-                    </Button>
-                    {nudge.status === "OPEN" && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUpdateStatus(nudge.id, "SNOOZED")}
-                        >
-                          <Moon className="h-4 w-4" />
-                          Snooze
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUpdateStatus(nudge.id, "DONE")}
-                        >
-                          <Check className="h-4 w-4" />
-                          Done
-                        </Button>
-                      </>
-                    )}
-                    {nudge.status === "SNOOZED" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUpdateStatus(nudge.id, "DONE")}
-                      >
-                        <Check className="h-4 w-4" />
-                        Done
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+            sortedNudges.map((nudge) => (
+              <NudgeCard key={nudge.id} nudge={nudge} onUpdateStatus={handleUpdateStatus} />
             ))
           )}
         </div>

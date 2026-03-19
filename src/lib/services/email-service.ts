@@ -8,87 +8,87 @@ const resend = process.env.RESEND_API_KEY
 const NUDGE_RECIPIENT = process.env.NUDGE_EMAIL_TO || "";
 const FROM_ADDRESS = process.env.RESEND_FROM || "Activate <onboarding@resend.dev>";
 
-function priorityColor(priority: string): string {
+const MAX_NUDGES_PER_EMAIL = 5;
+
+const MDS = {
+  deepBlue: "#051C2C",
+  blue: "#0070AD",
+  electricBlue: "#2251FF",
+  text: "#2D2D2D",
+  textLight: "#64748b",
+  bgLight: "#F5F5F5",
+  white: "#FFFFFF",
+  border: "#E0E0E0",
+  urgent: "#dc2626",
+  high: "#d97706",
+} as const;
+
+function priorityStyle(priority: string): { color: string; bg: string; label: string } {
   switch (priority) {
-    case "URGENT":
-      return "#ef4444";
-    case "HIGH":
-      return "#f59e0b";
-    case "MEDIUM":
-      return "#64748b";
-    default:
-      return "#94a3b8";
+    case "URGENT": return { color: MDS.urgent, bg: "#fef2f2", label: "Urgent" };
+    case "HIGH": return { color: MDS.high, bg: "#fffbeb", label: "High" };
+    default: return { color: MDS.textLight, bg: MDS.bgLight, label: priority.charAt(0) + priority.slice(1).toLowerCase() };
   }
 }
 
-function priorityLabel(priority: string): string {
-  switch (priority) {
-    case "URGENT":
-      return "URGENT";
-    case "HIGH":
-      return "HIGH";
-    case "MEDIUM":
-      return "MEDIUM";
-    default:
-      return "LOW";
-  }
+function ruleTypeLabel(ruleType: string): string {
+  const labels: Record<string, string> = {
+    STALE_CONTACT: "Reconnect",
+    JOB_CHANGE: "Executive Transition",
+    COMPANY_NEWS: "Company News",
+    UPCOMING_EVENT: "Upcoming Event",
+    MEETING_PREP: "Meeting Prep",
+    EVENT_ATTENDED: "Event Follow-Up",
+    EVENT_REGISTERED: "Event Outreach",
+    ARTICLE_READ: "Content Follow-Up",
+    LINKEDIN_ACTIVITY: "LinkedIn Activity",
+  };
+  return labels[ruleType] ?? "Nudge";
 }
 
-function ruleTypeIcon(ruleType: string): string {
-  switch (ruleType) {
-    case "STALE_CONTACT":
-      return "⏰";
-    case "JOB_CHANGE":
-      return "🎉";
-    case "COMPANY_NEWS":
-      return "📰";
-    case "UPCOMING_EVENT":
-      return "📅";
-    case "MEETING_PREP":
-      return "📋";
-    case "EVENT_ATTENDED":
-      return "🎫";
-    case "EVENT_REGISTERED":
-      return "📆";
-    case "ARTICLE_READ":
-      return "📖";
-    default:
-      return "💡";
-  }
+function ruleTypeCta(ruleType: string): string {
+  const ctas: Record<string, string> = {
+    STALE_CONTACT: "Draft Check-in",
+    JOB_CHANGE: "Draft Congratulations",
+    COMPANY_NEWS: "Draft News Email",
+    UPCOMING_EVENT: "Draft Pre-Event Email",
+    MEETING_PREP: "Prepare Brief",
+    EVENT_ATTENDED: "Draft Follow-Up",
+    EVENT_REGISTERED: "Draft Outreach",
+    ARTICLE_READ: "Draft Content Email",
+    LINKEDIN_ACTIVITY: "Draft LinkedIn Email",
+  };
+  return ctas[ruleType] ?? "Take Action";
 }
 
-function buildNudgeRow(nudge: NudgeWithRelations, appUrl: string): string {
-  const pColor = priorityColor(nudge.priority);
-  const pLabel = priorityLabel(nudge.priority);
-  const icon = ruleTypeIcon(nudge.ruleType);
-  const contactUrl = `${appUrl}/contacts/${nudge.contact.id}`;
+function buildNudgeRow(nudge: NudgeWithRelations, appUrl: string, isLast: boolean): string {
+  const ps = priorityStyle(nudge.priority);
+  const typeLabel = ruleTypeLabel(nudge.ruleType);
+  const ctaLabel = ruleTypeCta(nudge.ruleType);
+  const nudgesUrl = `${appUrl}/nudges`;
+  const borderBottom = isLast ? "" : `border-bottom: 1px solid ${MDS.border};`;
+
+  const reasonText = nudge.reason.length > 160
+    ? nudge.reason.slice(0, 157) + "..."
+    : nudge.reason;
 
   return `
     <tr>
-      <td style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 20px 28px; ${borderBottom}">
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
           <tr>
-            <td style="vertical-align: top; width: 44px;">
-              <div style="width: 40px; height: 40px; border-radius: 50%; background: #eff6ff; color: #2563eb; font-size: 18px; line-height: 40px; text-align: center;">
-                ${icon}
+            <td style="vertical-align: top;">
+              <div style="margin-bottom: 6px;">
+                <span style="font-weight: 600; font-size: 15px; color: ${MDS.deepBlue};">${nudge.contact.name}</span>
+                <span style="display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; color: ${ps.color}; background: ${ps.bg}; margin-left: 8px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.3px;">${ps.label}</span>
               </div>
-            </td>
-            <td style="vertical-align: top; padding-left: 14px;">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                <a href="${contactUrl}" style="font-weight: 600; font-size: 15px; color: #0f172a; text-decoration: none;">
-                  ${nudge.contact.name}
-                </a>
-                <span style="display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; color: white; background: ${pColor}; margin-left: 8px;">
-                  ${pLabel}
-                </span>
+              <div style="font-size: 12px; color: ${MDS.textLight}; margin-bottom: 8px;">
+                ${nudge.contact.title} at ${nudge.contact.company.name} &middot; ${typeLabel}
               </div>
-              <div style="font-size: 13px; color: #64748b; margin-bottom: 6px;">
-                ${nudge.contact.title} at ${nudge.contact.company.name}
+              <div style="font-size: 14px; color: ${MDS.text}; line-height: 1.5; margin-bottom: 12px;">
+                ${reasonText}
               </div>
-              <div style="font-size: 14px; color: #334155; line-height: 1.5;">
-                ${nudge.reason}
-              </div>
-              ${nudge.signal ? `<div style="margin-top: 6px; font-size: 12px; color: #94a3b8;">Signal: ${nudge.signal.type} — ${nudge.signal.content.slice(0, 120)}${nudge.signal.content.length > 120 ? "…" : ""}</div>` : ""}
+              <a href="${nudgesUrl}" style="display: inline-block; padding: 7px 20px; background: ${MDS.electricBlue}; color: ${MDS.white}; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 3px; letter-spacing: 0.2px;">${ctaLabel}</a>
             </td>
           </tr>
         </table>
@@ -101,25 +101,43 @@ function buildDigestHtml(
   nudges: NudgeWithRelations[],
   appUrl: string
 ): string {
-  const urgentCount = nudges.filter((n) => n.priority === "URGENT").length;
-  const highCount = nudges.filter((n) => n.priority === "HIGH").length;
-  const mediumCount = nudges.filter(
-    (n) => n.priority === "MEDIUM" || n.priority === "LOW"
-  ).length;
-
   const sorted = [...nudges].sort((a, b) => {
     const order: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
     return (order[a.priority] ?? 3) - (order[b.priority] ?? 3);
   });
 
-  const nudgeRows = sorted.map((n) => buildNudgeRow(n, appUrl)).join("");
+  const displayed = sorted.slice(0, MAX_NUDGES_PER_EMAIL);
+  const remaining = nudges.length - displayed.length;
+
+  const urgentCount = nudges.filter((n) => n.priority === "URGENT").length;
+  const highCount = nudges.filter((n) => n.priority === "HIGH").length;
+
+  const nudgeRows = displayed
+    .map((n, i) => buildNudgeRow(n, appUrl, i === displayed.length - 1))
+    .join("");
 
   const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
+
+  const firstName = partnerName.split(" ")[0];
+
+  const summaryParts: string[] = [];
+  if (urgentCount > 0) summaryParts.push(`<strong style="color: ${MDS.urgent};">${urgentCount} urgent</strong>`);
+  if (highCount > 0) summaryParts.push(`<strong style="color: ${MDS.high};">${highCount} high-priority</strong>`);
+  const summaryText = summaryParts.length > 0
+    ? `, including ${summaryParts.join(" and ")}`
+    : "";
+
+  const overflowRow = remaining > 0
+    ? `<tr>
+        <td style="padding: 20px 28px; text-align: center;">
+          <a href="${appUrl}/nudges" style="font-size: 14px; color: ${MDS.electricBlue}; text-decoration: none; font-weight: 600;">
+            View ${remaining} more nudge${remaining !== 1 ? "s" : ""} &rarr;
+          </a>
+        </td>
+      </tr>`
+    : "";
 
   return `
 <!DOCTYPE html>
@@ -129,76 +147,63 @@ function buildDigestHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Activate — Nudge Digest</title>
 </head>
-<body style="margin: 0; padding: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: #f8fafc;">
+<body style="margin: 0; padding: 0; background: ${MDS.bgLight}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: ${MDS.bgLight};">
     <tr>
       <td align="center" style="padding: 40px 16px;">
         <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 600px; width: 100%;">
 
           <!-- Header -->
           <tr>
-            <td style="background: #0f172a; border-radius: 12px 12px 0 0; padding: 32px 24px; text-align: center;">
-              <div style="display: inline-block; width: 44px; height: 44px; border-radius: 10px; background: #2563eb; color: white; font-weight: 700; font-size: 22px; line-height: 44px; text-align: center; margin-bottom: 12px;">
-                🚀
-              </div>
-              <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700;">
-                Your Nudge Digest
-              </h1>
-              <p style="margin: 6px 0 0; color: #94a3b8; font-size: 14px;">
-                ${today}
-              </p>
-            </td>
-          </tr>
-
-          <!-- Greeting + Stats -->
-          <tr>
-            <td style="background: #ffffff; padding: 24px; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
-              <p style="margin: 0 0 16px; font-size: 15px; color: #334155;">
-                Hi ${partnerName.split(" ")[0]}, you have <strong>${nudges.length} open nudge${nudges.length !== 1 ? "s" : ""}</strong> to review today.
-              </p>
+            <td style="background: ${MDS.deepBlue}; padding: 32px 28px;">
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  ${urgentCount > 0 ? `<td style="text-align: center; padding: 12px 8px; background: #fef2f2; border-radius: 8px;">
-                    <div style="font-size: 24px; font-weight: 700; color: #ef4444;">${urgentCount}</div>
-                    <div style="font-size: 11px; color: #ef4444; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Urgent</div>
-                  </td>` : ""}
-                  <td style="text-align: center; padding: 12px 8px; background: #fffbeb; border-radius: 8px;">
-                    <div style="font-size: 24px; font-weight: 700; color: #f59e0b;">${highCount}</div>
-                    <div style="font-size: 11px; color: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">High</div>
-                  </td>
-                  <td style="text-align: center; padding: 12px 8px; background: #f1f5f9; border-radius: 8px;">
-                    <div style="font-size: 24px; font-weight: 700; color: #64748b;">${mediumCount}</div>
-                    <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Medium / Low</div>
+                  <td>
+                    <div style="font-size: 14px; font-weight: 600; color: ${MDS.electricBlue}; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">Activate</div>
+                    <div style="font-size: 22px; font-weight: 700; color: ${MDS.white}; letter-spacing: -0.3px; font-family: Georgia, 'Times New Roman', serif;">
+                      Your Daily Nudge Digest
+                    </div>
+                    <div style="font-size: 13px; color: #94a3b8; margin-top: 6px;">${today}</div>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
+          <!-- Summary -->
+          <tr>
+            <td style="background: ${MDS.white}; padding: 24px 28px; border-bottom: 1px solid ${MDS.border};">
+              <div style="font-size: 15px; color: ${MDS.text}; line-height: 1.6;">
+                Hi ${firstName}, you have <strong style="color: ${MDS.deepBlue};">${nudges.length} action item${nudges.length !== 1 ? "s" : ""}</strong> today${summaryText}.
+              </div>
+            </td>
+          </tr>
+
           <!-- Nudge List -->
           <tr>
-            <td style="background: #ffffff; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
+            <td style="background: ${MDS.white};">
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 ${nudgeRows}
+                ${overflowRow}
               </table>
             </td>
           </tr>
 
-          <!-- CTA -->
+          <!-- Footer CTA -->
           <tr>
-            <td style="background: #ffffff; padding: 24px; text-align: center; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
-              <a href="${appUrl}/nudges" style="display: inline-block; padding: 12px 32px; background: #2563eb; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 8px;">
-                View All Nudges in Activate
+            <td style="background: ${MDS.white}; padding: 24px 28px; text-align: center; border-top: 1px solid ${MDS.border};">
+              <a href="${appUrl}/nudges" style="display: inline-block; padding: 12px 32px; background: ${MDS.deepBlue}; color: ${MDS.white}; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 3px; letter-spacing: -0.1px;">
+                Open Activate
               </a>
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="background: #f8fafc; border-radius: 0 0 12px 12px; padding: 20px 24px; text-align: center; border: 1px solid #e2e8f0; border-top: none;">
+            <td style="padding: 20px 28px; text-align: center;">
               <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
-                This is an automated digest from Activate.<br />
-                All company names, contacts, and data shown are entirely fictional and for demonstration purposes only.
+                Automated digest from Activate &middot;
+                <a href="${appUrl}/nudges/settings" style="color: ${MDS.blue}; text-decoration: none;">Manage preferences</a>
               </p>
             </td>
           </tr>
@@ -217,9 +222,7 @@ export async function sendNudgeDigest(
   nudges: NudgeWithRelations[]
 ): Promise<{ sent: boolean; error?: string }> {
   if (!resend) {
-    console.log(
-      "[email-service] RESEND_API_KEY not set — skipping nudge digest email"
-    );
+    console.log("[email-service] RESEND_API_KEY not set — skipping nudge digest email");
     return { sent: false, error: "RESEND_API_KEY not configured" };
   }
 
@@ -238,7 +241,7 @@ export async function sendNudgeDigest(
   const urgentCount = nudges.filter((n) => n.priority === "URGENT").length;
   const subject =
     urgentCount > 0
-      ? `🔴 ${urgentCount} urgent + ${nudges.length - urgentCount} more nudges — Activate`
+      ? `${urgentCount} urgent + ${nudges.length - urgentCount} more — Activate`
       : `${nudges.length} nudge${nudges.length !== 1 ? "s" : ""} to review — Activate`;
 
   try {
