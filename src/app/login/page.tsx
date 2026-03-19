@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ActivateLogo } from "@/components/ui/activate-logo";
 
 const demoPartners = [
   { name: "Ava Patel", email: "ava.patel@firm.com" },
@@ -32,8 +33,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 px-4">
         <div className="text-center">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground mb-4 text-4xl">
-            🚀
+          <div className="mx-auto mb-4">
+            <ActivateLogo size="lg" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
             Activate

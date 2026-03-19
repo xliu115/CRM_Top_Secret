@@ -61,7 +61,7 @@ export function generateMeetings(contacts: ContactRef[]) {
     title: string;
     purpose: string;
     notes: string | null;
-    attendeeContactIds: string[];
+    attendees: { contactId: string; isRequired: boolean }[];
   }[] = [];
 
   const now = new Date();
@@ -106,12 +106,60 @@ export function generateMeetings(contacts: ContactRef[]) {
         title,
         purpose: purposes[Math.floor(rand() * purposes.length)],
         notes: `Meeting went well. Discussed ${area.toLowerCase()} initiatives. ${primaryContact.name} was engaged and receptive.`,
-        attendeeContactIds: attendees.map((a) => a.id),
+        attendees: attendees.map((a, ai) => ({
+          contactId: a.id,
+          isRequired: ai === 0 || rand() > 0.3,
+        })),
       });
       idx++;
     }
 
-    // Upcoming meetings
+    // This-week meetings (guaranteed to populate the default view)
+    const dayOfWeek = now.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now.getTime() + mondayOffset * 86400000);
+    monday.setHours(0, 0, 0, 0);
+
+    const thisWeekCount = 5 + Math.floor(rand() * 4);
+    for (let i = 0; i < thisWeekCount; i++) {
+      const dayOffset = Math.floor(rand() * 7);
+      const hour = 8 + Math.floor(rand() * 9);
+      const minute = rand() > 0.5 ? 30 : 0;
+      const date = new Date(monday.getTime() + dayOffset * 86400000);
+      date.setHours(hour, minute, 0, 0);
+
+      const attendeeCount = 1 + Math.floor(rand() * 3);
+      const shuffled = [...pContacts].sort(() => rand() - 0.5);
+      const attendees = shuffled.slice(0, Math.min(attendeeCount, shuffled.length));
+      const primaryContact = attendees[0];
+      const company = companies.find((c) => c.id === primaryContact.companyId)!;
+      const area = areas[Math.floor(rand() * areas.length)];
+
+      const titleTemplate =
+        meetingTitles[Math.floor(rand() * meetingTitles.length)];
+      const title = titleTemplate
+        .replace(/{company}/g, company.name)
+        .replace(/{area}/g, area);
+
+      const isPastMeeting = date < now;
+      meetings.push({
+        id: `mtg-${String(idx).padStart(3, "0")}`,
+        partnerId: partner.id,
+        startTime: date,
+        title,
+        purpose: purposes[Math.floor(rand() * purposes.length)],
+        notes: isPastMeeting
+          ? `Meeting went well. Discussed ${area.toLowerCase()} initiatives. ${primaryContact.name} was engaged and receptive.`
+          : null,
+        attendees: attendees.map((a, ai) => ({
+          contactId: a.id,
+          isRequired: ai === 0 || rand() > 0.3,
+        })),
+      });
+      idx++;
+    }
+
+    // Additional upcoming meetings (next 2-30 days)
     const upcomingCount = 3 + Math.floor(rand() * 5);
     for (let i = 0; i < upcomingCount; i++) {
       const daysAhead = 1 + Math.floor(rand() * 30);
@@ -139,7 +187,10 @@ export function generateMeetings(contacts: ContactRef[]) {
         title,
         purpose: purposes[Math.floor(rand() * purposes.length)],
         notes: null,
-        attendeeContactIds: attendees.map((a) => a.id),
+        attendees: attendees.map((a, ai) => ({
+          contactId: a.id,
+          isRequired: ai === 0 || rand() > 0.3,
+        })),
       });
       idx++;
     }

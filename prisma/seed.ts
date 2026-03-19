@@ -98,13 +98,14 @@ async function main() {
   const meetings = generateMeetings(meetingContactRefs);
   console.log(`Creating ${meetings.length} meetings...`);
   for (const m of meetings) {
-    const { attendeeContactIds, ...meetingData } = m;
+    const { attendees: meetingAttendees, ...meetingData } = m;
     await prisma.meeting.create({
       data: {
         ...meetingData,
         attendees: {
-          create: attendeeContactIds.map((contactId) => ({
-            contact: { connect: { id: contactId } },
+          create: meetingAttendees.map((a) => ({
+            contact: { connect: { id: a.contactId } },
+            isRequired: a.isRequired,
           })),
         },
       },

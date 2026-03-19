@@ -95,8 +95,12 @@ function compareContacts(a: Contact, b: Contact, key: SortKey, dir: SortDir): nu
 }
 
 function sortContacts(contacts: Contact[], sort: SortState): Contact[] {
-  if (!sort) return contacts;
-  return [...contacts].sort((a, b) => compareContacts(a, b, sort.key, sort.dir));
+  if (!sort) return [...contacts].sort((a, b) => a.name.localeCompare(b.name));
+  return [...contacts].sort((a, b) => {
+    const cmp = compareContacts(a, b, sort.key, sort.dir);
+    if (cmp !== 0 || sort.key === "name") return cmp;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 // --- Filtering ---
@@ -651,7 +655,7 @@ function ContactsPageContent() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [viewMode, setViewMode] = useState<"grouped" | "flat">("grouped");
-  const [sort, setSort] = useState<SortState>({ key: "daysSince", dir: "desc" });
+  const [sort, setSort] = useState<SortState>({ key: "name", dir: "asc" });
   const [filterTiers, setFilterTiers] = useState<Set<string>>(new Set());
   const [filterMinDays, setFilterMinDays] = useState<number | null>(null);
   const [filterHasNudges, setFilterHasNudges] = useState(false);

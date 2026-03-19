@@ -144,9 +144,10 @@ model Meeting {
 }
 
 model MeetingAttendee {
-  id        String @id @default(uuid())
-  meetingId String @map("meeting_id")
-  contactId String @map("contact_id")
+  id         String  @id @default(uuid())
+  meetingId  String  @map("meeting_id")
+  contactId  String  @map("contact_id")
+  isRequired Boolean @default(true) @map("is_required")
 
   meeting Meeting @relation(fields: [meetingId], references: [id])
   contact Contact @relation(fields: [contactId], references: [id])

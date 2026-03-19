@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Avatar } from "@/components/ui/avatar";
+import { ActivateLogo } from "@/components/ui/activate-logo";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -29,9 +30,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 flex-col bg-sidebar-bg text-sidebar-fg">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl">
-          🚀
-        </div>
+        <ActivateLogo size="md" />
         <div>
           <h1 className="text-lg font-bold">Activate</h1>
         </div>
