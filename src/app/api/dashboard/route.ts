@@ -6,6 +6,8 @@ import {
   meetingRepo,
   interactionRepo,
 } from "@/lib/repositories";
+import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
+import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 
 export async function GET(_request: NextRequest) {
   try {
@@ -18,6 +20,12 @@ export async function GET(_request: NextRequest) {
         meetingRepo.countUpcomingByPartnerId(partnerId),
         interactionRepo.findRecentByPartnerId(partnerId, 5),
       ]);
+
+    if (openNudgeCount === 0) {
+      autoRefreshNudges(partnerId).catch((err) =>
+        console.error("[dashboard] Auto-refresh nudges failed:", err)
+      );
+    }
 
     return NextResponse.json({
       contactCount,
@@ -34,4 +42,11 @@ export async function GET(_request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function autoRefreshNudges(partnerId: string) {
+  console.log("[dashboard] No open nudges — auto-refreshing...");
+  const newsCount = await ingestNewsForPartner(partnerId);
+  const nudgeCount = await refreshNudgesForPartner(partnerId);
+  console.log(`[dashboard] Auto-refresh complete: ${newsCount} news, ${nudgeCount} nudges`);
 }
