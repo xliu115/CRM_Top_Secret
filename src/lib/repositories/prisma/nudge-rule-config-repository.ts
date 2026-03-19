@@ -11,6 +11,7 @@ const DEFAULTS: Omit<NudgeRuleConfig, "id" | "partnerId" | "createdAt" | "update
   eventAttendedEnabled: true,
   eventRegisteredEnabled: true,
   articleReadEnabled: true,
+  linkedinActivityEnabled: true,
   staleDaysCritical: 30,
   staleDaysHigh: 45,
   staleDaysMedium: 60,

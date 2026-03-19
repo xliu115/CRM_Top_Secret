@@ -25,6 +25,7 @@ type NudgeRuleConfig = {
   eventAttendedEnabled: boolean;
   eventRegisteredEnabled: boolean;
   articleReadEnabled: boolean;
+  linkedinActivityEnabled: boolean;
   staleDaysCritical: number;
   staleDaysHigh: number;
   staleDaysMedium: number;
@@ -42,6 +43,7 @@ const RULE_DESCRIPTIONS: {
     | "eventAttendedEnabled"
     | "eventRegisteredEnabled"
     | "articleReadEnabled"
+    | "linkedinActivityEnabled"
   >;
   label: string;
   description: string;
@@ -54,7 +56,7 @@ const RULE_DESCRIPTIONS: {
   },
   {
     key: "jobChangeEnabled",
-    label: "Job Change",
+    label: "Executive Transition",
     description:
       "Alert when a contact has a recent role change (within 30 days).",
   },
@@ -93,6 +95,12 @@ const RULE_DESCRIPTIONS: {
     label: "Article Read",
     description:
       "Alert when a contact viewed your content in the last 14 days.",
+  },
+  {
+    key: "linkedinActivityEnabled",
+    label: "LinkedIn Activity",
+    description:
+      "Alert when a contact posts, comments, or shares on LinkedIn (within 14 days).",
   },
 ];
 

@@ -2,13 +2,38 @@ import { contactRepo, interactionRepo, signalRepo, nudgeRepo, meetingRepo, engag
 import { differenceInDays } from "date-fns";
 import { prisma } from "@/lib/db/prisma";
 
+interface Insight {
+  type: string;
+  reason: string;
+  priority: string;
+  signalId?: string;
+  signalContent?: string;
+  signalUrl?: string | null;
+  relatedPartners?: { partnerId: string; partnerName: string }[];
+  personName?: string;
+}
+
 interface NudgeCandidate {
   contactId: string;
   signalId?: string;
   ruleType: string;
   reason: string;
   priority: string;
+  metadata?: string;
 }
+
+const PRIORITY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+const TYPE_RANK: Record<string, number> = {
+  MEETING_PREP: 0,
+  STALE_CONTACT: 1,
+  JOB_CHANGE: 2,
+  LINKEDIN_ACTIVITY: 3,
+  EVENT_ATTENDED: 4,
+  EVENT_REGISTERED: 5,
+  ARTICLE_READ: 6,
+  UPCOMING_EVENT: 7,
+  COMPANY_NEWS: 8,
+};
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
@@ -21,10 +46,60 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
   return map;
 }
 
+async function getPartnerRelationsForPerson(
+  personName: string,
+  companyId: string,
+  excludePartnerId?: string
+): Promise<{ partnerId: string; partnerName: string }[]> {
+  const contacts = await prisma.contact.findMany({
+    where: { name: personName, companyId },
+    include: { partner: { select: { id: true, name: true } } },
+  });
+  return contacts
+    .filter((c) => c.partner.id !== excludePartnerId)
+    .map((c) => ({ partnerId: c.partner.id, partnerName: c.partner.name }));
+}
+
+function pickPrimary(insights: Insight[]): { ruleType: string; priority: string; signalId?: string } {
+  const sorted = [...insights].sort((a, b) => {
+    const pa = PRIORITY_RANK[a.priority] ?? 9;
+    const pb = PRIORITY_RANK[b.priority] ?? 9;
+    if (pa !== pb) return pa - pb;
+    const ta = TYPE_RANK[a.type] ?? 9;
+    const tb = TYPE_RANK[b.type] ?? 9;
+    return ta - tb;
+  });
+  const top = sorted[0];
+  return { ruleType: top.type, priority: top.priority, signalId: top.signalId };
+}
+
+function buildReason(contactName: string, companyName: string, insights: Insight[]): string {
+  if (insights.length === 1) return insights[0].reason;
+
+  const typeLabels: Record<string, string> = {
+    STALE_CONTACT: "overdue for a check-in",
+    JOB_CHANGE: "executive transition",
+    COMPANY_NEWS: "company news",
+    UPCOMING_EVENT: "upcoming event",
+    MEETING_PREP: "upcoming meeting",
+    EVENT_ATTENDED: "event follow-up",
+    EVENT_REGISTERED: "event outreach",
+    ARTICLE_READ: "content engagement",
+    LINKEDIN_ACTIVITY: "LinkedIn activity",
+  };
+
+  const types = [...new Set(insights.map((i) => i.type))];
+  const labels = types.map((t) => typeLabels[t] ?? t.toLowerCase()).slice(0, 4);
+  const summary = labels.length <= 2
+    ? labels.join(" and ")
+    : labels.slice(0, -1).join(", ") + ", and " + labels[labels.length - 1];
+
+  return `${insights.length} reasons to reach out to ${contactName} at ${companyName}: ${summary}.`;
+}
+
 export async function refreshNudgesForPartner(partnerId: string) {
   const contacts = await contactRepo.findByPartnerId(partnerId);
   const now = new Date();
-  const candidates: NudgeCandidate[] = [];
 
   if (contacts.length === 0) {
     await nudgeRepo.deleteOpenByPartnerId(partnerId);
@@ -76,18 +151,25 @@ export async function refreshNudgesForPartner(partnerId: string) {
   const eventsByContact = groupBy(allEvents, (e) => e.contactId);
   const articlesByContact = groupBy(allArticles, (a) => a.contactId);
 
+  const candidates: NudgeCandidate[] = [];
+
   for (const contact of contacts) {
     const interactions = interactionsByContact.get(contact.id) ?? [];
     const signals = contactSignalsByContact.get(contact.id) ?? [];
     const companySignals = companySignalsByCompany.get(contact.companyId) ?? [];
     const meetings = meetingsByContact.get(contact.id) ?? [];
-    const allSignals = [...signals, ...companySignals];
+    const seenSignalIds = new Set(signals.map((s) => s.id));
+    const dedupedCompanySignals = companySignals.filter((s) => !seenSignalIds.has(s.id));
+    const allSignals = [...signals, ...dedupedCompanySignals];
 
     const lastInteraction = interactions[0];
     const daysSince = lastInteraction
       ? differenceInDays(now, new Date(lastInteraction.date))
       : 999;
 
+    const insights: Insight[] = [];
+
+    // --- Stale Contact ---
     if (config.staleContactEnabled) {
       const tierThreshold: Record<string, number> = {
         CRITICAL: config.staleDaysCritical,
@@ -96,154 +178,195 @@ export async function refreshNudgesForPartner(partnerId: string) {
         LOW: config.staleDaysLow,
       };
       const threshold = contact.staleThresholdDays ?? tierThreshold[contact.importance] ?? config.staleDaysMedium;
-
       if (daysSince > threshold) {
-        const priorityMap: Record<string, string> = {
-          CRITICAL: "URGENT",
-          HIGH: "HIGH",
-          MEDIUM: "MEDIUM",
-          LOW: "MEDIUM",
-        };
-        candidates.push({
-          contactId: contact.id,
-          ruleType: "STALE_CONTACT",
-          reason: `No interaction with ${contact.name} (${contact.title} at ${contact.company.name}) in ${daysSince} days — threshold is ${threshold} days.`,
+        const priorityMap: Record<string, string> = { CRITICAL: "URGENT", HIGH: "HIGH", MEDIUM: "MEDIUM", LOW: "MEDIUM" };
+        insights.push({
+          type: "STALE_CONTACT",
+          reason: `No interaction in ${daysSince} days (threshold: ${threshold} days).`,
           priority: priorityMap[contact.importance] ?? "MEDIUM",
         });
       }
     }
 
+    // --- Job Change ---
     if (config.jobChangeEnabled) {
-      const recentJobChange = allSignals.find(
-        (s) =>
-          s.type === "JOB_CHANGE" &&
-          differenceInDays(now, new Date(s.date)) < 30
+      const recentJobChanges = allSignals.filter(
+        (s) => s.type === "JOB_CHANGE" && differenceInDays(now, new Date(s.date)) < 30
       );
-      if (recentJobChange) {
-        candidates.push({
-          contactId: contact.id,
-          signalId: recentJobChange.id,
-          ruleType: "JOB_CHANGE",
-          reason: `${contact.name} had a recent role change: "${recentJobChange.content}". Great opportunity to reconnect and congratulate.`,
+      const ownChange = recentJobChanges.find((s) => s.contactId === contact.id);
+      if (ownChange) {
+        const otherPartners = await getPartnerRelationsForPerson(contact.name, contact.companyId, partnerId);
+        insights.push({
+          type: "JOB_CHANGE",
+          reason: `${contact.name} had a recent role change: "${ownChange.content}".`,
           priority: "HIGH",
+          signalId: ownChange.id,
+          signalContent: ownChange.content,
+          signalUrl: ownChange.url,
+          relatedPartners: otherPartners.length > 0 ? otherPartners : undefined,
+          personName: contact.name,
         });
+      } else {
+        const companyChange = recentJobChanges.find((s) => s.contactId !== contact.id);
+        if (companyChange && companyChange.contactId) {
+          const changedPerson = await prisma.contact.findUnique({
+            where: { id: companyChange.contactId },
+            select: { name: true, companyId: true, partnerId: true, partner: { select: { name: true } } },
+          });
+          const relatedPartners = changedPerson
+            ? [{ partnerId: changedPerson.partnerId, partnerName: changedPerson.partner.name }]
+            : [];
+          const personName = changedPerson?.name
+            ?? companyChange.content.split(/\s+(has|promoted|announced|transitioned|expanded)/)[0].trim();
+          insights.push({
+            type: "JOB_CHANGE",
+            reason: `Executive transition at ${contact.company.name}: "${companyChange.content}".`,
+            priority: contact.importance === "CRITICAL" ? "HIGH" : "MEDIUM",
+            signalId: companyChange.id,
+            signalContent: companyChange.content,
+            signalUrl: companyChange.url,
+            relatedPartners: relatedPartners.length > 0 ? relatedPartners : undefined,
+            personName,
+          });
+        }
       }
     }
 
+    // --- Company News (pick top 3 most recent, not all) ---
     if (config.companyNewsEnabled) {
       const recentNewsSignals = allSignals.filter(
-        (s) =>
-          s.type === "NEWS" &&
-          differenceInDays(now, new Date(s.date)) < 14
+        (s) => s.type === "NEWS" && differenceInDays(now, new Date(s.date)) < 14
       );
       const newsUsed = new Set<string>();
       for (const newsSignal of recentNewsSignals) {
         if (newsUsed.has(newsSignal.id)) continue;
         newsUsed.add(newsSignal.id);
-        const snippet = newsSignal.content.length > 200
-          ? newsSignal.content.slice(0, 200) + "…"
-          : newsSignal.content;
-        candidates.push({
-          contactId: contact.id,
-          signalId: newsSignal.id,
-          ruleType: "COMPANY_NEWS",
-          reason: `${contact.company.name} in the news: "${snippet}". Reach out to ${contact.name} with a relevant point of view.`,
+        if (newsUsed.size > 3) break;
+        insights.push({
+          type: "COMPANY_NEWS",
+          reason: `${contact.company.name} in the news: "${newsSignal.content.length > 150 ? newsSignal.content.slice(0, 150) + "…" : newsSignal.content}".`,
           priority: "MEDIUM",
+          signalId: newsSignal.id,
+          signalContent: newsSignal.content,
+          signalUrl: newsSignal.url,
         });
       }
     }
 
+    // --- Upcoming Event ---
     if (config.upcomingEventEnabled) {
       const upcomingEvent = allSignals.find(
-        (s) =>
-          s.type === "EVENT" &&
-          differenceInDays(new Date(s.date), now) >= 0 &&
-          differenceInDays(new Date(s.date), now) < 21
+        (s) => s.type === "EVENT" && differenceInDays(new Date(s.date), now) >= 0 && differenceInDays(new Date(s.date), now) < 21
       );
       if (upcomingEvent) {
-        candidates.push({
-          contactId: contact.id,
-          signalId: upcomingEvent.id,
-          ruleType: "UPCOMING_EVENT",
-          reason: `${upcomingEvent.content}. Opportunity to connect with ${contact.name} around this event.`,
+        insights.push({
+          type: "UPCOMING_EVENT",
+          reason: `${upcomingEvent.content}. Opportunity to connect around this event.`,
           priority: "MEDIUM",
+          signalId: upcomingEvent.id,
+          signalContent: upcomingEvent.content,
+          signalUrl: upcomingEvent.url,
         });
       }
     }
 
+    // --- Meeting Prep ---
     if (config.meetingPrepEnabled) {
-      const upcomingMeeting = meetings.find(
-        (m) => {
-          const daysUntil = differenceInDays(new Date(m.startTime), now);
-          return daysUntil >= 0 && daysUntil <= 3;
-        }
-      );
+      const upcomingMeeting = meetings.find((m) => {
+        const daysUntil = differenceInDays(new Date(m.startTime), now);
+        return daysUntil >= 0 && daysUntil <= 3;
+      });
       if (upcomingMeeting) {
-        candidates.push({
-          contactId: contact.id,
-          ruleType: "MEETING_PREP",
-          reason: `Meeting "${upcomingMeeting.title}" coming up soon with ${contact.name}. Prepare your brief and talking points.`,
+        insights.push({
+          type: "MEETING_PREP",
+          reason: `Meeting "${upcomingMeeting.title}" coming up soon. Prepare your brief and talking points.`,
           priority: "HIGH",
         });
       }
     }
 
+    // --- Event Attended ---
     if (config.eventAttendedEnabled) {
       const events = eventsByContact.get(contact.id) ?? [];
       const recentAttendedEvent = events.find(
-        (e) =>
-          e.status === "Attended" &&
-          differenceInDays(now, new Date(e.eventDate)) >= 0 &&
-          differenceInDays(now, new Date(e.eventDate)) < 30
+        (e) => e.status === "Attended" && differenceInDays(now, new Date(e.eventDate)) >= 0 && differenceInDays(now, new Date(e.eventDate)) < 30
       );
       if (recentAttendedEvent) {
-        candidates.push({
-          contactId: contact.id,
-          ruleType: "EVENT_ATTENDED",
-          reason: `${contact.name} attended "${recentAttendedEvent.name}" (${recentAttendedEvent.practice}) recently. Follow up on key takeaways and explore opportunities.`,
+        insights.push({
+          type: "EVENT_ATTENDED",
+          reason: `Attended "${recentAttendedEvent.name}" (${recentAttendedEvent.practice}) recently. Follow up on key takeaways.`,
           priority: contact.importance === "CRITICAL" ? "HIGH" : "MEDIUM",
         });
       }
     }
 
+    // --- Event Registered ---
     if (config.eventRegisteredEnabled) {
       const events = eventsByContact.get(contact.id) ?? [];
       const recentRegisteredEvent = events.find(
-        (e) =>
-          e.status === "Registered" &&
-          differenceInDays(new Date(e.eventDate), now) >= 0 &&
-          differenceInDays(new Date(e.eventDate), now) <= 14
+        (e) => e.status === "Registered" && differenceInDays(new Date(e.eventDate), now) >= 0 && differenceInDays(new Date(e.eventDate), now) <= 14
       );
       if (recentRegisteredEvent) {
-        candidates.push({
-          contactId: contact.id,
-          ruleType: "EVENT_REGISTERED",
-          reason: `${contact.name} is registered for "${recentRegisteredEvent.name}" coming up soon. Great opportunity to schedule a side conversation or send a pre-event note.`,
+        insights.push({
+          type: "EVENT_REGISTERED",
+          reason: `Registered for "${recentRegisteredEvent.name}" coming up soon. Schedule a side conversation or send a pre-event note.`,
           priority: "MEDIUM",
         });
       }
     }
 
+    // --- LinkedIn Activity (pick top 2) ---
+    if (config.linkedinActivityEnabled) {
+      const ownLinkedinSignals = allSignals.filter(
+        (s) => s.type === "LINKEDIN_ACTIVITY" && s.contactId === contact.id && differenceInDays(now, new Date(s.date)) < 14
+      );
+      let liCount = 0;
+      for (const liSignal of ownLinkedinSignals) {
+        if (liCount >= 2) break;
+        liCount++;
+        const snippet = liSignal.content.length > 150 ? liSignal.content.slice(0, 150) + "…" : liSignal.content;
+        insights.push({
+          type: "LINKEDIN_ACTIVITY",
+          reason: `Active on LinkedIn: "${snippet}".`,
+          priority: contact.importance === "CRITICAL" || contact.importance === "HIGH" ? "HIGH" : "MEDIUM",
+          signalId: liSignal.id,
+          signalContent: liSignal.content,
+          signalUrl: liSignal.url,
+        });
+      }
+    }
+
+    // --- Article Read ---
     if (config.articleReadEnabled) {
       const articles = articlesByContact.get(contact.id) ?? [];
       const recentArticleView = articles.find(
-        (a) =>
-          a.views > 0 &&
-          a.lastViewDate &&
-          differenceInDays(now, new Date(a.lastViewDate)) < 14
+        (a) => a.views > 0 && a.lastViewDate && differenceInDays(now, new Date(a.lastViewDate)) < 14
       );
       if (recentArticleView) {
-        candidates.push({
-          contactId: contact.id,
-          ruleType: "ARTICLE_READ",
-          reason: `${contact.name} recently viewed "${recentArticleView.name}" (${recentArticleView.views} view${recentArticleView.views !== 1 ? "s" : ""}). Use this as a conversation starter — they're engaged with your thought leadership.`,
+        insights.push({
+          type: "ARTICLE_READ",
+          reason: `Viewed "${recentArticleView.name}" (${recentArticleView.views} view${recentArticleView.views !== 1 ? "s" : ""}). Engaged with your thought leadership.`,
           priority: contact.importance === "CRITICAL" || contact.importance === "HIGH" ? "HIGH" : "MEDIUM",
         });
       }
     }
+
+    // --- Consolidate into one nudge per contact ---
+    if (insights.length === 0) continue;
+
+    const primary = pickPrimary(insights);
+    const reason = buildReason(contact.name, contact.company.name, insights);
+
+    candidates.push({
+      contactId: contact.id,
+      signalId: primary.signalId,
+      ruleType: primary.ruleType,
+      reason,
+      priority: primary.priority,
+      metadata: JSON.stringify({ insights }),
+    });
   }
 
-  // Clear old open nudges and create new ones
   await nudgeRepo.deleteOpenByPartnerId(partnerId);
   if (candidates.length > 0) {
     await nudgeRepo.createMany(candidates);

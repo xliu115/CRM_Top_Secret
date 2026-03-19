@@ -20,6 +20,7 @@ export interface INudgeRepository {
       ruleType: string;
       reason: string;
       priority: string;
+      metadata?: string;
     }[]
   ): Promise<number>;
   deleteOpenByPartnerId(partnerId: string): Promise<number>;
