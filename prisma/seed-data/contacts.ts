@@ -127,17 +127,18 @@ export function generateContacts() {
   let idx = 0;
   for (const [companyId, defs] of Object.entries(contactsByCompany)) {
     for (const def of defs) {
-      const partnerIdx = Math.floor(rand() * partners.length);
-      const partner = partners[partnerIdx];
+      const primaryPartnerIdx = Math.floor(rand() * partners.length);
+      const primaryPartner = partners[primaryPartnerIdx];
       const emailName = def.name.toLowerCase().replace(/[^a-z]/g, ".");
       const companyDomain = companies
         .find((c) => c.id === companyId)!
         .name.toLowerCase()
         .replace(/[^a-z]/g, "");
+      const companyName = companies.find((c) => c.id === companyId)!.name;
 
       contacts.push({
         id: `ct-${String(idx).padStart(3, "0")}`,
-        partnerId: partner.id,
+        partnerId: primaryPartner.id,
         companyId,
         name: def.name,
         email: `${emailName}@${companyDomain}.example.com`,
@@ -146,11 +147,44 @@ export function generateContacts() {
           Math.floor(rand() * 9000 + 1000)
         )}`,
         importance: def.importance,
-        notes: `Key ${def.title} contact at ${
-          companies.find((c) => c.id === companyId)!.name
-        }. Relationship established ${2020 + Math.floor(rand() * 5)}.`,
+        notes: `Key ${def.title} contact at ${companyName}. Relationship established ${2020 + Math.floor(rand() * 5)}.`,
       });
       idx++;
+
+      // CRITICAL and HIGH contacts are shared across 2-4 additional partners
+      if (def.importance === "CRITICAL" || def.importance === "HIGH") {
+        const additionalCount =
+          def.importance === "CRITICAL"
+            ? 2 + Math.floor(rand() * 3) // 2-4 extra partners
+            : 1 + Math.floor(rand() * 2); // 1-2 extra partners
+
+        const usedPartnerIds = new Set([primaryPartner.id]);
+        for (let j = 0; j < additionalCount; j++) {
+          let otherIdx = Math.floor(rand() * partners.length);
+          let attempts = 0;
+          while (usedPartnerIds.has(partners[otherIdx].id) && attempts < 10) {
+            otherIdx = (otherIdx + 1) % partners.length;
+            attempts++;
+          }
+          if (usedPartnerIds.has(partners[otherIdx].id)) continue;
+          usedPartnerIds.add(partners[otherIdx].id);
+
+          contacts.push({
+            id: `ct-${String(idx).padStart(3, "0")}`,
+            partnerId: partners[otherIdx].id,
+            companyId,
+            name: def.name,
+            email: `${emailName}@${companyDomain}.example.com`,
+            title: def.title,
+            phone: `+1-555-${String(1000 + idx).slice(-4)}-${String(
+              Math.floor(rand() * 9000 + 1000)
+            )}`,
+            importance: def.importance,
+            notes: `${def.title} at ${companyName}. Cross-firm relationship.`,
+          });
+          idx++;
+        }
+      }
     }
   }
   return contacts;

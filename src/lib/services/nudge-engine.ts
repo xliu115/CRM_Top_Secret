@@ -167,10 +167,14 @@ export async function refreshNudgesForPartner(partnerId: string) {
       ? differenceInDays(now, new Date(lastInteraction.date))
       : 999;
 
+    const disabledTypes = new Set<string>(
+      contact.disabledNudgeTypes ? JSON.parse(contact.disabledNudgeTypes) as string[] : []
+    );
+
     const insights: Insight[] = [];
 
     // --- Stale Contact ---
-    if (config.staleContactEnabled) {
+    if (config.staleContactEnabled && !disabledTypes.has("STALE_CONTACT")) {
       const tierThreshold: Record<string, number> = {
         CRITICAL: config.staleDaysCritical,
         HIGH: config.staleDaysHigh,
@@ -189,7 +193,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // --- Job Change ---
-    if (config.jobChangeEnabled) {
+    if (config.jobChangeEnabled && !disabledTypes.has("JOB_CHANGE")) {
       const recentJobChanges = allSignals.filter(
         (s) => s.type === "JOB_CHANGE" && differenceInDays(now, new Date(s.date)) < 30
       );
@@ -233,7 +237,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // --- Company News (pick top 3 most recent, not all) ---
-    if (config.companyNewsEnabled) {
+    if (config.companyNewsEnabled && !disabledTypes.has("COMPANY_NEWS")) {
       const recentNewsSignals = allSignals.filter(
         (s) => s.type === "NEWS" && differenceInDays(now, new Date(s.date)) < 14
       );
@@ -254,7 +258,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // --- Upcoming Event ---
-    if (config.upcomingEventEnabled) {
+    if (config.upcomingEventEnabled && !disabledTypes.has("UPCOMING_EVENT")) {
       const upcomingEvent = allSignals.find(
         (s) => s.type === "EVENT" && differenceInDays(new Date(s.date), now) >= 0 && differenceInDays(new Date(s.date), now) < 21
       );
@@ -271,7 +275,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // --- Meeting Prep ---
-    if (config.meetingPrepEnabled) {
+    if (config.meetingPrepEnabled && !disabledTypes.has("MEETING_PREP")) {
       const upcomingMeeting = meetings.find((m) => {
         const daysUntil = differenceInDays(new Date(m.startTime), now);
         return daysUntil >= 0 && daysUntil <= 3;
@@ -286,7 +290,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // --- Event Attended ---
-    if (config.eventAttendedEnabled) {
+    if (config.eventAttendedEnabled && !disabledTypes.has("EVENT_ATTENDED")) {
       const events = eventsByContact.get(contact.id) ?? [];
       const recentAttendedEvent = events.find(
         (e) => e.status === "Attended" && differenceInDays(now, new Date(e.eventDate)) >= 0 && differenceInDays(now, new Date(e.eventDate)) < 30
@@ -301,7 +305,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // --- Event Registered ---
-    if (config.eventRegisteredEnabled) {
+    if (config.eventRegisteredEnabled && !disabledTypes.has("EVENT_REGISTERED")) {
       const events = eventsByContact.get(contact.id) ?? [];
       const recentRegisteredEvent = events.find(
         (e) => e.status === "Registered" && differenceInDays(new Date(e.eventDate), now) >= 0 && differenceInDays(new Date(e.eventDate), now) <= 14
@@ -316,7 +320,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // --- LinkedIn Activity (pick top 2) ---
-    if (config.linkedinActivityEnabled) {
+    if (config.linkedinActivityEnabled && !disabledTypes.has("LINKEDIN_ACTIVITY")) {
       const ownLinkedinSignals = allSignals.filter(
         (s) => s.type === "LINKEDIN_ACTIVITY" && s.contactId === contact.id && differenceInDays(now, new Date(s.date)) < 14
       );
@@ -337,7 +341,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     // --- Article Read ---
-    if (config.articleReadEnabled) {
+    if (config.articleReadEnabled && !disabledTypes.has("ARTICLE_READ")) {
       const articles = articlesByContact.get(contact.id) ?? [];
       const recentArticleView = articles.find(
         (a) => a.views > 0 && a.lastViewDate && differenceInDays(now, new Date(a.lastViewDate)) < 14

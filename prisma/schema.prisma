@@ -46,6 +46,7 @@ model Contact {
   notes              String?
   lastContacted      DateTime? @map("last_contacted")
   staleThresholdDays Int?      @map("stale_threshold_days")
+  disabledNudgeTypes String?   @map("disabled_nudge_types")
   createdAt          DateTime  @default(now()) @map("created_at")
 
   partner      Partner          @relation(fields: [partnerId], references: [id])
