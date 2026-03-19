@@ -400,10 +400,18 @@ export default function ContactDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error("Failed to update nudge");
+      if (res.status === 404) {
+        // Nudge was already removed (e.g., by dashboard refresh) — treat as success
+        setNudges((prev) => prev.filter((n) => n.id !== nudgeId));
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "Failed to update nudge");
+      }
       setNudges((prev) => prev.filter((n) => n.id !== nudgeId));
-    } catch {
-      setError("Failed to update nudge status");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update nudge status");
     }
   }
 
