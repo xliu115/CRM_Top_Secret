@@ -228,7 +228,13 @@ function TableHeader({ sort, onSort }: { sort: SortState; onSort: (key: SortKey)
 
 // --- Contact Row ---
 
-function ContactTableRow({ contact }: { contact: Contact }) {
+function ContactTableRow({
+  contact,
+  showInstitution,
+}: {
+  contact: Contact;
+  showInstitution?: boolean;
+}) {
   const colors = getTierColors(contact.importance);
   return (
     <Link
@@ -241,6 +247,9 @@ function ContactTableRow({ contact }: { contact: Contact }) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground truncate leading-tight">{contact.name}</p>
           <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{contact.title}</p>
+          {showInstitution && contact.company?.name && (
+            <p className="text-xs text-muted-foreground/70 truncate leading-tight mt-0.5">{contact.company.name}</p>
+          )}
         </div>
       </div>
       <div className={`${COL.lastInteraction}`}>
@@ -599,7 +608,9 @@ function GroupedView({
                       </button>
                       {!collapsed && (
                         <div className="divide-y divide-border/30">
-                          {company.contacts.map((c) => <ContactTableRow key={c.id} contact={c} />)}
+                          {company.contacts.map((c) => (
+                            <ContactTableRow key={c.id} contact={c} showInstitution={false} />
+                          ))}
                         </div>
                       )}
                     </div>
@@ -607,7 +618,9 @@ function GroupedView({
                 })
               ) : (
                 <div className="divide-y divide-border/30">
-                  {tierContacts.map((c) => <ContactTableRow key={c.id} contact={c} />)}
+                  {tierContacts.map((c) => (
+                    <ContactTableRow key={c.id} contact={c} showInstitution={true} />
+                  ))}
                 </div>
               )}
             </div>
@@ -638,7 +651,9 @@ function FlatView({
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <TableHeader sort={sort} onSort={onSort} />
       <div className="divide-y divide-border/30">
-        {sorted.map((c) => <ContactTableRow key={c.id} contact={c} />)}
+        {sorted.map((c) => (
+          <ContactTableRow key={c.id} contact={c} showInstitution={true} />
+        ))}
       </div>
     </div>
   );

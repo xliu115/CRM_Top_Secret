@@ -1,5 +1,6 @@
 import { PrismaPartnerRepository } from "./prisma/partner-repository";
 import { PrismaContactRepository } from "./prisma/contact-repository";
+import { PrismaCompanyRepository } from "./prisma/company-repository";
 import { PrismaInteractionRepository } from "./prisma/interaction-repository";
 import { PrismaSignalRepository } from "./prisma/signal-repository";
 import { PrismaNudgeRepository } from "./prisma/nudge-repository";
@@ -9,6 +10,7 @@ import { PrismaNudgeRuleConfigRepository } from "./prisma/nudge-rule-config-repo
 
 export const partnerRepo = new PrismaPartnerRepository();
 export const contactRepo = new PrismaContactRepository();
+export const companyRepo = new PrismaCompanyRepository();
 export const interactionRepo = new PrismaInteractionRepository();
 export const signalRepo = new PrismaSignalRepository();
 export const nudgeRepo = new PrismaNudgeRepository();
@@ -20,6 +22,8 @@ export type {
   IPartnerRepository,
   IContactRepository,
   ContactWithCompany,
+  ICompanyRepository,
+  CompanyWithContacts,
   IInteractionRepository,
   InteractionWithContact,
   ISignalRepository,

@@ -62,6 +62,7 @@ type Contact = {
   importance: string;
   staleThresholdDays: number | null;
   disabledNudgeTypes: string | null;
+  companyId: string;
   company: { name: string };
 };
 
@@ -527,7 +528,13 @@ export default function ContactDetailPage() {
                   <TierBadge importance={contact.importance} />
                 </div>
                 <CardDescription>
-                  {contact.title} at {contact.company.name}
+                  {contact.title} at{" "}
+                  <Link
+                    href={`/companies/${contact.companyId}`}
+                    className="text-primary hover:underline"
+                  >
+                    {contact.company.name}
+                  </Link>
                 </CardDescription>
                 {contact.email && (
                   <p className="flex items-center gap-2 text-sm text-foreground">
