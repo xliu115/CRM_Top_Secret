@@ -65,6 +65,7 @@ type Contact = {
   importance: string;
   staleThresholdDays: number | null;
   disabledNudgeTypes: string | null;
+  companyId: string;
   company: { name: string };
 };
 
@@ -466,10 +467,18 @@ export default function ContactDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error("Failed to update nudge");
+      if (res.status === 404) {
+        // Nudge was already removed (e.g., by dashboard refresh) — treat as success
+        setNudges((prev) => prev.filter((n) => n.id !== nudgeId));
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "Failed to update nudge");
+      }
       setNudges((prev) => prev.filter((n) => n.id !== nudgeId));
-    } catch {
-      setError("Failed to update nudge status");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update nudge status");
     }
   }
 
@@ -611,7 +620,13 @@ export default function ContactDetailPage() {
                   <TierBadge importance={contact.importance} />
                 </div>
                 <CardDescription>
-                  {contact.title} at {contact.company.name}
+                  {contact.title} at{" "}
+                  <Link
+                    href={`/companies/${contact.companyId}`}
+                    className="text-primary hover:underline"
+                  >
+                    {contact.company.name}
+                  </Link>
                 </CardDescription>
                 {contact.email && (
                   <p className="flex items-center gap-2 text-sm text-foreground">

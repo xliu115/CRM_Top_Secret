@@ -49,6 +49,16 @@ export class PrismaContactRepository implements IContactRepository {
     return prisma.contact.count({ where: { partnerId } });
   }
 
+  async findInteractedInLastYearByPartnerId(partnerId: string, since: Date) {
+    return prisma.contact.findMany({
+      where: {
+        partnerId,
+        interactions: { some: { date: { gte: since } } },
+      },
+      include: { company: true },
+    });
+  }
+
   async updateStaleThreshold(id: string, partnerId: string, days: number | null) {
     const contact = await prisma.contact.findFirst({ where: { id, partnerId } });
     if (!contact) throw new Error("Contact not found");

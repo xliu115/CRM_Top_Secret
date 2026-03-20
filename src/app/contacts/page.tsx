@@ -32,14 +32,26 @@ type Contact = {
   email: string;
   importance: string;
   lastContacted: string | null;
-  company: { name: string };
+  company: { name: string; id?: string };
+  companyId?: string;
   daysSinceLastInteraction: number | null;
   lastInteraction: { type: string; summary: string; date: string } | null;
   openNudgeCount: number;
   otherPartners: string[];
 };
 
-type SortKey = "name" | "daysSince" | "lastInteraction" | "otherPartners" | "nudges";
+type ContactRowProps = {
+  contact: Contact;
+};
+
+type ContactRowBlockProps = {
+  contact: Contact;
+  recommendation?: TierRecommendation | null;
+  onAcceptSuggestion?: () => void;
+  onDismissSuggestion?: () => void;
+};
+
+type SortKey = "name" | "institution" | "lastInteraction" | "daysSince" | "otherPartners" | "nudges";
 type SortDir = "asc" | "desc";
 type SortState = { key: SortKey; dir: SortDir } | null;
 
@@ -54,6 +66,7 @@ const DAYS_FILTERS = [
 
 const COL_SIZE = {
   name: "flex-[2] min-w-0",
+  institution: "flex-[1.1] min-w-0",
   lastInteraction: "flex-[1.5] min-w-0",
   daysSince: "flex-[0.9] min-w-0",
   otherPartners: "flex-[1.5] min-w-0",
@@ -63,6 +76,7 @@ const COL_SIZE = {
 const COL = {
   bar: "w-1 shrink-0",
   name: COL_SIZE.name,
+  institution: COL_SIZE.institution,
   lastInteraction: `${COL_SIZE.lastInteraction} hidden md:block`,
   daysSince: COL_SIZE.daysSince,
   otherPartners: `${COL_SIZE.otherPartners} hidden lg:block`,
@@ -76,6 +90,9 @@ function compareContacts(a: Contact, b: Contact, key: SortKey, dir: SortDir): nu
   switch (key) {
     case "name":
       cmp = a.name.localeCompare(b.name);
+      break;
+    case "institution":
+      cmp = a.company.name.localeCompare(b.company.name);
       break;
     case "daysSince": {
       const getVal = (x: Contact) => {
@@ -139,7 +156,7 @@ type TierGroup = {
 
 function groupByTier(contacts: Contact[], sort: SortState): TierGroup[] {
   const groups: TierGroup[] = [];
-  const useCompanyGrouping = !sort || sort.key === "name";
+  const useCompanyGrouping = !sort || sort.key === "name" || sort.key === "institution";
 
   for (const tier of TIER_ORDER) {
     let tierContacts = contacts.filter((c) => c.importance === tier);
@@ -227,6 +244,7 @@ function TableHeader({ sort, onSort }: { sort: SortState; onSort: (key: SortKey)
     >
       <div className="w-1 shrink-0" role="presentation" />
       <SortableHeader label="Contact" sizeClass={COL_SIZE.name} sortKey="name" sort={sort} onSort={onSort} />
+      <SortableHeader label="Institution" sizeClass={COL_SIZE.institution} hideClass="hidden md:flex" sortKey="institution" sort={sort} onSort={onSort} />
       <SortableHeader label="Last Interaction" sizeClass={COL_SIZE.lastInteraction} hideClass="hidden md:flex" sortKey="lastInteraction" sort={sort} onSort={onSort} />
       <SortableHeader label="Days Since" sizeClass={COL_SIZE.daysSince} sortKey="daysSince" sort={sort} onSort={onSort} />
       <SortableHeader label="Other Partners" sizeClass={COL_SIZE.otherPartners} hideClass="hidden lg:flex" sortKey="otherPartners" sort={sort} onSort={onSort} />
@@ -237,20 +255,8 @@ function TableHeader({ sort, onSort }: { sort: SortState; onSort: (key: SortKey)
 
 // --- Contact Row + optional tier suggestion strip ---
 
-function ContactRowBlock({
-  contact,
-  recommendation,
-  onAcceptSuggestion,
-  onDismissSuggestion,
-}: {
-  contact: Contact;
-  recommendation?: TierRecommendation | null;
-  onAcceptSuggestion?: () => void;
-  onDismissSuggestion?: () => void;
-}) {
+function ContactTableRow({ contact }: ContactRowProps) {
   const colors = getTierColors(contact.importance);
-  const hasRec = Boolean(recommendation && onAcceptSuggestion && onDismissSuggestion);
-
   const rowInner = (
     <>
       <div className={`${COL.bar} self-stretch rounded-r ${colors.bar}`} />
@@ -260,6 +266,18 @@ function ContactRowBlock({
           <p className="text-sm font-semibold text-foreground truncate leading-tight">{contact.name}</p>
           <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{contact.title}</p>
         </div>
+      </div>
+      <div className={COL.institution}>
+        {contact.company?.name ? (
+          <Link
+            href={contact.companyId ? `/companies/${contact.companyId}` : "/companies"}
+            className="text-xs text-primary hover:underline truncate leading-tight block"
+          >
+            {contact.company.name}
+          </Link>
+        ) : (
+          <span className="text-xs text-muted-foreground/60">—</span>
+        )}
       </div>
       <div className={`${COL.lastInteraction}`}>
         {contact.lastInteraction ? (
@@ -299,6 +317,26 @@ function ContactRowBlock({
   );
 
   return (
+    <div className="border-b border-border/30 last:border-b-0">
+      <Link
+        href={`/contacts/${contact.id}`}
+        className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+      >
+        {rowInner}
+      </Link>
+    </div>
+  );
+}
+
+function ContactRowBlock({
+  contact,
+  recommendation,
+  onAcceptSuggestion,
+  onDismissSuggestion,
+}: ContactRowBlockProps) {
+  const hasRec = Boolean(recommendation && onAcceptSuggestion && onDismissSuggestion);
+
+  return (
     <div
       className={cn(
         "border-b border-border/30 last:border-b-0",
@@ -311,12 +349,7 @@ function ContactRowBlock({
           role="group"
           aria-label={`Tier suggestion for ${contact.name}`}
         >
-          <Link
-            href={`/contacts/${contact.id}`}
-            className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset rounded-t-xl border-b border-border/40"
-          >
-            {rowInner}
-          </Link>
+          <ContactTableRow contact={contact} />
           <div
             className="flex items-start gap-3 px-4 py-2.5 sm:px-5 bg-primary/[0.08] dark:bg-primary/15 border-t-2 border-primary/45 rounded-b-xl"
             onClick={(e) => e.stopPropagation()}
@@ -364,12 +397,7 @@ function ContactRowBlock({
           </div>
         </div>
       ) : (
-        <Link
-          href={`/contacts/${contact.id}`}
-          className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-        >
-          {rowInner}
-        </Link>
+        <ContactTableRow contact={contact} />
       )}
     </div>
   );
@@ -425,6 +453,117 @@ function TierRecommendationsBulkBar({
         </div>
       </div>
     </div>
+  );
+}
+
+function ContactListSection({
+  tier,
+  tierContacts,
+  companies,
+  sort,
+  onSort,
+  pendingByContactId,
+  onAcceptSuggestion,
+  onDismissSuggestion,
+}: {
+  tier: string;
+  tierContacts: Contact[];
+  companies: { name: string; contacts: Contact[] }[] | null;
+  sort: SortState;
+  onSort: (k: SortKey) => void;
+  pendingByContactId: Map<string, TierRecommendation>;
+  onAcceptSuggestion: (contactId: string) => void;
+  onDismissSuggestion: (contactId: string) => void;
+}) {
+  const colors = TIER_COLORS[tier as TierKey] ?? TIER_COLORS.MEDIUM;
+  const [collapsedCompanies, setCollapsedCompanies] = useState<Set<string>>(new Set());
+
+  function toggleCompany(key: string) {
+    setCollapsedCompanies((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  return (
+    <section aria-label={`${TIER_LABELS[tier] ?? tier} tier contacts`}>
+      <div className="flex items-center gap-3 mb-3 px-1">
+        <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
+        <h2 className={`text-base font-semibold tracking-tight ${colors.text}`}>
+          {TIER_LABELS[tier] ?? tier}
+        </h2>
+        <span className="text-sm text-muted-foreground">
+          · {tierContacts.length} contact{tierContacts.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <TableHeader sort={sort} onSort={onSort} />
+        {companies ? (
+          companies.map((company) => (
+            <div key={`${tier}:${company.name}`} className="border-b border-border/40 last:border-b-0">
+              <button
+                type="button"
+                onClick={() => toggleCompany(`${tier}:${company.name}`)}
+                aria-expanded={!collapsedCompanies.has(`${tier}:${company.name}`)}
+                className="flex w-full items-center gap-2.5 px-5 py-2.5 min-h-[40px] text-left hover:bg-muted/30 transition-colors duration-150 bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+              >
+                <span className="transition-transform duration-200">
+                  {collapsedCompanies.has(`${tier}:${company.name}`)
+                    ? <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    : <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+                </span>
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
+                <span className="text-xs font-medium text-foreground">{company.name}</span>
+                <span className="text-[11px] text-muted-foreground">({company.contacts.length})</span>
+              </button>
+              {!collapsedCompanies.has(`${tier}:${company.name}`) && (
+                <div className="divide-y divide-border/30">
+                  {company.contacts.map((c) => (
+                    <ContactRowBlock
+                      key={c.id}
+                      contact={c}
+                      recommendation={pendingByContactId.get(c.id)}
+                      onAcceptSuggestion={
+                        pendingByContactId.has(c.id)
+                          ? () => onAcceptSuggestion(c.id)
+                          : undefined
+                      }
+                      onDismissSuggestion={
+                        pendingByContactId.has(c.id)
+                          ? () => onDismissSuggestion(c.id)
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="divide-y divide-border/30">
+            {tierContacts.map((c) => (
+              <ContactRowBlock
+                key={c.id}
+                contact={c}
+                recommendation={pendingByContactId.get(c.id)}
+                onAcceptSuggestion={
+                  pendingByContactId.has(c.id)
+                    ? () => onAcceptSuggestion(c.id)
+                    : undefined
+                }
+                onDismissSuggestion={
+                  pendingByContactId.has(c.id)
+                    ? () => onDismissSuggestion(c.id)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -723,16 +862,6 @@ function GroupedView({
   onShowEveryoneFromEmpty: () => void;
 }) {
   const groups = useMemo(() => groupByTier(contacts, sort), [contacts, sort]);
-  const [collapsedCompanies, setCollapsedCompanies] = useState<Set<string>>(new Set());
-
-  function toggleCompany(key: string) {
-    setCollapsedCompanies((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
 
   if (emptyChangesOnly) {
     return (
@@ -753,84 +882,18 @@ function GroupedView({
   return (
     <div className="space-y-8">
       {groups.map(({ tier, contacts: tierContacts, companies }) => {
-        const colors = TIER_COLORS[tier as TierKey] ?? TIER_COLORS.MEDIUM;
         return (
-          <section key={tier} aria-label={`${TIER_LABELS[tier] ?? tier} tier contacts`}>
-            <div className="flex items-center gap-3 mb-3 px-1">
-              <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
-              <h2 className={`text-base font-semibold tracking-tight ${colors.text}`}>{TIER_LABELS[tier] ?? tier}</h2>
-              <span className="text-sm text-muted-foreground">· {tierContacts.length} contact{tierContacts.length !== 1 ? "s" : ""}</span>
-            </div>
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <TableHeader sort={sort} onSort={onSort} />
-              {companies ? (
-                companies.map((company) => {
-                  const companyKey = `${tier}:${company.name}`;
-                  const collapsed = collapsedCompanies.has(companyKey);
-                  return (
-                    <div key={companyKey} className="border-b border-border/40 last:border-b-0">
-                      <button
-                        type="button"
-                        onClick={() => toggleCompany(companyKey)}
-                        aria-expanded={!collapsed}
-                        className="flex w-full items-center gap-2.5 px-5 py-2.5 min-h-[40px] text-left hover:bg-muted/30 transition-colors duration-150 bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                      >
-                        <span className="transition-transform duration-200">
-                          {collapsed
-                            ? <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                            : <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
-                        </span>
-                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
-                        <span className="text-xs font-medium text-foreground">{company.name}</span>
-                        <span className="text-[11px] text-muted-foreground">({company.contacts.length})</span>
-                      </button>
-                      {!collapsed && (
-                        <div>
-                          {company.contacts.map((c) => (
-                            <ContactRowBlock
-                              key={c.id}
-                              contact={c}
-                              recommendation={pendingByContactId.get(c.id)}
-                              onAcceptSuggestion={
-                                pendingByContactId.has(c.id)
-                                  ? () => onAcceptSuggestion(c.id)
-                                  : undefined
-                              }
-                              onDismissSuggestion={
-                                pendingByContactId.has(c.id)
-                                  ? () => onDismissSuggestion(c.id)
-                                  : undefined
-                              }
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <div>
-                  {tierContacts.map((c) => (
-                    <ContactRowBlock
-                      key={c.id}
-                      contact={c}
-                      recommendation={pendingByContactId.get(c.id)}
-                      onAcceptSuggestion={
-                        pendingByContactId.has(c.id)
-                          ? () => onAcceptSuggestion(c.id)
-                          : undefined
-                      }
-                      onDismissSuggestion={
-                        pendingByContactId.has(c.id)
-                          ? () => onDismissSuggestion(c.id)
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <ContactListSection
+            key={tier}
+            tier={tier}
+            tierContacts={tierContacts}
+            companies={companies}
+            sort={sort}
+            onSort={onSort}
+            pendingByContactId={pendingByContactId}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onDismissSuggestion={onDismissSuggestion}
+          />
         );
       })}
     </div>
@@ -881,7 +944,7 @@ function FlatView({
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <TableHeader sort={sort} onSort={onSort} />
-      <div>
+      <div className="divide-y divide-border/30">
         {sorted.map((c) => (
           <ContactRowBlock
             key={c.id}

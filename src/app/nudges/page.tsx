@@ -543,7 +543,15 @@ export default function NudgesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error("Failed to update nudge");
+      // 404 = nudge already gone (e.g. deleted by refresh) — refetch to sync, no error
+      if (res.status === 404) {
+        await fetchNudges();
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "Failed to update nudge");
+      }
       await fetchNudges();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

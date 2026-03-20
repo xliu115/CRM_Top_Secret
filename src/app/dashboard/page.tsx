@@ -1,16 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
-  Users,
-  Bell,
-  Calendar,
   ChevronRight,
-  Activity,
-  ExternalLink,
   Clock,
   Briefcase,
   Newspaper,
@@ -21,6 +16,8 @@ import {
   BookOpen,
   Linkedin,
   Send,
+  ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -31,24 +28,39 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { format, isToday, isTomorrow, isYesterday } from "date-fns";
 
 type DashboardData = {
   contactCount: number;
   openNudgeCount: number;
   upcomingMeetingCount: number;
-  recentInteractions: Array<{
+  upcomingMeetings: Array<{
+    id: string;
+    title: string;
+    purpose: string | null;
+    startTime: string;
+    generatedBrief: string | null;
+    attendees: Array<{
+      contact: {
+        id: string;
+        name: string;
+        title: string;
+        importance?: string;
+        company: { id: string; name: string };
+      };
+    }>;
+  }>;
+  clientNews: Array<{
     id: string;
     type: string;
     date: string;
-    summary: string;
-    contact: {
-      id: string;
-      name: string;
-      company: { name: string };
-    };
+    content: string;
+    url: string | null;
+    contact: { name: string; company?: string } | null;
+    company: { id: string; name: string } | null;
   }>;
 };
 
@@ -119,13 +131,63 @@ function getTypeConfig(ruleType: string): NudgeTypeConfig {
   return NUDGE_TYPE_CONFIG[ruleType] ?? DEFAULT_TYPE_CONFIG;
 }
 
-function signalLinkLabel(ruleType: string): string {
-  switch (ruleType) {
-    case "LINKEDIN_ACTIVITY": return "View on LinkedIn";
-    case "COMPANY_NEWS": return "Read article";
-    case "JOB_CHANGE": return "View on LinkedIn";
-    default: return "View source";
+function getSignalTypeConfig(type: string): NudgeTypeConfig {
+  const map: Record<string, NudgeTypeConfig> = {
+    NEWS: NUDGE_TYPE_CONFIG.COMPANY_NEWS,
+    JOB_CHANGE: NUDGE_TYPE_CONFIG.JOB_CHANGE,
+    EVENT: NUDGE_TYPE_CONFIG.UPCOMING_EVENT,
+  };
+  return map[type] ?? DEFAULT_TYPE_CONFIG;
+}
+
+const DASHBOARD_SUGGESTED_QUESTIONS = [
+  "Summarize my week",
+  "Who needs follow-up?",
+  "Prep me for tomorrow's meetings",
+  "What's the latest with my top clients?",
+  "Which contacts haven't I spoken to in 60+ days?",
+  "Who knows my contacts?",
+];
+
+function groupMeetingsByTimeBucket(
+  meetings: DashboardData["upcomingMeetings"]
+): { label: string; meetings: typeof meetings }[] {
+  const now = new Date();
+  const today: typeof meetings = [];
+  const tomorrow: typeof meetings = [];
+  const later: typeof meetings = [];
+
+  for (const m of meetings) {
+    const d = new Date(m.startTime);
+    if (isToday(d)) today.push(m);
+    else if (isTomorrow(d)) tomorrow.push(m);
+    else later.push(m);
   }
+
+  const buckets: { label: string; meetings: typeof meetings }[] = [];
+  if (today.length > 0) buckets.push({ label: "Today", meetings: today });
+  if (tomorrow.length > 0) buckets.push({ label: "Tomorrow", meetings: tomorrow });
+  if (later.length > 0) buckets.push({ label: "Later this week", meetings: later });
+  return buckets;
+}
+
+function groupNewsByTime(news: DashboardData["clientNews"]): { label: string; items: typeof news }[] {
+  const today: typeof news = [];
+  const yesterday: typeof news = [];
+  const thisWeek: typeof news = [];
+
+  for (const item of news) {
+    const d = new Date(item.date);
+    if (isToday(d)) today.push(item);
+    else if (isYesterday(d)) yesterday.push(item);
+    else thisWeek.push(item);
+  }
+
+  const buckets: { label: string; items: typeof news }[] = [];
+  if (today.length > 0) buckets.push({ label: "Today", items: today });
+  if (yesterday.length > 0) buckets.push({ label: "Yesterday", items: yesterday });
+  if (thisWeek.length > 0) buckets.push({ label: "This week", items: thisWeek });
+  return buckets;
 }
 
 export default function DashboardPage() {
@@ -135,6 +197,7 @@ export default function DashboardPage() {
   const [topNudges, setTopNudges] = useState<Nudge[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chatInput, setChatInput] = useState("");
 
   useEffect(() => {
     async function fetchData() {
@@ -169,19 +232,33 @@ export default function DashboardPage() {
 
   const userName = session?.user?.name ?? "Partner";
 
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  function handleChatSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatInput("");
+    router.push(`/chat?q=${encodeURIComponent(text)}`);
+  }
+
+  function handleSuggestedQuestion(q: string) {
+    setChatInput(q);
+    chatInputRef.current?.focus();
+  }
+
   if (loading) {
     return (
       <DashboardShell>
         <div className="space-y-8">
           <Skeleton className="h-10 w-64" />
-          <div className="grid gap-4 md:grid-cols-3">
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
-          </div>
-          <div className="grid gap-6 lg:grid-cols-2">
+          <Skeleton className="h-32" />
+          <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
             <Skeleton className="h-80" />
-            <Skeleton className="h-80" />
+            <div className="space-y-6">
+              <Skeleton className="h-64" />
+              <Skeleton className="h-48" />
+            </div>
           </div>
         </div>
       </DashboardShell>
@@ -198,69 +275,80 @@ export default function DashboardPage() {
     );
   }
 
+  const meetingBuckets = dashboardData?.upcomingMeetings?.length
+    ? groupMeetingsByTimeBucket(dashboardData.upcomingMeetings)
+    : [];
+  const newsBuckets = dashboardData?.clientNews?.length
+    ? groupNewsByTime(dashboardData.clientNews)
+    : [];
+
+  const timeGreeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good Morning";
+    if (h < 17) return "Good Afternoon";
+    return "Good Evening";
+  })();
+
+  const firstName = (userName ?? "Partner").split(/\s+/)[0] || userName || "Partner";
+
   return (
     <DashboardShell>
       <div className="space-y-8">
-        <div>
+        {/* Centered greeting above chat — reference design */}
+        <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Dashboard
+            {timeGreeting}, {firstName}
           </h1>
-          <p className="mt-1 text-muted-foreground">
-            Welcome back, {userName}. Here&apos;s what&apos;s happening today.
+          <p className="text-3xl font-bold tracking-tight text-foreground">
+            What&apos;s on{" "}
+            <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">
+              your mind
+            </span>
+            ?
           </p>
         </div>
 
-        {/* Stat cards */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <Link href="/contacts">
-            <Card className="transition-colors hover:bg-muted/50">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Contacts
-                </CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  {dashboardData?.contactCount ?? 0}
+        {/* Chat bar */}
+        <Card className="shadow-sm">
+          <CardContent className="pt-6">
+            <form onSubmit={handleChatSubmit} className="space-y-4">
+              <div className="flex gap-2">
+                <div className="relative flex flex-1">
+                  <Sparkles className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    ref={chatInputRef}
+                    id="dashboard-chat"
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Ask AI a question or make a request…"
+                    className="flex-1 rounded-lg border border-border bg-background pl-11 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
                 </div>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/nudges">
-            <Card className="transition-colors hover:bg-muted/50">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Open Nudges
-                </CardTitle>
-                <Bell className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  {dashboardData?.openNudgeCount ?? 0}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/meetings">
-            <Card className="transition-colors hover:bg-muted/50">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Upcoming Meetings
-                </CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  {dashboardData?.upcomingMeetingCount ?? 0}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        </div>
+                <Button type="submit" size="default" disabled={!chatInput.trim()}>
+                  Ask
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {DASHBOARD_SUGGESTED_QUESTIONS.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => handleSuggestedQuestion(q)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Sparkles className="h-3 w-3 text-primary" />
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Today's Top Nudges */}
+        {/* Option D: 60% Nudges | 40% Meetings + News stacked */}
+        <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+          {/* Left: Today's Top Nudges */}
           <Card>
             <CardHeader>
               <CardTitle>Today&apos;s Top Nudges</CardTitle>
@@ -278,7 +366,6 @@ export default function DashboardPage() {
                   {topNudges.map((nudge) => {
                     const cfg = getTypeConfig(nudge.ruleType);
                     const insights = parseInsights(nudge.metadata);
-                    const insightTypes = [...new Set(insights.map((i) => i.type))];
                     return (
                       <div
                         key={nudge.id}
@@ -341,60 +428,138 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Interactions</CardTitle>
-              <CardDescription>
-                Latest interactions across your contacts
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!dashboardData?.recentInteractions?.length ? (
-                <p className="text-sm text-muted-foreground">
-                  No recent activity.
-                </p>
-              ) : (
-                <div className="space-y-0">
-                  {dashboardData.recentInteractions.map((interaction, idx) => (
-                    <div
-                      key={interaction.id}
-                      className="flex gap-4 pb-6 last:pb-0"
-                    >
-                      <div className="relative flex flex-col items-center">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                          <Activity className="h-4 w-4 text-muted-foreground" />
+          {/* Right column: Meeting Prep + Client News stacked */}
+          <div className="space-y-6">
+            {/* Meeting Prep — Next 7 Days */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Meeting Prep — Next 7 Days</CardTitle>
+                <CardDescription>
+                  Upcoming priority client meetings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {meetingBuckets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No meetings in the next 7 days.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {meetingBuckets.map(({ label, meetings }) => (
+                      <div key={label}>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                          {label}
+                        </h3>
+                        <div className="space-y-2">
+                          {meetings.map((meeting) => {
+                            const attendeeNames = meeting.attendees
+                              .map((a) => a.contact.name)
+                              .join(", ");
+                            const topAttendee = meeting.attendees[0]?.contact;
+                            return (
+                              <Link
+                                key={meeting.id}
+                                href={`/meetings/${meeting.id}`}
+                                className="block overflow-hidden rounded-lg border border-border bg-card transition-colors hover:bg-muted/30"
+                              >
+                                <div className="flex items-start gap-2 p-3">
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                    <ClipboardList className="h-3.5 w-3.5 text-primary" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium text-foreground text-sm">{meeting.title}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {format(new Date(meeting.startTime), "EEE, MMM d · h:mm a")}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                      {attendeeNames}
+                                      {topAttendee?.company && ` · ${topAttendee.company.name}`}
+                                    </p>
+                                    <span className="inline-flex items-center text-xs font-medium text-primary hover:underline mt-1">
+                                      View brief
+                                      <ChevronRight className="ml-0.5 h-3 w-3" />
+                                    </span>
+                                  </div>
+                                </div>
+                              </Link>
+                            );
+                          })}
                         </div>
-                        {idx < dashboardData.recentInteractions.length - 1 && (
-                          <div className="absolute top-8 left-1/2 h-full w-px -translate-x-px bg-border" />
-                        )}
                       </div>
-                      <div className="min-w-0 flex-1 pt-0.5">
-                        <p className="text-sm font-medium text-foreground">
-                          {interaction.contact.name} at{" "}
-                          {interaction.contact.company.name}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {interaction.summary}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {format(new Date(interaction.date), "MMM d, yyyy")} ·{" "}
-                          {interaction.type}
-                        </p>
-                        <Link
-                          href={`/contacts/${interaction.contact.id}`}
-                          className="mt-2 inline-flex items-center text-sm font-medium text-primary hover:underline"
-                        >
-                          View contact
-                          <ChevronRight className="ml-0.5 h-4 w-4" />
-                        </Link>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Client News */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Client News</CardTitle>
+                <CardDescription>
+                  Recent signals across your contacts and companies
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {newsBuckets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No recent client news.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {newsBuckets.map(({ label, items }) => (
+                      <div key={label}>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                          {label}
+                        </h3>
+                        <div className="space-y-0">
+                          {items.slice(0, 5).map((item, idx) => {
+                            const cfg = getSignalTypeConfig(item.type);
+                            const IIcon = cfg.icon;
+                            const entity = item.contact
+                              ? `${item.contact.name}${item.contact.company ? ` · ${item.contact.company}` : ""}`
+                              : item.company?.name ?? "Unknown";
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex gap-3 pb-4 last:pb-0"
+                              >
+                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
+                                  <IIcon className="h-3 w-3 text-muted-foreground" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-foreground">
+                                    {item.type === "NEWS" ? item.company?.name ?? entity : entity}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground line-clamp-2">
+                                    {item.content}
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    {format(new Date(item.date), "MMM d")} · {item.type}
+                                  </p>
+                                  {item.url && (
+                                    <a
+                                      href={item.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="mt-1 inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                    >
+                                      Read more
+                                      <ExternalLink className="ml-0.5 h-3 w-3" />
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </DashboardShell>
