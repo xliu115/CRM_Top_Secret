@@ -14,6 +14,7 @@ const protectedPaths = [
   "/dashboard",
   "/nudges",
   "/contacts",
+  "/companies",
   "/meetings",
   "/chat",
   "/api/nudges",
@@ -24,6 +25,7 @@ const protectedPaths = [
   "/api/signals",
   "/api/dashboard",
   "/api/stats",
+  "/api/companies",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -66,6 +68,7 @@ export const config = {
     "/dashboard/:path*",
     "/nudges/:path*",
     "/contacts/:path*",
+    "/companies/:path*",
     "/meetings/:path*",
     "/chat/:path*",
     "/api/nudges/:path*",
@@ -76,5 +79,6 @@ export const config = {
     "/api/signals/:path*",
     "/api/dashboard/:path*",
     "/api/stats/:path*",
+    "/api/companies/:path*",
   ],
 };

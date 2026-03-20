@@ -210,7 +210,9 @@ export default function DashboardPage() {
         ]);
 
         if (!dashboardRes.ok) {
-          throw new Error("Failed to fetch dashboard");
+          const body = await dashboardRes.json().catch(() => ({}));
+          const message = (body && typeof body.error === "string") ? body.error : "Failed to fetch dashboard";
+          throw new Error(message);
         }
         const dashboard = await dashboardRes.json();
         setDashboardData(dashboard);

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Search, X, List, Layers, ChevronDown, ChevronRight, ChevronUp,
-  Building2, Bell, SlidersHorizontal, SearchX, Users,
+  Building2, Bell, SlidersHorizontal, SearchX, Users, Check, Loader2, Shield,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,16 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTierColors, TIER_COLORS, type TierKey } from "@/lib/utils/tier-colors";
+import { importanceDisplayLabel } from "@/lib/utils/importance-labels";
+import { cn } from "@/lib/utils/cn";
 import { format } from "date-fns";
+
+type TierRecommendation = {
+  contactId: string;
+  currentTier: string;
+  suggestedTier: string;
+  reason: string;
+};
 
 type Contact = {
   id: string;
@@ -23,14 +32,26 @@ type Contact = {
   email: string;
   importance: string;
   lastContacted: string | null;
-  company: { name: string };
+  company: { name: string; id?: string };
+  companyId?: string;
   daysSinceLastInteraction: number | null;
   lastInteraction: { type: string; summary: string; date: string } | null;
   openNudgeCount: number;
   otherPartners: string[];
 };
 
-type SortKey = "name" | "daysSince" | "lastInteraction" | "otherPartners" | "nudges";
+type ContactRowProps = {
+  contact: Contact;
+};
+
+type ContactRowBlockProps = {
+  contact: Contact;
+  recommendation?: TierRecommendation | null;
+  onAcceptSuggestion?: () => void;
+  onDismissSuggestion?: () => void;
+};
+
+type SortKey = "name" | "institution" | "lastInteraction" | "daysSince" | "otherPartners" | "nudges";
 type SortDir = "asc" | "desc";
 type SortState = { key: SortKey; dir: SortDir } | null;
 
@@ -45,6 +66,7 @@ const DAYS_FILTERS = [
 
 const COL_SIZE = {
   name: "flex-[2] min-w-0",
+  institution: "flex-[1.1] min-w-0",
   lastInteraction: "flex-[1.5] min-w-0",
   daysSince: "flex-[0.9] min-w-0",
   otherPartners: "flex-[1.5] min-w-0",
@@ -54,6 +76,7 @@ const COL_SIZE = {
 const COL = {
   bar: "w-1 shrink-0",
   name: COL_SIZE.name,
+  institution: COL_SIZE.institution,
   lastInteraction: `${COL_SIZE.lastInteraction} hidden md:block`,
   daysSince: COL_SIZE.daysSince,
   otherPartners: `${COL_SIZE.otherPartners} hidden lg:block`,
@@ -67,6 +90,9 @@ function compareContacts(a: Contact, b: Contact, key: SortKey, dir: SortDir): nu
   switch (key) {
     case "name":
       cmp = a.name.localeCompare(b.name);
+      break;
+    case "institution":
+      cmp = a.company.name.localeCompare(b.company.name);
       break;
     case "daysSince": {
       const getVal = (x: Contact) => {
@@ -130,7 +156,7 @@ type TierGroup = {
 
 function groupByTier(contacts: Contact[], sort: SortState): TierGroup[] {
   const groups: TierGroup[] = [];
-  const useCompanyGrouping = !sort || sort.key === "name";
+  const useCompanyGrouping = !sort || sort.key === "name" || sort.key === "institution";
 
   for (const tier of TIER_ORDER) {
     let tierContacts = contacts.filter((c) => c.importance === tier);
@@ -218,6 +244,7 @@ function TableHeader({ sort, onSort }: { sort: SortState; onSort: (key: SortKey)
     >
       <div className="w-1 shrink-0" role="presentation" />
       <SortableHeader label="Contact" sizeClass={COL_SIZE.name} sortKey="name" sort={sort} onSort={onSort} />
+      <SortableHeader label="Institution" sizeClass={COL_SIZE.institution} hideClass="hidden md:flex" sortKey="institution" sort={sort} onSort={onSort} />
       <SortableHeader label="Last Interaction" sizeClass={COL_SIZE.lastInteraction} hideClass="hidden md:flex" sortKey="lastInteraction" sort={sort} onSort={onSort} />
       <SortableHeader label="Days Since" sizeClass={COL_SIZE.daysSince} sortKey="daysSince" sort={sort} onSort={onSort} />
       <SortableHeader label="Other Partners" sizeClass={COL_SIZE.otherPartners} hideClass="hidden lg:flex" sortKey="otherPartners" sort={sort} onSort={onSort} />
@@ -226,31 +253,31 @@ function TableHeader({ sort, onSort }: { sort: SortState; onSort: (key: SortKey)
   );
 }
 
-// --- Contact Row ---
+// --- Contact Row + optional tier suggestion strip ---
 
-function ContactTableRow({
-  contact,
-  showInstitution,
-}: {
-  contact: Contact;
-  showInstitution?: boolean;
-}) {
+function ContactTableRow({ contact }: ContactRowProps) {
   const colors = getTierColors(contact.importance);
-  return (
-    <Link
-      href={`/contacts/${contact.id}`}
-      className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-    >
+  const rowInner = (
+    <>
       <div className={`${COL.bar} self-stretch rounded-r ${colors.bar}`} />
       <div className={`${COL.name} flex items-center gap-3`}>
         <Avatar name={contact.name} size="sm" className="shrink-0" />
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground truncate leading-tight">{contact.name}</p>
           <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{contact.title}</p>
-          {showInstitution && contact.company?.name && (
-            <p className="text-xs text-muted-foreground/70 truncate leading-tight mt-0.5">{contact.company.name}</p>
-          )}
         </div>
+      </div>
+      <div className={COL.institution}>
+        {contact.company?.name ? (
+          <Link
+            href={contact.companyId ? `/companies/${contact.companyId}` : "/companies"}
+            className="text-xs text-primary hover:underline truncate leading-tight block"
+          >
+            {contact.company.name}
+          </Link>
+        ) : (
+          <span className="text-xs text-muted-foreground/60">—</span>
+        )}
       </div>
       <div className={`${COL.lastInteraction}`}>
         {contact.lastInteraction ? (
@@ -286,11 +313,276 @@ function ContactTableRow({
           <span className="text-xs text-muted-foreground/60">—</span>
         )}
       </div>
-    </Link>
+    </>
+  );
+
+  return (
+    <div className="border-b border-border/30 last:border-b-0">
+      <Link
+        href={`/contacts/${contact.id}`}
+        className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+      >
+        {rowInner}
+      </Link>
+    </div>
+  );
+}
+
+function ContactRowBlock({
+  contact,
+  recommendation,
+  onAcceptSuggestion,
+  onDismissSuggestion,
+}: ContactRowBlockProps) {
+  const hasRec = Boolean(recommendation && onAcceptSuggestion && onDismissSuggestion);
+
+  return (
+    <div
+      className={cn(
+        "border-b border-border/30 last:border-b-0",
+        hasRec && "px-1 py-1.5"
+      )}
+    >
+      {hasRec ? (
+        <div
+          className="rounded-xl border border-primary/35 bg-card shadow-sm overflow-hidden ring-1 ring-primary/15 dark:ring-primary/25"
+          role="group"
+          aria-label={`Tier suggestion for ${contact.name}`}
+        >
+          <ContactTableRow contact={contact} />
+          <div
+            className="flex items-start gap-3 px-4 py-2.5 sm:px-5 bg-primary/[0.08] dark:bg-primary/15 border-t-2 border-primary/45 rounded-b-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              className="text-xs text-muted-foreground min-w-0 flex-1 leading-snug pt-0.5"
+              title={recommendation!.reason}
+            >
+              <span className="font-medium text-foreground">{contact.name}</span>
+              <span className="text-muted-foreground"> — </span>
+              <span className="font-semibold text-foreground">
+                {importanceDisplayLabel(recommendation!.currentTier)} → {importanceDisplayLabel(recommendation!.suggestedTier)}
+              </span>
+              <span className="text-muted-foreground"> · </span>
+              {recommendation!.reason}
+            </p>
+            <div className="flex items-center gap-1 shrink-0">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 border-primary/40 text-primary hover:bg-primary/10"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onAcceptSuggestion!();
+                }}
+                aria-label={`Accept tier change for ${contact.name}`}
+              >
+                <Check className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onDismissSuggestion!();
+                }}
+                aria-label={`Discard suggestion for ${contact.name}`}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <ContactTableRow contact={contact} />
+      )}
+    </div>
+  );
+}
+
+function TierRecommendationsBulkBar({
+  count,
+  onAcceptAll,
+  onDiscardAll,
+  loading,
+}: {
+  count: number;
+  onAcceptAll: () => void;
+  onDiscardAll: () => void;
+  loading: boolean;
+}) {
+  if (count === 0) return null;
+  const changeWord = count === 1 ? "change" : "changes";
+  return (
+    <div
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-primary/25 bg-background/95 backdrop-blur-md px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(34,81,255,0.12)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.4)] md:left-64"
+      role="region"
+      aria-label="Bulk tier suggestions"
+    >
+      <div className="mx-auto max-w-6xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground flex items-center gap-2 min-w-0">
+          <Shield className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <span>
+            <span className="font-medium text-foreground">{count}</span> pending {changeWord}
+          </span>
+        </p>
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9"
+            disabled={loading}
+            onClick={onDiscardAll}
+          >
+            Discard {count} {changeWord}
+          </Button>
+          <Button type="button" size="sm" className="h-9" disabled={loading} onClick={onAcceptAll}>
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
+                Applying…
+              </>
+            ) : (
+              `Accept ${count} ${changeWord}`
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactListSection({
+  tier,
+  tierContacts,
+  companies,
+  sort,
+  onSort,
+  pendingByContactId,
+  onAcceptSuggestion,
+  onDismissSuggestion,
+}: {
+  tier: string;
+  tierContacts: Contact[];
+  companies: { name: string; contacts: Contact[] }[] | null;
+  sort: SortState;
+  onSort: (k: SortKey) => void;
+  pendingByContactId: Map<string, TierRecommendation>;
+  onAcceptSuggestion: (contactId: string) => void;
+  onDismissSuggestion: (contactId: string) => void;
+}) {
+  const colors = TIER_COLORS[tier as TierKey] ?? TIER_COLORS.MEDIUM;
+  const [collapsedCompanies, setCollapsedCompanies] = useState<Set<string>>(new Set());
+
+  function toggleCompany(key: string) {
+    setCollapsedCompanies((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  return (
+    <section aria-label={`${TIER_LABELS[tier] ?? tier} tier contacts`}>
+      <div className="flex items-center gap-3 mb-3 px-1">
+        <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
+        <h2 className={`text-base font-semibold tracking-tight ${colors.text}`}>
+          {TIER_LABELS[tier] ?? tier}
+        </h2>
+        <span className="text-sm text-muted-foreground">
+          · {tierContacts.length} contact{tierContacts.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <TableHeader sort={sort} onSort={onSort} />
+        {companies ? (
+          companies.map((company) => (
+            <div key={`${tier}:${company.name}`} className="border-b border-border/40 last:border-b-0">
+              <button
+                type="button"
+                onClick={() => toggleCompany(`${tier}:${company.name}`)}
+                aria-expanded={!collapsedCompanies.has(`${tier}:${company.name}`)}
+                className="flex w-full items-center gap-2.5 px-5 py-2.5 min-h-[40px] text-left hover:bg-muted/30 transition-colors duration-150 bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+              >
+                <span className="transition-transform duration-200">
+                  {collapsedCompanies.has(`${tier}:${company.name}`)
+                    ? <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    : <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+                </span>
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
+                <span className="text-xs font-medium text-foreground">{company.name}</span>
+                <span className="text-[11px] text-muted-foreground">({company.contacts.length})</span>
+              </button>
+              {!collapsedCompanies.has(`${tier}:${company.name}`) && (
+                <div className="divide-y divide-border/30">
+                  {company.contacts.map((c) => (
+                    <ContactRowBlock
+                      key={c.id}
+                      contact={c}
+                      recommendation={pendingByContactId.get(c.id)}
+                      onAcceptSuggestion={
+                        pendingByContactId.has(c.id)
+                          ? () => onAcceptSuggestion(c.id)
+                          : undefined
+                      }
+                      onDismissSuggestion={
+                        pendingByContactId.has(c.id)
+                          ? () => onDismissSuggestion(c.id)
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="divide-y divide-border/30">
+            {tierContacts.map((c) => (
+              <ContactRowBlock
+                key={c.id}
+                contact={c}
+                recommendation={pendingByContactId.get(c.id)}
+                onAcceptSuggestion={
+                  pendingByContactId.has(c.id)
+                    ? () => onAcceptSuggestion(c.id)
+                    : undefined
+                }
+                onDismissSuggestion={
+                  pendingByContactId.has(c.id)
+                    ? () => onDismissSuggestion(c.id)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
 // --- Empty States ---
+
+function EmptyChangesOnlyState({ onShowEveryone }: { onShowEveryone: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-6">
+      <Users className="h-12 w-12 text-muted-foreground/40 mb-4" aria-hidden="true" />
+      <h3 className="text-base font-semibold text-foreground mb-1">No pending tier suggestions</h3>
+      <p className="text-sm text-muted-foreground mb-6 max-w-sm text-center">
+        All suggestions are cleared, or none matched this list. Switch to everyone to see the full directory.
+      </p>
+      <Button variant="outline" size="sm" onClick={onShowEveryone}>
+        Show everyone
+      </Button>
+    </div>
+  );
+}
 
 function EmptyFilteredState({ onClear }: { onClear: () => void }) {
   return (
@@ -547,21 +839,36 @@ function SortAnnouncement({ sort }: { sort: SortState }) {
 // --- Views ---
 
 function GroupedView({
-  contacts, sort, onSort, onClearFilters, hasActiveFilters,
+  contacts,
+  sort,
+  onSort,
+  onClearFilters,
+  hasActiveFilters,
+  pendingByContactId,
+  onAcceptSuggestion,
+  onDismissSuggestion,
+  emptyChangesOnly,
+  onShowEveryoneFromEmpty,
 }: {
-  contacts: Contact[]; sort: SortState; onSort: (k: SortKey) => void;
-  onClearFilters: () => void; hasActiveFilters: boolean;
+  contacts: Contact[];
+  sort: SortState;
+  onSort: (k: SortKey) => void;
+  onClearFilters: () => void;
+  hasActiveFilters: boolean;
+  pendingByContactId: Map<string, TierRecommendation>;
+  onAcceptSuggestion: (contactId: string) => void;
+  onDismissSuggestion: (contactId: string) => void;
+  emptyChangesOnly: boolean;
+  onShowEveryoneFromEmpty: () => void;
 }) {
   const groups = useMemo(() => groupByTier(contacts, sort), [contacts, sort]);
-  const [collapsedCompanies, setCollapsedCompanies] = useState<Set<string>>(new Set());
 
-  function toggleCompany(key: string) {
-    setCollapsedCompanies((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  if (emptyChangesOnly) {
+    return (
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <EmptyChangesOnlyState onShowEveryone={onShowEveryoneFromEmpty} />
+      </div>
+    );
   }
 
   if (groups.length === 0) {
@@ -575,56 +882,18 @@ function GroupedView({
   return (
     <div className="space-y-8">
       {groups.map(({ tier, contacts: tierContacts, companies }) => {
-        const colors = TIER_COLORS[tier as TierKey] ?? TIER_COLORS.MEDIUM;
         return (
-          <section key={tier} aria-label={`${TIER_LABELS[tier] ?? tier} tier contacts`}>
-            <div className="flex items-center gap-3 mb-3 px-1">
-              <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
-              <h2 className={`text-base font-semibold tracking-tight ${colors.text}`}>{TIER_LABELS[tier] ?? tier}</h2>
-              <span className="text-sm text-muted-foreground">· {tierContacts.length} contact{tierContacts.length !== 1 ? "s" : ""}</span>
-            </div>
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <TableHeader sort={sort} onSort={onSort} />
-              {companies ? (
-                companies.map((company) => {
-                  const companyKey = `${tier}:${company.name}`;
-                  const collapsed = collapsedCompanies.has(companyKey);
-                  return (
-                    <div key={companyKey} className="border-b border-border/40 last:border-b-0">
-                      <button
-                        type="button"
-                        onClick={() => toggleCompany(companyKey)}
-                        aria-expanded={!collapsed}
-                        className="flex w-full items-center gap-2.5 px-5 py-2.5 min-h-[40px] text-left hover:bg-muted/30 transition-colors duration-150 bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                      >
-                        <span className="transition-transform duration-200">
-                          {collapsed
-                            ? <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                            : <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
-                        </span>
-                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
-                        <span className="text-xs font-medium text-foreground">{company.name}</span>
-                        <span className="text-[11px] text-muted-foreground">({company.contacts.length})</span>
-                      </button>
-                      {!collapsed && (
-                        <div className="divide-y divide-border/30">
-                          {company.contacts.map((c) => (
-                            <ContactTableRow key={c.id} contact={c} showInstitution={false} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="divide-y divide-border/30">
-                  {tierContacts.map((c) => (
-                    <ContactTableRow key={c.id} contact={c} showInstitution={true} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <ContactListSection
+            key={tier}
+            tier={tier}
+            tierContacts={tierContacts}
+            companies={companies}
+            sort={sort}
+            onSort={onSort}
+            pendingByContactId={pendingByContactId}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onDismissSuggestion={onDismissSuggestion}
+          />
         );
       })}
     </div>
@@ -632,12 +901,37 @@ function GroupedView({
 }
 
 function FlatView({
-  contacts, sort, onSort, onClearFilters, hasActiveFilters,
+  contacts,
+  sort,
+  onSort,
+  onClearFilters,
+  hasActiveFilters,
+  pendingByContactId,
+  onAcceptSuggestion,
+  onDismissSuggestion,
+  emptyChangesOnly,
+  onShowEveryoneFromEmpty,
 }: {
-  contacts: Contact[]; sort: SortState; onSort: (k: SortKey) => void;
-  onClearFilters: () => void; hasActiveFilters: boolean;
+  contacts: Contact[];
+  sort: SortState;
+  onSort: (k: SortKey) => void;
+  onClearFilters: () => void;
+  hasActiveFilters: boolean;
+  pendingByContactId: Map<string, TierRecommendation>;
+  onAcceptSuggestion: (contactId: string) => void;
+  onDismissSuggestion: (contactId: string) => void;
+  emptyChangesOnly: boolean;
+  onShowEveryoneFromEmpty: () => void;
 }) {
   const sorted = useMemo(() => sortContacts(contacts, sort), [contacts, sort]);
+
+  if (emptyChangesOnly) {
+    return (
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <EmptyChangesOnlyState onShowEveryone={onShowEveryoneFromEmpty} />
+      </div>
+    );
+  }
 
   if (sorted.length === 0) {
     return (
@@ -652,7 +946,21 @@ function FlatView({
       <TableHeader sort={sort} onSort={onSort} />
       <div className="divide-y divide-border/30">
         {sorted.map((c) => (
-          <ContactTableRow key={c.id} contact={c} showInstitution={true} />
+          <ContactRowBlock
+            key={c.id}
+            contact={c}
+            recommendation={pendingByContactId.get(c.id)}
+            onAcceptSuggestion={
+              pendingByContactId.has(c.id)
+                ? () => onAcceptSuggestion(c.id)
+                : undefined
+            }
+            onDismissSuggestion={
+              pendingByContactId.has(c.id)
+                ? () => onDismissSuggestion(c.id)
+                : undefined
+            }
+          />
         ))}
       </div>
     </div>
@@ -674,7 +982,109 @@ function ContactsPageContent() {
   const [filterTiers, setFilterTiers] = useState<Set<string>>(new Set());
   const [filterMinDays, setFilterMinDays] = useState<number | null>(null);
   const [filterHasNudges, setFilterHasNudges] = useState(false);
+  const [recommendationsLoaded, setRecommendationsLoaded] = useState(false);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [pendingRecommendations, setPendingRecommendations] = useState<Record<string, TierRecommendation>>({});
+  const [listScope, setListScope] = useState<"all" | "changes">("all");
+  const [bulkAccepting, setBulkAccepting] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef(pendingRecommendations);
+  pendingRef.current = pendingRecommendations;
+
+  const pendingByContactId = useMemo(() => {
+    const m = new Map<string, TierRecommendation>();
+    for (const [id, rec] of Object.entries(pendingRecommendations)) {
+      m.set(id, rec);
+    }
+    return m;
+  }, [pendingRecommendations]);
+
+  const pendingCount = Object.keys(pendingRecommendations).length;
+
+  const loadTierRecommendations = useCallback(async () => {
+    setLoadingRecommendations(true);
+    try {
+      const res = await fetch("/api/contacts/tier-recommendations/load", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to load");
+      const data = (await res.json()) as { recommendations: TierRecommendation[] };
+      const next: Record<string, TierRecommendation> = {};
+      for (const r of data.recommendations) {
+        next[r.contactId] = r;
+      }
+      setPendingRecommendations(next);
+      setRecommendationsLoaded(true);
+    } catch {
+      /* keep prior pending */
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  }, []);
+
+  const acceptSuggestion = useCallback(async (contactId: string) => {
+    const rec = pendingRef.current[contactId];
+    if (!rec) return;
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ importance: rec.suggestedTier }),
+      });
+      if (!res.ok) return;
+      setContacts((prev) =>
+        prev.map((c) => (c.id === contactId ? { ...c, importance: rec.suggestedTier } : c))
+      );
+      setPendingRecommendations((prev) => {
+        const n = { ...prev };
+        delete n[contactId];
+        return n;
+      });
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const dismissSuggestion = useCallback((contactId: string) => {
+    setPendingRecommendations((prev) => {
+      const n = { ...prev };
+      delete n[contactId];
+      return n;
+    });
+  }, []);
+
+  const acceptAllPending = useCallback(async () => {
+    const entries = Object.entries(pendingRef.current);
+    if (entries.length === 0) return;
+    setBulkAccepting(true);
+    try {
+      const ok: { id: string; tier: string }[] = [];
+      for (const [id, rec] of entries) {
+        const res = await fetch(`/api/contacts/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ importance: rec.suggestedTier }),
+        });
+        if (res.ok) ok.push({ id, tier: rec.suggestedTier });
+      }
+      setContacts((prev) => {
+        const tierById = new Map(ok.map((o) => [o.id, o.tier]));
+        return prev.map((c) => (tierById.has(c.id) ? { ...c, importance: tierById.get(c.id)! } : c));
+      });
+      setPendingRecommendations({});
+    } finally {
+      setBulkAccepting(false);
+    }
+  }, []);
+
+  const discardAllPending = useCallback(() => {
+    setPendingRecommendations({});
+  }, []);
+
+  /** Leave recommendation review and return to normal contacts work (discards pending UI state). */
+  const exitRecommendationSession = useCallback(() => {
+    setRecommendationsLoaded(false);
+    setPendingRecommendations({});
+    setListScope("all");
+  }, []);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -721,14 +1131,35 @@ function ContactsPageContent() {
     setFilterHasNudges(false);
   }
 
-  const filtered = useMemo(
+  const baseFiltered = useMemo(
     () => applyFilters(contacts, { tiers: filterTiers, minDays: filterMinDays, hasNudges: filterHasNudges }),
     [contacts, filterTiers, filterMinDays, filterHasNudges]
   );
 
+  const filtered = useMemo(() => {
+    if (listScope !== "changes" || !recommendationsLoaded || Object.keys(pendingRecommendations).length === 0) {
+      return baseFiltered;
+    }
+    return baseFiltered.filter((c) => pendingRecommendations[c.id]);
+  }, [baseFiltered, listScope, recommendationsLoaded, pendingRecommendations]);
+
+  const emptyChangesOnly =
+    listScope === "changes" &&
+    recommendationsLoaded &&
+    !loading &&
+    contacts.length > 0 &&
+    filtered.length === 0 &&
+    baseFiltered.length > 0;
+
   return (
     <DashboardShell>
-      <div className="space-y-6">
+      <>
+      <div
+        className={cn(
+          "space-y-6",
+          recommendationsLoaded && pendingCount > 0 && "pb-28"
+        )}
+      >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Contacts</h1>
@@ -757,6 +1188,107 @@ function ContactsPageContent() {
             <Button variant="ghost" size="sm" className="h-7 px-2" asChild>
               <Link href="/contacts"><X className="h-3.5 w-3.5" /> Clear filter</Link>
             </Button>
+          </div>
+        )}
+
+        {!loading && contacts.length > 0 && !recommendationsLoaded && (
+          <div className="rounded-lg border border-primary/25 bg-primary/5 dark:bg-primary/10 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-3 min-w-0">
+              <Shield className="h-5 w-5 shrink-0 text-primary mt-0.5" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">Load tier recommendations</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  We’ll suggest tier changes from your engagement and stale-contact rules. Nothing is applied until you accept.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="shrink-0"
+              disabled={loadingRecommendations}
+              onClick={() => loadTierRecommendations()}
+            >
+              {loadingRecommendations ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
+                  Loading…
+                </>
+              ) : (
+                "Load recommendations"
+              )}
+            </Button>
+          </div>
+        )}
+
+        {!loading && contacts.length > 0 && recommendationsLoaded && (
+          <div className="rounded-lg border border-primary/20 bg-primary/[0.06] dark:bg-primary/10 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <p className="text-sm text-muted-foreground flex items-start gap-2 min-w-0 flex-1">
+              <Shield className="h-4 w-4 shrink-0 text-primary mt-0.5" aria-hidden="true" />
+              <span>
+                {pendingCount > 0 ? (
+                  <>
+                    <span className="font-medium text-foreground">{pendingCount}</span> tier suggestion
+                    {pendingCount !== 1 ? "s" : ""} pending review. Accept or discard below, or exit to keep working.
+                  </>
+                ) : (
+                  <>
+                    No tier suggestions right now. Reload to check again, or exit to continue with contacts as usual.
+                  </>
+                )}
+              </span>
+            </p>
+            <div className="flex flex-wrap items-center gap-2 shrink-0 sm:justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 text-muted-foreground"
+                onClick={exitRecommendationSession}
+              >
+                Exit
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9"
+                disabled={loadingRecommendations}
+                onClick={() => loadTierRecommendations()}
+              >
+                {loadingRecommendations ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  "Reload recommendations"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!loading && contacts.length > 0 && recommendationsLoaded && pendingCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">View</span>
+            <div className="inline-flex rounded-lg border border-border bg-muted/50 p-1">
+              <Button
+                type="button"
+                variant={listScope === "all" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-3 text-xs"
+                onClick={() => setListScope("all")}
+              >
+                Everyone
+              </Button>
+              <Button
+                type="button"
+                variant={listScope === "changes" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-3 text-xs"
+                onClick={() => setListScope("changes")}
+              >
+                Changes only
+              </Button>
+            </div>
           </div>
         )}
 
@@ -813,11 +1345,42 @@ function ContactsPageContent() {
             ))}
           </div>
         ) : viewMode === "grouped" ? (
-          <GroupedView contacts={filtered} sort={sort} onSort={handleSort} onClearFilters={clearAllFilters} hasActiveFilters={hasActiveFilters} />
+          <GroupedView
+            contacts={filtered}
+            sort={sort}
+            onSort={handleSort}
+            onClearFilters={clearAllFilters}
+            hasActiveFilters={hasActiveFilters}
+            pendingByContactId={pendingByContactId}
+            onAcceptSuggestion={acceptSuggestion}
+            onDismissSuggestion={dismissSuggestion}
+            emptyChangesOnly={emptyChangesOnly}
+            onShowEveryoneFromEmpty={() => setListScope("all")}
+          />
         ) : (
-          <FlatView contacts={filtered} sort={sort} onSort={handleSort} onClearFilters={clearAllFilters} hasActiveFilters={hasActiveFilters} />
+          <FlatView
+            contacts={filtered}
+            sort={sort}
+            onSort={handleSort}
+            onClearFilters={clearAllFilters}
+            hasActiveFilters={hasActiveFilters}
+            pendingByContactId={pendingByContactId}
+            onAcceptSuggestion={acceptSuggestion}
+            onDismissSuggestion={dismissSuggestion}
+            emptyChangesOnly={emptyChangesOnly}
+            onShowEveryoneFromEmpty={() => setListScope("all")}
+          />
         )}
       </div>
+      {recommendationsLoaded && (
+        <TierRecommendationsBulkBar
+          count={pendingCount}
+          onAcceptAll={acceptAllPending}
+          onDiscardAll={discardAllPending}
+          loading={bulkAccepting}
+        />
+      )}
+      </>
     </DashboardShell>
   );
 }

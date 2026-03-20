@@ -23,9 +23,7 @@ export async function GET() {
         where: { contactId: { in: partnerContactIds }, status: "OPEN" },
         _count: { id: true },
       }),
-      signalRepo.findByContactIds(
-        companies.map((c) => c.id)
-      ),
+      signalRepo.findByContactIds(partnerContactIds),
     ]);
 
     const latestInteractionByContact = new Map<string, Date>();
@@ -44,12 +42,12 @@ export async function GET() {
 
     const signalCountByCompany = new Map<string, number>();
     for (const s of signalCounts) {
-      if (s.companyId) {
-        signalCountByCompany.set(
-          s.companyId,
-          (signalCountByCompany.get(s.companyId) ?? 0) + 1
-        );
-      }
+      const companyId = s.companyId ?? s.contact?.companyId ?? null;
+      if (!companyId) continue;
+      signalCountByCompany.set(
+        companyId,
+        (signalCountByCompany.get(companyId) ?? 0) + 1
+      );
     }
 
     const now = new Date();

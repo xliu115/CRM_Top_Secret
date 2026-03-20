@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
       const last = latestInteraction.get(c.id);
       return {
         ...c,
+        companyId: c.companyId,
         daysSinceLastInteraction: last ? differenceInDays(now, last.date) : null,
         lastInteraction: last ? { type: last.type, summary: last.summary, date: last.date.toISOString() } : null,
         openNudgeCount: nudgeCountMap.get(c.id) ?? 0,
