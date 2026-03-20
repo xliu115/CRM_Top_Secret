@@ -3,6 +3,8 @@ import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { contactRepo } from "@/lib/repositories";
 import { prisma } from "@/lib/db/prisma";
 
+const VALID_IMPORTANCE = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
+
 const VALID_NUDGE_TYPES = [
   "STALE_CONTACT",
   "JOB_CHANGE",
@@ -52,8 +54,9 @@ export async function PATCH(
 
     const hasThreshold = "staleThresholdDays" in body;
     const hasNudgeTypes = "disabledNudgeTypes" in body;
+    const hasImportance = "importance" in body;
 
-    if (!hasThreshold && !hasNudgeTypes) {
+    if (!hasThreshold && !hasNudgeTypes && !hasImportance) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
 
@@ -63,6 +66,17 @@ export async function PATCH(
     }
 
     const data: Record<string, unknown> = {};
+
+    if (hasImportance) {
+      const raw = body.importance;
+      if (typeof raw !== "string" || !VALID_IMPORTANCE.includes(raw as (typeof VALID_IMPORTANCE)[number])) {
+        return NextResponse.json(
+          { error: `importance must be one of: ${VALID_IMPORTANCE.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      data.importance = raw;
+    }
 
     if (hasThreshold) {
       const raw = body.staleThresholdDays;
@@ -80,12 +94,17 @@ export async function PATCH(
       }
     }
 
+    /** Persisted via raw SQL so updates work even if the generated Prisma client is out of sync with the DB. */
+    let disabledNudgeTypesValue: string | null | undefined;
     if (hasNudgeTypes) {
       const types = body.disabledNudgeTypes;
       if (types === null || (Array.isArray(types) && types.length === 0)) {
-        data.disabledNudgeTypes = null;
-      } else if (Array.isArray(types) && types.every((t: unknown) => typeof t === "string" && VALID_NUDGE_TYPES.includes(t as string))) {
-        data.disabledNudgeTypes = JSON.stringify(types);
+        disabledNudgeTypesValue = null;
+      } else if (
+        Array.isArray(types) &&
+        types.every((t: unknown) => typeof t === "string" && VALID_NUDGE_TYPES.includes(t as string))
+      ) {
+        disabledNudgeTypesValue = JSON.stringify(types);
       } else {
         return NextResponse.json(
           { error: `disabledNudgeTypes must be an array of valid types: ${VALID_NUDGE_TYPES.join(", ")}` },
@@ -94,11 +113,24 @@ export async function PATCH(
       }
     }
 
-    const updated = await prisma.contact.update({
-      where: { id },
-      data,
-      include: { company: true },
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(data).length > 0) {
+        await tx.contact.update({ where: { id }, data });
+      }
+      if (hasNudgeTypes) {
+        await tx.$executeRawUnsafe(
+          `UPDATE contacts SET disabled_nudge_types = ? WHERE id = ? AND partner_id = ?`,
+          disabledNudgeTypesValue ?? null,
+          id,
+          partnerId
+        );
+      }
     });
+
+    const updated = await contactRepo.findById(id, partnerId);
+    if (!updated) {
+      return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+    }
 
     return NextResponse.json(updated);
   } catch (err) {

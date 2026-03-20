@@ -21,8 +21,6 @@ import {
   ChevronDown,
   ChevronUp,
   Building2,
-  Settings,
-  BellOff,
   Moon,
   Send,
   RotateCcw,
@@ -50,6 +48,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownPreview } from "@/components/ui/markdown-preview";
 import { getTierColors } from "@/lib/utils/tier-colors";
+import { importanceDisplayLabel } from "@/lib/utils/importance-labels";
+import {
+  getStaleDaysForTier,
+  type PartnerStaleDaysConfig,
+} from "@/lib/utils/tier-review-suggestions";
 import { format } from "date-fns";
 
 type Contact = {
@@ -196,10 +199,12 @@ function TierBadge({ importance }: { importance: string }) {
   const colors = getTierColors(importance);
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${colors.badge}`}>
-      {importance}
+      {importanceDisplayLabel(importance)}
     </span>
   );
 }
+
+const TIER_OPTIONS = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
 
 function getSentimentColor(sentiment: string): string {
   switch (sentiment) {
@@ -300,16 +305,17 @@ export default function ContactDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [editingThreshold, setEditingThreshold] = useState(false);
-  const [thresholdInput, setThresholdInput] = useState("");
+  const [reconnectDaysInput, setReconnectDaysInput] = useState("");
   const [savingThreshold, setSavingThreshold] = useState(false);
 
   const [firmRelData, setFirmRelData] = useState<FirmRelationshipData | null>(null);
   const [firmRelLoading, setFirmRelLoading] = useState(false);
   const [firmRelFetched, setFirmRelFetched] = useState(false);
 
-  const [showNudgePrefs, setShowNudgePrefs] = useState(false);
+  const [nudgeRuleConfig, setNudgeRuleConfig] = useState<PartnerStaleDaysConfig | null>(null);
   const [savingNudgePrefs, setSavingNudgePrefs] = useState(false);
+  const [savingTier, setSavingTier] = useState(false);
+  const [nudgePrefsExpanded, setNudgePrefsExpanded] = useState(false);
 
   const [showDraftPanel, setShowDraftPanel] = useState(false);
   const [draftSubject, setDraftSubject] = useState("");
@@ -347,6 +353,32 @@ export default function ContactDetailPage() {
     fetchData();
   }, [id]);
 
+  useEffect(() => {
+    async function loadNudgeRules() {
+      try {
+        const res = await fetch("/api/nudge-rules");
+        if (!res.ok) return;
+        const data = (await res.json()) as Record<string, unknown>;
+        setNudgeRuleConfig({
+          staleDaysCritical: Number(data.staleDaysCritical) || 30,
+          staleDaysHigh: Number(data.staleDaysHigh) || 45,
+          staleDaysMedium: Number(data.staleDaysMedium) || 60,
+          staleDaysLow: Number(data.staleDaysLow) || 90,
+        });
+      } catch {
+        setNudgeRuleConfig(null);
+      }
+    }
+    loadNudgeRules();
+  }, []);
+
+  useEffect(() => {
+    if (!contact) return;
+    const tierD = getStaleDaysForTier(contact.importance, nudgeRuleConfig);
+    const effective = contact.staleThresholdDays ?? tierD;
+    setReconnectDaysInput(String(effective));
+  }, [contact, nudgeRuleConfig]);
+
   async function handleGenerateEmail() {
     setGenerating(true);
     try {
@@ -374,6 +406,25 @@ export default function ContactDetailPage() {
     setTimeout(() => setCopySuccess(false), 2000);
   }
 
+  async function handleTierChange(nextImportance: string) {
+    if (!contact || nextImportance === contact.importance) return;
+    setSavingTier(true);
+    try {
+      const res = await fetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ importance: nextImportance }),
+      });
+      if (!res.ok) throw new Error("Failed to update tier");
+      const updated = await res.json();
+      setContact((prev) => (prev ? { ...prev, importance: updated.importance } : prev));
+    } catch {
+      setError("Failed to update relationship tier");
+    } finally {
+      setSavingTier(false);
+    }
+  }
+
   async function handleSaveThreshold(days: number | null) {
     setSavingThreshold(true);
     try {
@@ -385,12 +436,27 @@ export default function ContactDetailPage() {
       if (!res.ok) throw new Error("Failed to update threshold");
       const updated = await res.json();
       setContact((prev) => prev ? { ...prev, staleThresholdDays: updated.staleThresholdDays } : prev);
-      setEditingThreshold(false);
     } catch {
       setError("Failed to save staleness threshold");
     } finally {
       setSavingThreshold(false);
     }
+  }
+
+  function commitReconnectDays() {
+    if (!contact) return;
+    const tierD = getStaleDaysForTier(contact.importance, nudgeRuleConfig);
+    const parsed = parseInt(reconnectDaysInput, 10);
+    if (isNaN(parsed) || parsed < 1 || parsed > 365) {
+      setReconnectDaysInput(String(contact.staleThresholdDays ?? tierD));
+      return;
+    }
+    if (parsed === tierD) {
+      if (contact.staleThresholdDays !== null) void handleSaveThreshold(null);
+      return;
+    }
+    if (contact.staleThresholdDays === parsed) return;
+    void handleSaveThreshold(parsed);
   }
 
   async function handleNudgeStatusUpdate(nudgeId: string, status: string) {
@@ -435,7 +501,7 @@ export default function ContactDetailPage() {
 
   async function handleToggleNudgeType(typeKey: string) {
     if (!contact) return;
-    setSavingNudgePrefs(true);
+    const previousJson = contact.disabledNudgeTypes;
     const disabled = getDisabledTypes();
     if (disabled.has(typeKey)) {
       disabled.delete(typeKey);
@@ -443,18 +509,42 @@ export default function ContactDetailPage() {
       disabled.add(typeKey);
     }
     const newDisabled = Array.from(disabled);
+    const nextJson =
+      newDisabled.length > 0 ? JSON.stringify(newDisabled) : null;
+    setContact((prev) =>
+      prev ? { ...prev, disabledNudgeTypes: nextJson } : prev
+    );
+    setSavingNudgePrefs(true);
     try {
       const res = await fetch(`/api/contacts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ disabledNudgeTypes: newDisabled.length > 0 ? newDisabled : null }),
+        body: JSON.stringify({
+          disabledNudgeTypes: newDisabled.length > 0 ? newDisabled : null,
+        }),
+        credentials: "same-origin",
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setContact((prev) => prev ? { ...prev, disabledNudgeTypes: updated.disabledNudgeTypes } : prev);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        setContact((prev) =>
+          prev ? { ...prev, disabledNudgeTypes: previousJson } : prev
+        );
+        setError(
+          typeof errBody.error === "string"
+            ? errBody.error
+            : "Could not save nudge type preferences"
+        );
+        return;
       }
+      const updated = await res.json();
+      setContact((prev) =>
+        prev ? { ...prev, disabledNudgeTypes: updated.disabledNudgeTypes } : prev
+      );
     } catch {
-      // silently fail
+      setContact((prev) =>
+        prev ? { ...prev, disabledNudgeTypes: previousJson } : prev
+      );
+      setError("Could not save nudge type preferences");
     } finally {
       setSavingNudgePrefs(false);
     }
@@ -498,6 +588,8 @@ export default function ContactDetailPage() {
     );
   }
 
+  const tierDefaultDays = getStaleDaysForTier(contact.importance, nudgeRuleConfig);
+
   return (
     <DashboardShell>
       <div className="space-y-6">
@@ -537,131 +629,6 @@ export default function ContactDetailPage() {
                     {contact.notes}
                   </p>
                 )}
-                {/* Nudge preferences — stale threshold + type toggles */}
-                <div className="mt-2">
-                  <button
-                    className="flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors"
-                    onClick={() => setShowNudgePrefs(!showNudgePrefs)}
-                  >
-                    {getDisabledTypes().size > 0 ? (
-                      <BellOff className="h-3.5 w-3.5 text-amber-500" />
-                    ) : (
-                      <Settings className="h-3.5 w-3.5" />
-                    )}
-                    <span>Nudge preferences</span>
-                    {(contact.staleThresholdDays !== null || getDisabledTypes().size > 0) && (
-                      <span className="text-muted-foreground/70">
-                        ({[
-                          contact.staleThresholdDays !== null ? `${contact.staleThresholdDays}d stale` : null,
-                          getDisabledTypes().size > 0 ? `${getDisabledTypes().size} muted` : null,
-                        ].filter(Boolean).join(", ")})
-                      </span>
-                    )}
-                  </button>
-                  {showNudgePrefs && (
-                    <div className="mt-2 rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-                      {/* Stale threshold */}
-                      <div>
-                        <p className="text-xs font-medium text-foreground mb-1.5">Stale threshold</p>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          {editingThreshold ? (
-                            <span className="flex items-center gap-1.5">
-                              <Input
-                                type="number"
-                                min={1}
-                                max={365}
-                                className="h-7 w-20 text-xs"
-                                value={thresholdInput}
-                                onChange={(e) => setThresholdInput(e.target.value)}
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    const val = parseInt(thresholdInput, 10);
-                                    if (!isNaN(val) && val >= 1 && val <= 365) handleSaveThreshold(val);
-                                  }
-                                  if (e.key === "Escape") setEditingThreshold(false);
-                                }}
-                              />
-                              <span className="text-xs text-muted-foreground">days</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                disabled={savingThreshold}
-                                onClick={() => {
-                                  const val = parseInt(thresholdInput, 10);
-                                  if (!isNaN(val) && val >= 1 && val <= 365) handleSaveThreshold(val);
-                                }}
-                              >
-                                {savingThreshold ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                              </Button>
-                              {contact.staleThresholdDays !== null && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-xs text-muted-foreground"
-                                  disabled={savingThreshold}
-                                  onClick={() => handleSaveThreshold(null)}
-                                >
-                                  Use default
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-1"
-                                onClick={() => setEditingThreshold(false)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </span>
-                          ) : (
-                            <button
-                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                              onClick={() => {
-                                setThresholdInput(contact.staleThresholdDays?.toString() ?? "");
-                                setEditingThreshold(true);
-                              }}
-                            >
-                              {contact.staleThresholdDays !== null
-                                ? `${contact.staleThresholdDays} days (custom)`
-                                : "Using tier default — click to customize"}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {/* Type toggles */}
-                      <div>
-                        <p className="text-xs font-medium text-foreground mb-1.5">Nudge types</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                          {NUDGE_TYPES.map((nt) => {
-                            const isDisabled = getDisabledTypes().has(nt.key);
-                            return (
-                              <button
-                                key={nt.key}
-                                disabled={savingNudgePrefs}
-                                onClick={() => handleToggleNudgeType(nt.key)}
-                                className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
-                                  isDisabled
-                                    ? "border-border bg-muted text-muted-foreground line-through opacity-60"
-                                    : "border-primary/20 bg-primary/5 text-foreground"
-                                } hover:border-primary/40`}
-                              >
-                                <span
-                                  className={`h-2 w-2 rounded-full shrink-0 ${
-                                    isDisabled ? "bg-muted-foreground/30" : "bg-primary"
-                                  }`}
-                                />
-                                {nt.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
               <Button
                 onClick={() => {
@@ -685,6 +652,147 @@ export default function ContactDetailPage() {
               </Button>
             </div>
           </CardHeader>
+        </Card>
+
+        {/* Tier & nudge preferences — compact until Edit */}
+        <Card>
+          <CardContent className="space-y-4 py-4">
+            {!nudgePrefsExpanded ? (
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm text-muted-foreground shrink-0">Tier</span>
+                  <TierBadge importance={contact.importance} />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setNudgePrefsExpanded(true)}
+                >
+                  Edit
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-0.5">
+                    <CardTitle className="text-base">Tier & nudge preferences</CardTitle>
+                    <CardDescription className="text-xs">
+                      Tier timing defaults:{" "}
+                      <Link href="/nudges/settings" className="text-primary underline-offset-2 hover:underline">
+                        nudge settings
+                      </Link>
+                      .
+                    </CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 h-8 text-muted-foreground"
+                    onClick={() => setNudgePrefsExpanded(false)}
+                  >
+                    Done
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <label htmlFor="contact-tier" className="text-xs text-muted-foreground shrink-0">
+                    Tier
+                  </label>
+                  <select
+                    id="contact-tier"
+                    className="h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-w-[160px]"
+                    value={contact.importance}
+                    disabled={savingTier}
+                    onChange={(e) => handleTierChange(e.target.value)}
+                  >
+                    {TIER_OPTIONS.map((t) => (
+                      <option key={t} value={t}>
+                        {importanceDisplayLabel(t)}
+                      </option>
+                    ))}
+                  </select>
+                  {savingTier && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                  <span className="text-muted-foreground">Nudge when there has been no interaction for</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Input
+                      id="reconnect-days"
+                      type="number"
+                      min={1}
+                      max={365}
+                      className="h-8 w-[4.5rem] text-sm tabular-nums"
+                      value={reconnectDaysInput}
+                      disabled={savingThreshold}
+                      onChange={(e) => setReconnectDaysInput(e.target.value)}
+                      onBlur={() => commitReconnectDays()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.currentTarget.blur();
+                        }
+                      }}
+                    />
+                    <span className="text-muted-foreground">days</span>
+                    {savingThreshold && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+                    )}
+                  </span>
+                  {contact.staleThresholdDays !== null && (
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline-offset-2 hover:underline disabled:opacity-50"
+                      disabled={savingThreshold}
+                      onClick={() => handleSaveThreshold(null)}
+                    >
+                      Use tier default ({tierDefaultDays})
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="relative z-10 space-y-1.5">
+              <p className="text-xs font-medium text-foreground">Nudge types for this contact</p>
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                {NUDGE_TYPES.map((nt) => {
+                  const isOn = !getDisabledTypes().has(nt.key);
+                  return (
+                    <button
+                      key={nt.key}
+                      type="button"
+                      disabled={savingNudgePrefs}
+                      aria-pressed={isOn}
+                      aria-label={`${nt.label}: ${isOn ? "on" : "off"}. Click to toggle.`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleToggleNudgeType(nt.key);
+                      }}
+                      className={`relative flex min-h-[2.25rem] w-full cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors select-none hover:opacity-90 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                        isOn
+                          ? "border-primary/35 bg-primary/10 text-foreground"
+                          : "border-muted bg-muted/60 text-muted-foreground"
+                      }`}
+                    >
+                      <span
+                        className={`mt-0.5 size-1.5 shrink-0 rounded-full ${
+                          isOn ? "bg-primary" : "bg-muted-foreground/45"
+                        }`}
+                        aria-hidden
+                      />
+                      <span className={`min-w-0 flex-1 leading-tight ${!isOn ? "line-through opacity-80" : ""}`}>
+                        {nt.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </CardContent>
         </Card>
 
         {/* Email draft panel */}
