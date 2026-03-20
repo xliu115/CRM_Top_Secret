@@ -23,6 +23,7 @@ const protectedPaths = [
   "/api/chat",
   "/api/signals",
   "/api/dashboard",
+  "/api/stats",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -74,5 +75,6 @@ export const config = {
     "/api/chat/:path*",
     "/api/signals/:path*",
     "/api/dashboard/:path*",
+    "/api/stats/:path*",
   ],
 };

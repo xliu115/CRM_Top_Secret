@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Send, Loader2, Trash2, Sparkles } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
+import { AssistantReply } from "@/components/chat/assistant-reply";
 
 type Source = { type: string; content: string; date?: string; id?: string; url?: string };
 
@@ -17,18 +19,21 @@ type Message = {
 
 const SUGGESTED_QUESTIONS = [
   "What's the latest news about Microsoft?",
-  "Who changed jobs recently among my accounts?",
+  "Who changed jobs recently among my clients?",
   "Summarize my relationship with the CIO at Amazon",
   "Which contacts haven't I spoken to in 60+ days?",
   "What's happening with Nvidia stock and AI strategy?",
   "Which contacts have been reading our articles?",
+  "Who knows my contacts?",
 ];
 
-export default function ChatPage() {
+function ChatPageContent() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const initialQuerySentRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -39,6 +44,15 @@ export default function ChatPage() {
   useEffect(() => {
     inputRef.current?.focus();
   }, [loading]);
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q && !initialQuerySentRef.current) {
+      initialQuerySentRef.current = true;
+      window.history.replaceState({}, "", "/chat");
+      handleSend(q);
+    }
+  }, [searchParams]);
 
   function buildHistory(): { role: "user" | "assistant"; content: string }[] {
     return messages.map((m) => ({ role: m.role, content: m.content }));
@@ -181,51 +195,18 @@ export default function ChatPage() {
                         className={
                           msg.role === "user"
                             ? "rounded-lg bg-primary/5 px-4 py-3 text-sm text-foreground"
-                            : "whitespace-pre-wrap text-sm leading-relaxed text-foreground"
+                            : ""
                         }
                       >
-                        {msg.content}
-                      </div>
-                      {msg.role === "assistant" &&
-                        msg.sources &&
-                        msg.sources.length > 0 && (
-                          <details className="group">
-                            <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
-                              {msg.sources.length} source
-                              {msg.sources.length !== 1 ? "s" : ""} referenced
-                            </summary>
-                            <div className="mt-2 space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
-                              {msg.sources.map((s, j) => (
-                                <div
-                                  key={j}
-                                  className="flex flex-col gap-0.5 text-xs"
-                                >
-                                  <span className="font-medium text-foreground">
-                                    [{j + 1}] {s.type}
-                                    {s.date && (
-                                      <span className="ml-1 text-muted-foreground">
-                                        ({s.date})
-                                      </span>
-                                    )}
-                                  </span>
-                                  <span className="line-clamp-2 text-muted-foreground">
-                                    {s.content}
-                                  </span>
-                                  {s.url && (
-                                    <a
-                                      href={s.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="truncate text-primary hover:underline"
-                                    >
-                                      {s.url}
-                                    </a>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </details>
+                        {msg.role === "assistant" ? (
+                          <AssistantReply
+                            content={msg.content}
+                            sources={msg.sources ?? []}
+                          />
+                        ) : (
+                          msg.content
                         )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -301,5 +282,22 @@ export default function ChatPage() {
         </div>
       </div>
     </DashboardShell>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardShell>
+          <div className="flex h-[calc(100vh-8rem)] flex-col items-center justify-center gap-4">
+            <div className="h-16 w-16 animate-pulse rounded-2xl bg-primary/10" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        </DashboardShell>
+      }
+    >
+      <ChatPageContent />
+    </Suspense>
   );
 }

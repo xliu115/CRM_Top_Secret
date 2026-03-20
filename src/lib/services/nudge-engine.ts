@@ -97,6 +97,10 @@ function buildReason(contactName: string, companyName: string, insights: Insight
   return `${insights.length} reasons to reach out to ${contactName} at ${companyName}: ${summary}.`;
 }
 
+/**
+ * Refreshes nudges for a partner. Nudges are anchored on the partner's contacts
+ * (executives) — only contacts in the partner's book generate nudges.
+ */
 export async function refreshNudgesForPartner(partnerId: string) {
   const contacts = await contactRepo.findByPartnerId(partnerId);
   const now = new Date();
