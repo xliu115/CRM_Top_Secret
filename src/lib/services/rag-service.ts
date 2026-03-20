@@ -6,6 +6,7 @@ import {
   meetingRepo,
   engagementRepo,
 } from "@/lib/repositories";
+import { prisma } from "@/lib/db/prisma";
 import { tavily } from "@tavily/core";
 
 export interface RetrievedDoc {
@@ -14,12 +15,26 @@ export interface RetrievedDoc {
   date?: string;
   id?: string;
   url?: string;
+  contactId?: string; // for Nudge sources — enables Draft email CTA
+}
+
+function isFirmRelationshipQuery(q: string): boolean {
+  return /who knows|firm relationship|other partners|who has (a )?relationship|relationship at|who else (knows|has)|introductions?/i.test(q);
+}
+
+function isStaleFollowUpQuery(q: string): boolean {
+  return /stale|follow ?up|follow-up|who needs|overdue|check ?in|haven'?t spoken|hasn'?t spoken|no contact|out of touch|reconnect/i.test(q);
+}
+
+function isInteractionQuery(q: string): boolean {
+  return /interaction|meeting|call|email|conversation|last spoke|last contact/i.test(q);
 }
 
 /**
  * Simple keyword-based retrieval for MVP.
  * Searches across contacts, interactions, signals, nudges, and meetings.
- * In production, this would use pgvector embeddings for semantic search.
+ * For CRM-specific queries (interactions, firm relationships, stale contacts)
+ * we explicitly pull from mock data to ensure answers use real data.
  */
 export async function retrieveContext(
   query: string,
@@ -28,18 +43,81 @@ export async function retrieveContext(
 ): Promise<RetrievedDoc[]> {
   const docs: RetrievedDoc[] = [];
   const keywords = extractKeywords(query);
+  const fallbackKeywords = keywords.slice(0, 3);
 
-  // Search contacts
-  const contacts = await contactRepo.search(
-    keywords[0] || query,
-    partnerId
-  );
+  // Search contacts (use full list for firm-relationship / stale queries so we surface mock data)
+  const contacts =
+    isFirmRelationshipQuery(query) || isStaleFollowUpQuery(query)
+      ? await contactRepo.findByPartnerId(partnerId)
+      : await searchContactsWithFallback(query, partnerId, fallbackKeywords);
   for (const c of contacts.slice(0, 5)) {
     docs.push({
       type: "Contact",
       content: `${c.name} – ${c.title} at ${c.company.name}. Importance: ${c.importance}. ${c.notes || ""}`,
       id: c.id,
     });
+  }
+
+  // Firm relationships: who knows my contacts / other partners at company (use mock data)
+  if (isFirmRelationshipQuery(query) && contacts.length > 0) {
+    const companyIds = [...new Set(contacts.map((c) => c.companyId))];
+    const otherPartnersAtCompanies = await prisma.contact.findMany({
+      where: {
+        companyId: { in: companyIds },
+        partnerId: { not: partnerId },
+      },
+      select: { companyId: true, partner: { select: { name: true } } },
+      distinct: ["companyId", "partnerId"],
+    });
+    const otherPartnersByCompany = new Map<string, string[]>();
+    for (const row of otherPartnersAtCompanies) {
+      const arr = otherPartnersByCompany.get(row.companyId);
+      if (arr) arr.push(row.partner.name);
+      else otherPartnersByCompany.set(row.companyId, [row.partner.name]);
+    }
+    const companyNames = new Map(contacts.map((c) => [c.companyId, c.company.name]));
+    for (const c of contacts.slice(0, 10)) {
+      const others = otherPartnersByCompany.get(c.companyId) ?? [];
+      const companyName = companyNames.get(c.companyId) ?? "Unknown";
+      docs.push({
+        type: "Firm Relationship",
+        content: `${c.name} at ${companyName}. Other partners with relationships: ${others.length > 0 ? others.join(", ") : "None"}.`,
+        id: c.id,
+      });
+    }
+  }
+
+  // Stale / follow-up: include open nudges and contacts needing follow-up (use mock data)
+  if (isStaleFollowUpQuery(query)) {
+    const allNudges = await nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" });
+    const staleNudges = allNudges.filter((n) =>
+      n.reason.toLowerCase().includes("interaction") ||
+      n.reason.toLowerCase().includes("days") ||
+      n.ruleType === "STALE_CONTACT"
+    );
+    for (const n of (staleNudges.length > 0 ? staleNudges : allNudges).slice(0, 8)) {
+      docs.push({
+        type: "Nudge",
+        content: `${n.contact.name} (${n.contact.company.name}): ${n.reason}`,
+        date: new Date(n.createdAt).toISOString().split("T")[0],
+        id: n.id,
+        contactId: n.contact.id,
+      });
+    }
+  }
+
+  // Interactions: fetch recent interactions (use mock data)
+  if (isInteractionQuery(query)) {
+    const recentInteractions = await interactionRepo.findRecentByPartnerId(partnerId, 10);
+    for (const i of recentInteractions) {
+      if (docs.some((d) => d.type === "Interaction" && d.id === i.id)) continue;
+      docs.push({
+        type: "Interaction",
+        content: `${i.type} with ${i.contact.name} (${i.contact.company.name}): ${i.summary}${i.nextStep ? ` Next step: ${i.nextStep}` : ""}`,
+        date: new Date(i.date).toISOString().split("T")[0],
+        id: i.id,
+      });
+    }
   }
 
   // Search interactions and signals in parallel across all keywords
@@ -76,23 +154,26 @@ export async function retrieveContext(
     }
   }
 
-  // Search nudges
-  const nudges = await nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" });
-  const relevantNudges = nudges.filter((n) =>
-    keywords.some(
-      (kw) =>
-        n.reason.toLowerCase().includes(kw.toLowerCase()) ||
-        n.contact.name.toLowerCase().includes(kw.toLowerCase()) ||
-        n.contact.company.name.toLowerCase().includes(kw.toLowerCase())
-    )
-  );
-  for (const n of relevantNudges.slice(0, 3)) {
-    docs.push({
-      type: "Nudge",
-      content: `${n.contact.name} (${n.contact.company.name}): ${n.reason}`,
-      date: new Date(n.createdAt).toISOString().split("T")[0],
-      id: n.id,
-    });
+  // Search nudges (skip if we already added from stale/follow-up intent)
+  if (!isStaleFollowUpQuery(query)) {
+    const nudges = await nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" });
+    const relevantNudges = nudges.filter((n) =>
+      keywords.some(
+        (kw) =>
+          n.reason.toLowerCase().includes(kw.toLowerCase()) ||
+          n.contact.name.toLowerCase().includes(kw.toLowerCase()) ||
+          n.contact.company.name.toLowerCase().includes(kw.toLowerCase())
+      )
+    );
+    for (const n of relevantNudges.slice(0, 3)) {
+      docs.push({
+        type: "Nudge",
+        content: `${n.contact.name} (${n.contact.company.name}): ${n.reason}`,
+        date: new Date(n.createdAt).toISOString().split("T")[0],
+        id: n.id,
+        contactId: n.contact.id,
+      });
+    }
   }
 
   // Search meetings
@@ -163,6 +244,22 @@ export async function retrieveContext(
   }
 
   return docs.slice(0, limit);
+}
+
+async function searchContactsWithFallback(
+  query: string,
+  partnerId: string,
+  keywords: string[]
+): Promise<Awaited<ReturnType<typeof contactRepo.search>>> {
+  const primary = await contactRepo.search(query, partnerId);
+  if (primary.length > 0) return primary;
+
+  for (const keyword of keywords) {
+    const results = await contactRepo.search(keyword, partnerId);
+    if (results.length > 0) return results;
+  }
+
+  return contactRepo.findByPartnerId(partnerId);
 }
 
 function extractKeywords(query: string): string[] {

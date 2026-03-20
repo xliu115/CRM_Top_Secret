@@ -1,5 +1,5 @@
 import { tavily } from "@tavily/core";
-import { contactRepo, signalRepo } from "@/lib/repositories";
+import { contactRepo } from "@/lib/repositories";
 import { prisma } from "@/lib/db/prisma";
 
 interface FetchedArticle {
@@ -10,21 +10,25 @@ interface FetchedArticle {
 
 async function fetchCompanyNews(
   companyName: string,
+  executiveNames: string[],
   maxResults = 5
 ): Promise<FetchedArticle[]> {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) return [];
 
+  // Anchor search on executives: include top 2–3 names to bias results toward our contacts
+  const execAnchors = executiveNames.slice(0, 3).join(" ");
+  const query = execAnchors
+    ? `${companyName} ${execAnchors} latest news`
+    : `${companyName} latest news`;
+
   try {
     const client = tavily({ apiKey });
-    const response = await client.search(
-      `${companyName} latest news`,
-      {
-        maxResults,
-        searchDepth: "basic",
-        topic: "news",
-      }
-    );
+    const response = await client.search(query, {
+      maxResults,
+      searchDepth: "basic",
+      topic: "news",
+    });
 
     return (response.results ?? []).map((r) => ({
       title: r.title,
@@ -42,15 +46,24 @@ async function fetchCompanyNews(
 
 /**
  * Fetches real news for all companies associated with a partner's contacts,
- * replaces stale NEWS signals, and returns the count of new signals created.
+ * anchored on the executives (contacts) at each company. Search queries include
+ * executive names to bias results toward news relevant to our contacts.
+ * Replaces stale NEWS signals and returns the count of new signals created.
  */
 export async function ingestNewsForPartner(partnerId: string): Promise<number> {
   const contacts = await contactRepo.findByPartnerId(partnerId);
 
-  const companyMap = new Map<string, string>();
+  // Build company -> { name, executive names } so we anchor news on our contacts
+  const companyMap = new Map<string, { name: string; executives: string[] }>();
   for (const c of contacts) {
-    if (!companyMap.has(c.companyId)) {
-      companyMap.set(c.companyId, c.company.name);
+    const existing = companyMap.get(c.companyId);
+    if (!existing) {
+      companyMap.set(c.companyId, {
+        name: c.company.name,
+        executives: [c.name],
+      });
+    } else if (!existing.executives.includes(c.name)) {
+      existing.executives.push(c.name);
     }
   }
 
@@ -66,8 +79,8 @@ export async function ingestNewsForPartner(partnerId: string): Promise<number> {
     const batch = entries.slice(i, i + batchSize);
 
     const results = await Promise.allSettled(
-      batch.map(async ([companyId, companyName]) => {
-        const articles = await fetchCompanyNews(companyName, 3);
+      batch.map(async ([companyId, { name: companyName, executives }]) => {
+        const articles = await fetchCompanyNews(companyName, executives, 3);
         if (articles.length === 0) return 0;
 
         // Check for existing signals that reference nudges (can't delete those)
@@ -109,7 +122,7 @@ export async function ingestNewsForPartner(partnerId: string): Promise<number> {
   }
 
   console.log(
-    `[news-ingestion] Total: ${totalCreated} news signals for ${companyMap.size} companies`
+    `[news-ingestion] Total: ${totalCreated} news signals for ${companyMap.size} companies (anchored on executives)`
   );
   return totalCreated;
 }

@@ -248,7 +248,7 @@ Your capabilities:
 - Suggest next steps for outreach
 
 You have access to two types of context:
-1. **CRM Data** — internal contacts, interactions, signals, meetings, nudges, events, articles (sources labeled Contact, Interaction, Signal, Nudge, Meeting, Event, Article)
+1. **CRM Data** — internal contacts, interactions, signals, meetings, nudges, events, articles, firm relationships (sources labeled Contact, Interaction, Signal, Nudge, Meeting, Event, Article, Firm Relationship). Use this for questions about interactions, who knows contacts, firm relationships, follow-ups, and stale contacts.
 2. **Live Web Results** — real-time search results from the internet (sources labeled "Web Summary" or "Web Result")
 
 Rules:
@@ -259,7 +259,10 @@ Rules:
 - If you don't have enough information, say so and suggest what the user could ask instead.
 - Remember the conversation history — the user may ask follow-up questions referring to previous answers.
 - When listing contacts or data, format it clearly with names, titles, and companies.
-- Blend CRM insights with web data naturally — e.g. if asked about a company, combine what you know from CRM contacts with the latest news.`;
+- Prefer CRM data for internal questions about contacts, interactions, firm relationships, stale follow-ups, nudges, meetings, events, and article engagement.
+- For questions like "who knows my contacts", "who needs follow-up", "which contacts are stale", "recent interactions", or "firm relationship", answer from CRM context first and ignore web results unless the user explicitly asks for live external info.
+- If CRM data is sparse, say that clearly and return the best available CRM context rather than filling with generic web content.
+- Blend CRM insights with web data naturally only when the user asks about a company, market, or live news.`;
 
 export async function generateChatAnswer(ctx: ChatContext): Promise<string> {
   const docsText = ctx.retrievedDocs
