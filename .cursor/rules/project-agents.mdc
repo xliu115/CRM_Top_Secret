@@ -1,0 +1,16 @@
+---
+description: Project agent wiring for Cursor slash-command discovery
+alwaysApply: false
+---
+
+# Project Agents
+
+This repository exposes custom agent skills in `.claude/agents/`:
+
+- `content-marketer`
+- `customer-success-manager`
+- `context-manager`
+
+Use these agents when the user requests `/content-marketer`, `/customer-success-manager`, or `/context-manager`, or when the task clearly matches their descriptions.
+
+If Cursor needs a project-visible entry point, keep these skills in `.claude/agents/<agent-name>/SKILL.md` and reference them from this rule.

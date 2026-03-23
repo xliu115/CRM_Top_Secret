@@ -77,13 +77,20 @@ export default function MeetingDetailPage() {
       const res = await fetch(`/api/meetings/${id}/brief`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error("Failed to generate brief");
-      const { brief } = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string"
+            ? data.error
+            : "Failed to generate brief"
+        );
+      }
+      const { brief } = data as { brief: string };
       setMeeting((prev) =>
         prev ? { ...prev, generatedBrief: brief } : null
       );
-    } catch {
-      setError("Failed to generate brief");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate brief");
     } finally {
       setGeneratingBrief(false);
     }

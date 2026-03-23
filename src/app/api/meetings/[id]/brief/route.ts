@@ -63,10 +63,15 @@ export async function POST(
       attendees,
     });
 
-    await meetingRepo.updateBrief(id, brief);
+    try {
+      await meetingRepo.updateBrief(id, brief);
+    } catch (persistErr) {
+      console.warn("[meetings/brief] Could not persist brief, returning generated brief only:", persistErr);
+    }
 
     return NextResponse.json({ brief });
   } catch (err) {
+    console.error("[meetings/brief] Failed to generate brief:", err);
     if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

@@ -5,7 +5,7 @@
 export function stripMarkdownToPlainText(md: string): string {
   if (!md || typeof md !== "string") return md;
 
-  let text = md
+  const text = md
     // Code blocks (```...```)
     .replace(/```[\s\S]*?```/g, (m) => m.replace(/^```\w*\n?|```$/g, "").trim())
     // Inline code (`...`)
