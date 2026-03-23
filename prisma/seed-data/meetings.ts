@@ -159,13 +159,17 @@ export function generateMeetings(contacts: ContactRef[]) {
       idx++;
     }
 
-    // Additional upcoming meetings (next 2-30 days)
-    const upcomingCount = 3 + Math.floor(rand() * 5);
+    // Additional upcoming meetings: bias toward the next 7 days so the default
+    // Meetings view and detail-page previews have enough near-term items.
+    const upcomingCount = 6 + Math.floor(rand() * 5);
     for (let i = 0; i < upcomingCount; i++) {
-      const daysAhead = 1 + Math.floor(rand() * 30);
+      const daysAhead = i < 4
+        ? 1 + Math.floor(rand() * 7)
+        : 8 + Math.floor(rand() * 23);
       const hour = 9 + Math.floor(rand() * 8);
+      const minute = rand() > 0.5 ? 30 : 0;
       const date = new Date(now.getTime() + daysAhead * 86400000);
-      date.setHours(hour, 0, 0, 0);
+      date.setHours(hour, minute, 0, 0);
 
       const attendeeCount = 1 + Math.floor(rand() * 3);
       const shuffled = [...pContacts].sort(() => rand() - 0.5);
@@ -186,7 +190,7 @@ export function generateMeetings(contacts: ContactRef[]) {
         startTime: date,
         title,
         purpose: purposes[Math.floor(rand() * purposes.length)],
-        notes: null,
+        notes: `Upcoming discussion focused on ${area.toLowerCase()} priorities for ${company.name}.`,
         attendees: attendees.map((a, ai) => ({
           contactId: a.id,
           isRequired: ai === 0 || rand() > 0.3,

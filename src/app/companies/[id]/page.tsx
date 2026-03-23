@@ -194,6 +194,34 @@ function formatDaysAgo(days: number | null): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+type EngagementSortKey = "date" | "name" | "status" | "practice" | "type" | "size" | "location";
+type SortDirection = "asc" | "desc";
+
+function SortButton({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  direction: SortDirection;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 font-medium text-inherit hover:text-foreground focus-visible:outline-none focus-visible:underline"
+    >
+      <span>{label}</span>
+      <span className={active ? "text-foreground" : "text-muted-foreground"}>
+        {active ? (direction === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </button>
+  );
+}
+
 const COL = {
   bar: "w-1 shrink-0",
   name: "flex-[2] min-w-0",
@@ -285,6 +313,10 @@ export default function CompanyDetailPage() {
   const [firmRelData, setFirmRelData] = useState<FirmRelationshipData | null>(
     null
   );
+  const [engagementSortKey, setEngagementSortKey] =
+    useState<EngagementSortKey>("date");
+  const [engagementSortDirection, setEngagementSortDirection] =
+    useState<SortDirection>("desc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -361,6 +393,88 @@ export default function CompanyDetailPage() {
       (a, b) =>
         new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
     );
+  function toggleEngagementSort(key: EngagementSortKey) {
+    if (engagementSortKey === key) {
+      setEngagementSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setEngagementSortKey(key);
+    setEngagementSortDirection(key === "date" ? "desc" : "asc");
+  }
+
+  const sortedEvents = [...events].sort((a, b) => {
+    let cmp = 0;
+    switch (engagementSortKey) {
+      case "date":
+        cmp = new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
+        break;
+      case "name":
+        cmp = a.name.localeCompare(b.name);
+        break;
+      case "status":
+        cmp = a.status.localeCompare(b.status);
+        break;
+      case "practice":
+        cmp = a.practice.localeCompare(b.practice);
+        break;
+      case "type":
+        cmp = a.type.localeCompare(b.type);
+        break;
+      case "size":
+        cmp = (a.eventSize ?? "").localeCompare(b.eventSize ?? "");
+        break;
+      case "location":
+        cmp = (a.location ?? "").localeCompare(b.location ?? "");
+        break;
+    }
+    return engagementSortDirection === "asc" ? cmp : -cmp;
+  });
+  const sortedArticles = [...articles].sort((a, b) => {
+    let cmp = 0;
+    switch (engagementSortKey) {
+      case "date":
+        cmp =
+          new Date(a.lastViewDate ?? a.articleSent).getTime() -
+          new Date(b.lastViewDate ?? b.articleSent).getTime();
+        break;
+      case "name":
+        cmp = a.name.localeCompare(b.name);
+        break;
+      case "status":
+        cmp = a.articleSent.localeCompare(b.articleSent);
+        break;
+      case "type":
+        cmp = a.views - b.views;
+        break;
+      case "size":
+        cmp = (a.sentFrom ?? "").localeCompare(b.sentFrom ?? "");
+        break;
+      case "location":
+        cmp = (a.lastViewDate ?? "").localeCompare(b.lastViewDate ?? "");
+        break;
+      case "practice":
+        cmp = 0;
+        break;
+    }
+    return engagementSortDirection === "asc" ? cmp : -cmp;
+  });
+  const sortedCampaigns = [...campaigns].sort((a, b) => {
+    let cmp = 0;
+    switch (engagementSortKey) {
+      case "date":
+        cmp = new Date(a.statusDate).getTime() - new Date(b.statusDate).getTime();
+        break;
+      case "name":
+        cmp = a.name.localeCompare(b.name);
+        break;
+      case "status":
+        cmp = a.status.localeCompare(b.status);
+        break;
+      default:
+        cmp = 0;
+    }
+    return engagementSortDirection === "asc" ? cmp : -cmp;
+  });
 
   return (
     <DashboardShell>
@@ -664,7 +778,6 @@ export default function CompanyDetailPage() {
 
           {/* Reach & Engagement Tab */}
           <TabsContent value="engagement" className="mt-4 space-y-6">
-            {/* Events */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
@@ -675,77 +788,70 @@ export default function CompanyDetailPage() {
                     <CardTitle className="text-base">
                       Events ({events.length})
                     </CardTitle>
-                    <CardDescription>Sorted by date</CardDescription>
+                    <CardDescription>
+                      Sorted by {engagementSortKey === "date" ? "date" : engagementSortKey}
+                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 {events.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No event registrations.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="pb-2 pr-4 font-medium">#</th>
-                          <th className="pb-2 pr-4 font-medium">Name</th>
-                          <th className="pb-2 pr-4 font-medium">Status</th>
-                          <th className="pb-2 pr-4 font-medium">Event Date</th>
-                          <th className="pb-2 pr-4 font-medium">Practice</th>
-                          <th className="pb-2 pr-4 font-medium">Type</th>
-                          <th className="pb-2 pr-4 font-medium">Event Size</th>
-                          <th className="pb-2 font-medium">Location</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {events.slice(0, 10).map((ev, i) => (
-                          <tr
-                            key={ev.id}
-                            className="border-b border-border/50 last:border-0"
-                          >
-                            <td className="py-2.5 pr-4 text-muted-foreground">
-                              {i + 1}
-                            </td>
-                            <td className="py-2.5 pr-4 font-medium text-primary">
-                              {ev.name}
-                            </td>
-                            <td className="py-2.5 pr-4">
-                              <Badge
-                                variant={
-                                  ev.status === "Attended"
-                                    ? "secondary"
-                                    : "outline"
-                                }
-                              >
-                                {ev.status}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 pr-4 text-muted-foreground">
-                              {format(new Date(ev.eventDate), "MM/dd/yyyy")}
-                            </td>
-                            <td className="py-2.5 pr-4">{ev.practice}</td>
-                            <td className="py-2.5 pr-4">{ev.type}</td>
-                            <td className="py-2.5 pr-4">
-                              {ev.eventSize ?? "—"}
-                            </td>
-                            <td className="py-2.5">{ev.location ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {events.length > 10 && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Showing 10 of {events.length} events
-                      </p>
-                    )}
+                  <div className="px-6 pb-6">
+                    <p className="text-sm text-muted-foreground">
+                      No event registrations.
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                      <div className="w-1 shrink-0" />
+                      <div className="flex-[2] min-w-0">
+                        <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
+                      </div>
+                      <div className="flex-[1.2] min-w-0">
+                        <SortButton label="Status" active={engagementSortKey === "status"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("status")} />
+                      </div>
+                      <div className="flex-[1.2] min-w-0 hidden md:block">
+                        <SortButton label="Date" active={engagementSortKey === "date"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("date")} />
+                      </div>
+                      <div className="flex-[1.1] min-w-0 hidden lg:block">
+                        <SortButton label="Practice" active={engagementSortKey === "practice"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("practice")} />
+                      </div>
+                      <div className="flex-[1] min-w-0 hidden xl:block">
+                        <SortButton label="Type" active={engagementSortKey === "type"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("type")} />
+                      </div>
+                      <div className="flex-[0.9] min-w-0 hidden xl:block">
+                        <SortButton label="Size" active={engagementSortKey === "size"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("size")} />
+                      </div>
+                      <div className="flex-[1.1] min-w-0 hidden xl:block">
+                        <SortButton label="Location" active={engagementSortKey === "location"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("location")} />
+                      </div>
+                    </div>
+                    <div className="divide-y divide-border/30">
+                      {sortedEvents.slice(0, 10).map((ev) => (
+                        <div key={ev.id} className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50">
+                          <div className="w-1 shrink-0 self-stretch rounded-r bg-red-500" />
+                          <div className="flex-[2] min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate leading-tight">{ev.name}</p>
+                            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5 md:hidden">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</p>
+                          </div>
+                          <div className="flex-[1.2] min-w-0">
+                            <Badge variant={ev.status === "Attended" ? "secondary" : "outline"}>{ev.status}</Badge>
+                          </div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</div>
+                          <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden lg:block truncate">{ev.practice}</div>
+                          <div className="flex-[1] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.type}</div>
+                          <div className="flex-[0.9] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.eventSize ?? "—"}</div>
+                          <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.location ?? "—"}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {events.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {events.length} events</p>}
+                  </>
                 )}
               </CardContent>
             </Card>
 
-            {/* Articles */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
@@ -760,68 +866,54 @@ export default function CompanyDetailPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 {articles.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No article engagements.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="pb-2 pr-4 font-medium">#</th>
-                          <th className="pb-2 pr-4 font-medium">Name</th>
-                          <th className="pb-2 pr-4 font-medium">
-                            Article Sent
-                          </th>
-                          <th className="pb-2 pr-4 font-medium">
-                            Number of Views
-                          </th>
-                          <th className="pb-2 pr-4 font-medium">Sent from</th>
-                          <th className="pb-2 font-medium">Last View Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {articles.slice(0, 10).map((art, i) => (
-                          <tr
-                            key={art.id}
-                            className="border-b border-border/50 last:border-0"
-                          >
-                            <td className="py-2.5 pr-4 text-muted-foreground">
-                              {i + 1}
-                            </td>
-                            <td className="py-2.5 pr-4 font-medium text-primary">
-                              {art.name}
-                            </td>
-                            <td className="py-2.5 pr-4">{art.articleSent}</td>
-                            <td className="py-2.5 pr-4">{art.views}</td>
-                            <td className="py-2.5 pr-4">
-                              {art.sentFrom ?? "—"}
-                            </td>
-                            <td className="py-2.5">
-                              {art.lastViewDate
-                                ? format(
-                                    new Date(art.lastViewDate),
-                                    "MM/dd/yyyy"
-                                  )
-                                : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {articles.length > 10 && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Showing 10 of {articles.length} articles
-                      </p>
-                    )}
+                  <div className="px-6 pb-6">
+                    <p className="text-sm text-muted-foreground">
+                      No article engagements.
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                      <div className="w-1 shrink-0" />
+                      <div className="flex-[2] min-w-0">
+                        <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
+                      </div>
+                      <div className="flex-[1.6] min-w-0">
+                        <SortButton label="Article Sent" active={engagementSortKey === "status"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("status")} />
+                      </div>
+                      <div className="flex-[1.1] min-w-0 hidden md:block">
+                        <SortButton label="Views" active={engagementSortKey === "type"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("type")} />
+                      </div>
+                      <div className="flex-[1.2] min-w-0 hidden lg:block">
+                        <SortButton label="Sent from" active={engagementSortKey === "size"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("size")} />
+                      </div>
+                      <div className="flex-[1.2] min-w-0 hidden md:block">
+                        <SortButton label="Last View Date" active={engagementSortKey === "date"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("date")} />
+                      </div>
+                    </div>
+                    <div className="divide-y divide-border/30">
+                      {sortedArticles.slice(0, 10).map((art) => (
+                        <div key={art.id} className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50">
+                          <div className="w-1 shrink-0 self-stretch rounded-r bg-purple-500" />
+                          <div className="flex-[2] min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate leading-tight">{art.name}</p>
+                            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5 md:hidden">{art.articleSent}</p>
+                          </div>
+                          <div className="flex-[1.6] min-w-0 text-sm text-foreground truncate">{art.articleSent}</div>
+                          <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden md:block tabular-nums">{art.views}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-foreground hidden lg:block truncate">{art.sentFrom ?? "—"}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{art.lastViewDate ? format(new Date(art.lastViewDate), "MM/dd/yyyy") : "—"}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {articles.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {articles.length} articles</p>}
+                  </>
                 )}
               </CardContent>
             </Card>
 
-            {/* Campaign Outreach */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
@@ -836,61 +928,43 @@ export default function CompanyDetailPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 {campaigns.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No campaign outreach records.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="pb-2 pr-4 font-medium">#</th>
-                          <th className="pb-2 pr-4 font-medium">Name</th>
-                          <th className="pb-2 pr-4 font-medium">Status</th>
-                          <th className="pb-2 font-medium">Status Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {campaigns.slice(0, 10).map((camp, i) => (
-                          <tr
-                            key={camp.id}
-                            className="border-b border-border/50 last:border-0"
-                          >
-                            <td className="py-2.5 pr-4 text-muted-foreground">
-                              {i + 1}
-                            </td>
-                            <td className="py-2.5 pr-4 font-medium">
-                              {camp.name}
-                            </td>
-                            <td className="py-2.5 pr-4">
-                              <Badge
-                                variant={
-                                  camp.status === "Clicked"
-                                    ? "secondary"
-                                    : "outline"
-                                }
-                              >
-                                {camp.status}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5">
-                              {format(
-                                new Date(camp.statusDate),
-                                "MM/dd/yyyy"
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {campaigns.length > 10 && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Showing 10 of {campaigns.length} campaigns
-                      </p>
-                    )}
+                  <div className="px-6 pb-6">
+                    <p className="text-sm text-muted-foreground">
+                      No campaign outreach records.
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                      <div className="w-1 shrink-0" />
+                      <div className="flex-[2] min-w-0">
+                        <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
+                      </div>
+                      <div className="flex-[1.2] min-w-0">
+                        <SortButton label="Status" active={engagementSortKey === "status"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("status")} />
+                      </div>
+                      <div className="flex-[1.2] min-w-0 hidden md:block">
+                        <SortButton label="Status Date" active={engagementSortKey === "date"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("date")} />
+                      </div>
+                    </div>
+                    <div className="divide-y divide-border/30">
+                      {sortedCampaigns.slice(0, 10).map((camp) => (
+                        <div key={camp.id} className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50">
+                          <div className="w-1 shrink-0 self-stretch rounded-r bg-blue-500" />
+                          <div className="flex-[2] min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate leading-tight">{camp.name}</p>
+                          </div>
+                          <div className="flex-[1.2] min-w-0">
+                            <Badge variant={camp.status === "Clicked" ? "secondary" : "outline"}>{camp.status}</Badge>
+                          </div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{format(new Date(camp.statusDate), "MM/dd/yyyy")}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {campaigns.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {campaigns.length} campaigns</p>}
+                  </>
                 )}
               </CardContent>
             </Card>
