@@ -269,12 +269,23 @@ function ContactTableRow({ contact }: ContactRowProps) {
       </div>
       <div className={COL.institution}>
         {contact.company?.name ? (
-          <Link
-            href={contact.companyId ? `/companies/${contact.companyId}` : "/companies"}
-            className="text-xs text-primary hover:underline truncate leading-tight block"
-          >
-            {contact.company.name}
-          </Link>
+          contact.companyId ? (
+            <Link
+              href={`/companies/${contact.companyId}`}
+              className="text-xs text-primary hover:underline truncate leading-tight block"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {contact.company.name}
+            </Link>
+          ) : (
+            <Link
+              href="/companies"
+              className="text-xs text-primary hover:underline truncate leading-tight block"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {contact.company.name}
+            </Link>
+          )
         ) : (
           <span className="text-xs text-muted-foreground/60">—</span>
         )}
@@ -318,12 +329,13 @@ function ContactTableRow({ contact }: ContactRowProps) {
 
   return (
     <div className="border-b border-border/30 last:border-b-0">
-      <Link
-        href={`/contacts/${contact.id}`}
+      <div
+        role="link"
+        tabIndex={0}
         className="flex items-center gap-6 px-5 py-3.5 transition-[background-color,box-shadow] duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
       >
         {rowInner}
-      </Link>
+      </div>
     </div>
   );
 }

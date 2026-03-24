@@ -10,6 +10,7 @@ import {
   Users,
   Building2,
   Calendar,
+  Share2,
   MessageSquare,
   LogOut,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/nudges", label: "Nudges", icon: Bell, countKey: "openNudgeCount" },
   { href: "/meetings", label: "Meetings", icon: Calendar },
+  { href: "/campaigns", label: "Campaigns", icon: Share2 },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/companies", label: "Institutions", icon: Building2 },
   { href: "/chat", label: "Ask Anything", icon: MessageSquare },
