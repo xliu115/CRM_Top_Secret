@@ -10,9 +10,10 @@ import {
   Users,
   Building2,
   Calendar,
-  Share2,
+  Megaphone,
   MessageSquare,
   LogOut,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Avatar } from "@/components/ui/avatar";
@@ -29,9 +30,10 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/nudges", label: "Nudges", icon: Bell, countKey: "openNudgeCount" },
   { href: "/meetings", label: "Meetings", icon: Calendar },
-  { href: "/campaigns", label: "Campaigns", icon: Share2 },
+  { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/companies", label: "Institutions", icon: Building2 },
+  { href: "/pipeline", label: "Pipeline", icon: TrendingUp },
   { href: "/chat", label: "Ask Anything", icon: MessageSquare },
 ];
 
