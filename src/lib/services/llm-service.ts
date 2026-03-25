@@ -331,3 +331,69 @@ function generateChatTemplate(ctx: ChatContext): string {
 
   return `Here's what I found:\n\n${parts.join("\n\n")}\n\n*Note: Add credits to your OpenAI account for full AI-powered answers.*`;
 }
+
+// ── Dashboard Briefing ──────────────────────────────────────────────
+
+export interface DashboardBriefingContext {
+  partnerName: string;
+  nudges: { contactName: string; company: string; reason: string; priority: string }[];
+  meetings: { title: string; startTime: string; attendeeNames: string[] }[];
+  clientNews: { content: string; contactName?: string; company?: string }[];
+}
+
+export async function generateDashboardBriefing(
+  ctx: DashboardBriefingContext
+): Promise<string> {
+  const nudgeBlock = ctx.nudges.length
+    ? `Open nudges (${ctx.nudges.length}):\n${ctx.nudges.map((n) => `- [${n.priority}] ${n.contactName} (${n.company}): ${n.reason}`).join("\n")}`
+    : "No open nudges today.";
+
+  const meetingBlock = ctx.meetings.length
+    ? `Upcoming meetings (${ctx.meetings.length}):\n${ctx.meetings.map((m) => `- "${m.title}" at ${m.startTime} with ${m.attendeeNames.join(", ")}`).join("\n")}`
+    : "No upcoming meetings.";
+
+  const newsBlock = ctx.clientNews.length
+    ? `Recent client news (${ctx.clientNews.length}):\n${ctx.clientNews.slice(0, 5).map((n) => `- ${n.company ? `[${n.company}] ` : ""}${n.content.slice(0, 150)}`).join("\n")}`
+    : "No recent client news.";
+
+  const result = await callLLM(
+    `You are Activate, an AI assistant for a client relationship management platform. Generate a concise, warm morning briefing for a Partner. Highlight the most important nudges to act on, upcoming meetings to prepare for, and any notable client news. Be conversational and actionable. Keep it to 3-5 sentences. Do not use markdown headers or bullet points — write flowing prose.`,
+    `Generate a morning briefing for ${ctx.partnerName}.\n\n${nudgeBlock}\n\n${meetingBlock}\n\n${newsBlock}`
+  );
+
+  return result ?? generateBriefingTemplate(ctx);
+}
+
+function generateBriefingTemplate(ctx: DashboardBriefingContext): string {
+  const parts: string[] = [];
+
+  if (ctx.nudges.length > 0) {
+    const top = ctx.nudges[0];
+    parts.push(
+      `You have ${ctx.nudges.length} open nudge${ctx.nudges.length === 1 ? "" : "s"} to act on — the highest priority is reaching out to **${top.contactName}** at ${top.company}.`
+    );
+  }
+
+  if (ctx.meetings.length > 0) {
+    const next = ctx.meetings[0];
+    const attendees = next.attendeeNames.join(", ");
+    parts.push(
+      `You have ${ctx.meetings.length === 1 ? "a meeting" : `${ctx.meetings.length} meetings`} coming up — next is **"${next.title}"** with ${attendees}.`
+    );
+  }
+
+  if (ctx.clientNews.length > 0) {
+    const company = ctx.clientNews[0].company;
+    parts.push(
+      company
+        ? `There's fresh news about **${company}** worth a look.`
+        : `There are ${ctx.clientNews.length} new client signal${ctx.clientNews.length === 1 ? "" : "s"} to review.`
+    );
+  }
+
+  if (parts.length === 0) {
+    return `Looks like a quiet day — no urgent nudges, upcoming meetings, or client news on your radar. A great time to do some proactive outreach!`;
+  }
+
+  return parts.join(" ");
+}

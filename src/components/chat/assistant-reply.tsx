@@ -95,34 +95,34 @@ export function AssistantReply({
     intro = intro.slice(0, 200).trim() + "…";
   }
 
+  const hasSources = crmSources.length > 0 || webSources.length > 0;
+
   return (
     <div className="space-y-4">
-      {intro && (
-        <p className="text-sm leading-relaxed text-foreground">{intro}</p>
-      )}
+      {hasSources ? (
+        <>
+          {intro && (
+            <p className="text-sm leading-relaxed text-foreground">{intro}</p>
+          )}
 
-      {/* CRM sources as cards with CTAs */}
-      {crmSources.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            From your CRM
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {crmSources.map((s, j) => (
-              <SourceCard key={j} source={s} />
-            ))}
-          </div>
-        </div>
-      )}
-      {crmSources.length === 0 && webSources.length === 0 && intro === plainContent && (
-        <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Answer
-          </p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-            {plainContent}
-          </p>
-        </div>
+          {/* CRM sources as cards with CTAs */}
+          {crmSources.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                From your CRM
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {crmSources.map((s, j) => (
+                  <SourceCard key={j} source={s} />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {plainContent}
+        </p>
       )}
 
       {/* Web sources — compact, collapsible */}
