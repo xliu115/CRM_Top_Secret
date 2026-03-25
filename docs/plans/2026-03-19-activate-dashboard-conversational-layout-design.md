@@ -1,13 +1,16 @@
 # Activate CRM — Dashboard Conversational Layout Design
 
 **Date:** 2026-03-19  
-**Status:** Option D implemented (2026-03-19)
+**Status:** Option D implemented (2026-03-19)  
+**Last updated:** 2026-03-25 — Unified feed, meeting prep merge, client news by company
 
 ---
 
 ## Overview
 
 Exploration of dashboard layout options that elevate **Ask Activate** (conversational assistant) to the top of the dashboard. Core tension: *Answer questions fast* vs *surface operational counts at a glance* vs *preserve scan patterns for Today's Nudges / Meeting Prep / News*.
+
+**Current state (2026-03-25):** Option D layout with unified "Today's Top Nudges" feed (outreach nudges + meeting prep cards sorted by priority), client news grouped by company and ranked by contact importance. See [Current Implementation](#current-implementation-2026-03-25) for full details.
 
 ---
 
@@ -313,11 +316,139 @@ Seed data uses real, verifiable executives (CEOs, SVPs, etc.) from company leade
 
 ---
 
+## Current Implementation (2026-03-25)
+
+This section documents the latest state of the Dashboard tab as implemented.
+
+### Layout overview
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  "Good Morning, Taylor"                                            │
+│  "What's on your mind?"                                            │
+├────────────────────────────────────────────────────────────────────┤
+│  Ask Activate  [ ✦ Ask AI a question or make a request… ] [Ask]    │
+│  [✦ Summarize my week] [✦ Who needs follow-up?] [✦ Prep for…] ... │
+├──────────────────────────────────┬─────────────────────────────────┤
+│  Today's Top Nudges (60%)        │  Client News (40%)              │
+│  Sorted URGENT → HIGH → MEDIUM   │  Grouped by client company      │
+│                                  │  Sorted by contact importance   │
+│  ┌─ Meeting Prep card ─────────┐ │                                 │
+│  │ [title] [Meeting Prep badge]│ │  ── MICROSOFT [CRITICAL] ────── │
+│  │ Brief/Purpose preview       │ │  Satya Nadella — news content   │
+│  │ Attendees                   │ │  Scott Guthrie — news content   │
+│  │ View more >                 │ │                                 │
+│  └─────────────────────────────┘ │  ── NVIDIA [CRITICAL] ───────── │
+│                                  │  Jensen Huang — news content    │
+│  ┌─ Outreach Nudge card ───────┐ │                                 │
+│  │ [avatar] [name] [URGENT]    │ │  ── SALESFORCE [HIGH] ───────── │
+│  │ Title at Company             │ │  Marc Benioff — news content    │
+│  │ ✦ AI SUMMARY                │ │                                 │
+│  │ Take action >               │ │                                 │
+│  └─────────────────────────────┘ │                                 │
+│                                  │                                 │
+│  ┌─ Outreach Nudge card ───────┐ │                                 │
+│  │ ...                         │ │                                 │
+│  └─────────────────────────────┘ │                                 │
+└──────────────────────────────────┴─────────────────────────────────┘
+```
+
+### Top section (unchanged from earlier confirmation)
+
+- Centered greeting: "Good [Morning/Afternoon/Evening], [FirstName]" + "What's on your mind?" with gradient accent
+- Chat bar: Ask Activate input with sparkles icon + suggested question chips
+- First question routes to `/chat?q=...` (Ask Anything tab)
+- Stats remain in sidebar nav
+
+### Left column: Today's Top Nudges
+
+Evolved from the original "Today's Top Nudges" + separate "Meeting Prep" two-card layout into a **unified, priority-sorted feed**.
+
+**Key design decisions:**
+
+1. **Meeting prep merged as nudge cards.** Upcoming meetings (today + tomorrow, max 3) appear as first-class cards in the same list as outreach nudges. Each has a "Meeting Prep" badge (indigo), a ClipboardList icon, and shows the meeting title, date/time, and company.
+
+2. **Unified priority sort.** All items — both nudges and meeting prep — are sorted together by priority: URGENT > HIGH > MEDIUM > LOW. Meeting prep items derive their priority from the highest-importance attendee (CRITICAL contact maps to URGENT, HIGH to HIGH, etc.).
+
+3. **Meeting brief preview.** Each meeting prep card shows a pre-loaded summary:
+   - If an AI-generated brief exists (`generatedBrief`): shows truncated brief (200 chars) with "Brief" label
+   - Fallback: shows the meeting `purpose` text with "Purpose" label
+   - Attendee names always shown below the summary
+   - "View more >" links to `/meetings/:id` for the full brief
+
+4. **Background brief generation.** The dashboard API (`/api/dashboard`) triggers background LLM brief generation for any upcoming meetings missing a `generatedBrief` (fire-and-forget, up to 3 meetings). On subsequent page loads the AI briefs will be populated.
+
+5. **Outreach nudge cards** show avatar, contact name (linked), priority badge, "Title at Company" subtitle, AI Summary panel (using `buildSummaryFragments`), and "Take action >" link.
+
+### Right column: Client News
+
+Evolved from time-based grouping (Today / Yesterday / This week) to **grouping by client company**.
+
+**Key design decisions:**
+
+1. **Grouped by company.** News items are grouped by the company name (from `contact.company` or `company.name`). Each group has a bold company header.
+
+2. **Ranked by contact importance.** Groups are ordered by the highest-importance contact within each group (CRITICAL first, then HIGH, MEDIUM, LOW). Within each group, individual items are also sorted by importance.
+
+3. **Contact importance badge on group headers.** Each company group header shows the highest tier badge (e.g., CRITICAL in red, HIGH in amber) for quick scanning.
+
+4. **Contact name labels.** Each news item shows the specific contact name (if available) above the content snippet.
+
+5. **Compact layout.** Up to 4 items per company group. Each shows signal type icon, contact name, content (2-line clamp), date, signal type, and "Read more" link if URL available.
+
+6. **API includes contact importance.** The dashboard API serializes `contact.importance` alongside `contact.name` and `contact.company` for each signal, enabling client-side ranking.
+
+### Data flow
+
+```
+/api/dashboard (GET)
+  ├── contactRepo.countByPartnerId
+  ├── nudgeRepo.countOpenByPartnerId
+  ├── meetingRepo.countUpcomingByPartnerId
+  ├── meetingRepo.findUpcomingByPartnerId → upcomingMeetings (filtered to 7 days)
+  ├── signalRepo.findRecentByPartnerId(15) → clientNews (with contact.importance)
+  ├── [background] generateMissingBriefs (up to 3 meetings without briefs)
+  └── [background] autoRefreshNudges (if no open nudges)
+
+/api/nudges?status=OPEN (GET)
+  └── nudgeRepo.findByPartnerId → topNudges (first 5, ordered by createdAt desc)
+
+Client-side:
+  upcomingMeetings → groupMeetingsByTimeBucket → today+tomorrow (max 3)
+  topNudges + meetings → FeedItem[] unified list → sorted by PRIORITY_RANK
+  clientNews → groupNewsByClient → sorted by IMPORTANCE_RANK
+```
+
+### Files
+
+| File | Role |
+|------|------|
+| `src/app/dashboard/page.tsx` | Dashboard page — types, feed construction, all rendering |
+| `src/app/api/dashboard/route.ts` | Dashboard API — data fetch, serialization, background brief generation |
+| `src/components/layout/dashboard-shell.tsx` | Layout wrapper (sidebar + main) |
+| `src/components/layout/sidebar.tsx` | Sidebar nav with stat counts |
+| `src/lib/utils/nudge-summary.ts` | AI summary fragment builder for nudge cards |
+| `src/lib/services/llm-service.ts` | `generateMeetingBrief` for background brief generation |
+
+### Open questions / future considerations
+
+- Brief generation latency: First dashboard load shows purpose as fallback; briefs populate on next load. Consider polling or SSE for live updates.
+- Meeting prep card could show key talking points from the brief instead of raw truncation.
+- Client News "Read more" could open an inline expandable instead of navigating away.
+- Consider capping the total feed items (nudges + meetings) to avoid a very long left column.
+
+---
+
 ## Next Steps
 
 - [x] Stats placement: sidebar nav (Nudges (28), Meetings (9), Contacts (29))
 - [x] Chat flow: first question → transition to Ask Anything tab
 - [x] Top section: confirmed (header + chat bar)
-- [x] Below section: Option D implemented (60% nudges | 40% meetings+news stacked)
+- [x] Below section: Option D implemented (60% nudges | 40% client news)
+- [x] Meeting prep merged into nudge feed as first-class cards with priority sort
+- [x] Client News grouped by company, ranked by contact importance
+- [x] Background brief generation for upcoming meetings
 - [ ] Validate chat bar height and expansion behavior
 - [ ] Prototype and test with users
+- [ ] Consider live brief loading (polling/SSE) for first-visit experience
+- [ ] Evaluate feed length cap and pagination for large nudge volumes

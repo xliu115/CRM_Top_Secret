@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, isToday, isTomorrow, isYesterday } from "date-fns";
+import { format, isToday, isTomorrow } from "date-fns";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
 
 type DashboardData = {
@@ -60,7 +60,7 @@ type DashboardData = {
     date: string;
     content: string;
     url: string | null;
-    contact: { name: string; company?: string } | null;
+    contact: { name: string; importance?: string; company?: string } | null;
     company: { id: string; name: string } | null;
   }>;
 };
@@ -137,6 +137,28 @@ function getSignalTypeConfig(type: string): NudgeTypeConfig {
   return map[type] ?? DEFAULT_TYPE_CONFIG;
 }
 
+const IMPORTANCE_RANK: Record<string, number> = {
+  CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3,
+};
+
+const PRIORITY_RANK: Record<string, number> = {
+  URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3,
+};
+
+type FeedNudgeItem = { kind: "nudge"; priority: string; nudge: Nudge };
+type FeedMeetingItem = { kind: "meeting"; priority: string; meeting: DashboardData["upcomingMeetings"][number] };
+type FeedItem = FeedNudgeItem | FeedMeetingItem;
+
+function meetingToPriority(meeting: DashboardData["upcomingMeetings"][number]): string {
+  const importanceToPriority: Record<string, string> = {
+    CRITICAL: "URGENT", HIGH: "HIGH", MEDIUM: "MEDIUM", LOW: "LOW",
+  };
+  const topImportance = meeting.attendees
+    .map((a) => a.contact.importance ?? "MEDIUM")
+    .sort((a, b) => (IMPORTANCE_RANK[a] ?? 99) - (IMPORTANCE_RANK[b] ?? 99))[0];
+  return importanceToPriority[topImportance ?? "MEDIUM"] ?? "HIGH";
+}
+
 const DASHBOARD_SUGGESTED_QUESTIONS = [
   "Summarize my week",
   "Who needs follow-up?",
@@ -168,23 +190,40 @@ function groupMeetingsByTimeBucket(
   return buckets;
 }
 
-function groupNewsByTime(news: DashboardData["clientNews"]): { label: string; items: typeof news }[] {
-  const today: typeof news = [];
-  const yesterday: typeof news = [];
-  const thisWeek: typeof news = [];
+function sortNewsByImportance(items: DashboardData["clientNews"]): DashboardData["clientNews"] {
+  return [...items].sort((a, b) => {
+    const rankA = IMPORTANCE_RANK[a.contact?.importance ?? ""] ?? 99;
+    const rankB = IMPORTANCE_RANK[b.contact?.importance ?? ""] ?? 99;
+    return rankA - rankB;
+  });
+}
+
+function groupNewsByClient(news: DashboardData["clientNews"]): {
+  clientName: string;
+  topImportance: string;
+  items: typeof news;
+}[] {
+  const groups = new Map<string, typeof news>();
 
   for (const item of news) {
-    const d = new Date(item.date);
-    if (isToday(d)) today.push(item);
-    else if (isYesterday(d)) yesterday.push(item);
-    else thisWeek.push(item);
+    const key = item.contact?.company ?? item.company?.name ?? "Other";
+    const existing = groups.get(key) ?? [];
+    existing.push(item);
+    groups.set(key, existing);
   }
 
-  const buckets: { label: string; items: typeof news }[] = [];
-  if (today.length > 0) buckets.push({ label: "Today", items: today });
-  if (yesterday.length > 0) buckets.push({ label: "Yesterday", items: yesterday });
-  if (thisWeek.length > 0) buckets.push({ label: "This week", items: thisWeek });
-  return buckets;
+  return Array.from(groups.entries())
+    .map(([clientName, items]) => {
+      const topImportance = items
+        .map((i) => i.contact?.importance ?? "")
+        .sort((a, b) => (IMPORTANCE_RANK[a] ?? 99) - (IMPORTANCE_RANK[b] ?? 99))[0] || "";
+      return {
+        clientName,
+        topImportance,
+        items: sortNewsByImportance(items),
+      };
+    })
+    .sort((a, b) => (IMPORTANCE_RANK[a.topImportance] ?? 99) - (IMPORTANCE_RANK[b.topImportance] ?? 99));
 }
 
 export default function DashboardPage() {
@@ -251,11 +290,8 @@ export default function DashboardPage() {
           <Skeleton className="h-10 w-64" />
           <Skeleton className="h-32" />
           <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+            <Skeleton className="h-[28rem]" />
             <Skeleton className="h-80" />
-            <div className="space-y-6">
-              <Skeleton className="h-64" />
-              <Skeleton className="h-48" />
-            </div>
           </div>
         </div>
       </DashboardShell>
@@ -275,8 +311,22 @@ export default function DashboardPage() {
   const meetingBuckets = dashboardData?.upcomingMeetings?.length
     ? groupMeetingsByTimeBucket(dashboardData.upcomingMeetings)
     : [];
-  const newsBuckets = dashboardData?.clientNews?.length
-    ? groupNewsByTime(dashboardData.clientNews)
+
+  const todayMeetings = meetingBuckets.find((b) => b.label === "Today")?.meetings ?? [];
+  const tomorrowMeetings = meetingBuckets.find((b) => b.label === "Tomorrow")?.meetings ?? [];
+  const upcomingPrepMeetings = [...todayMeetings, ...tomorrowMeetings].slice(0, 3);
+
+  const feedItems: FeedItem[] = [
+    ...upcomingPrepMeetings.map((m): FeedItem => ({
+      kind: "meeting", priority: meetingToPriority(m), meeting: m,
+    })),
+    ...topNudges.map((n): FeedItem => ({
+      kind: "nudge", priority: n.priority, nudge: n,
+    })),
+  ].sort((a, b) => (PRIORITY_RANK[a.priority] ?? 99) - (PRIORITY_RANK[b.priority] ?? 99));
+
+  const newsGroups = dashboardData?.clientNews?.length
+    ? groupNewsByClient(dashboardData.clientNews)
     : [];
 
   const timeGreeting = (() => {
@@ -354,13 +404,86 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {topNudges.length === 0 ? (
+              {feedItems.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No open nudges right now.
                 </p>
               ) : (
                 <div className="space-y-4">
-                  {topNudges.map((nudge) => {
+                  {feedItems.map((item) => {
+                    if (item.kind === "meeting") {
+                      const meeting = item.meeting;
+                      const topAttendee = meeting.attendees[0]?.contact;
+                      const attendeeNames = meeting.attendees
+                        .map((a) => a.contact.name)
+                        .join(", ");
+                      const summarySource = meeting.generatedBrief || meeting.purpose;
+                      const summaryPreview = summarySource
+                        ? summarySource.length > 200
+                          ? summarySource.slice(0, 200).trimEnd() + "…"
+                          : summarySource
+                        : null;
+                      return (
+                        <Card key={`mtg-${meeting.id}`} className="overflow-hidden">
+                          <CardHeader className="pb-3 pt-5">
+                            <div className="flex items-start gap-4">
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/30">
+                                <ClipboardList className="h-5 w-5 text-indigo-600" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <CardTitle className="text-lg font-bold">
+                                    <Link href={`/meetings/${meeting.id}`} className="hover:text-primary hover:underline transition-colors">
+                                      {meeting.title}
+                                    </Link>
+                                  </CardTitle>
+                                  <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-900 dark:bg-indigo-950 dark:text-indigo-400">
+                                    Meeting Prep
+                                  </Badge>
+                                </div>
+                                <CardDescription className="mt-0.5">
+                                  {format(new Date(meeting.startTime), "EEE, MMM d · h:mm a")}
+                                  {topAttendee?.company && ` · ${topAttendee.company.name}`}
+                                </CardDescription>
+                              </div>
+                            </div>
+                          </CardHeader>
+
+                          <CardContent className="space-y-3">
+                            <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <Sparkles className="h-4 w-4 text-indigo-600" />
+                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                                  {meeting.generatedBrief ? "Brief" : "Purpose"}
+                                </span>
+                              </div>
+                              {summaryPreview ? (
+                                <p className="text-sm text-foreground/70 leading-relaxed">{summaryPreview}</p>
+                              ) : (
+                                <p className="text-sm text-foreground/70 leading-relaxed">{attendeeNames}</p>
+                              )}
+                              {attendeeNames && summaryPreview && (
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  {attendeeNames}
+                                </p>
+                              )}
+                            </div>
+
+                            <div>
+                              <Link
+                                href={`/meetings/${meeting.id}`}
+                                className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+                              >
+                                View more
+                                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                              </Link>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    }
+
+                    const nudge = item.nudge;
                     const insights = parseInsights(nudge.metadata);
                     const fragments = buildSummaryFragments(nudge, insights);
                     return (
@@ -421,70 +544,8 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Right column: Meeting Prep + Client News stacked */}
+          {/* Right column: Client News */}
           <div className="space-y-6">
-            {/* Meeting Prep — Next 7 Days */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Meeting Prep — Next 7 Days</CardTitle>
-                <CardDescription>
-                  Upcoming priority client meetings
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {meetingBuckets.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No meetings in the next 7 days.
-                  </p>
-                ) : (
-                  <div className="space-y-4">
-                    {meetingBuckets.map(({ label, meetings }) => (
-                      <div key={label}>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                          {label}
-                        </h3>
-                        <div className="space-y-2">
-                          {meetings.map((meeting) => {
-                            const attendeeNames = meeting.attendees
-                              .map((a) => a.contact.name)
-                              .join(", ");
-                            const topAttendee = meeting.attendees[0]?.contact;
-                            return (
-                              <Link
-                                key={meeting.id}
-                                href={`/meetings/${meeting.id}`}
-                                className="block overflow-hidden rounded-lg border border-border bg-card transition-colors hover:bg-muted/30"
-                              >
-                                <div className="flex items-start gap-2 p-3">
-                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                                    <ClipboardList className="h-3.5 w-3.5 text-primary" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-medium text-foreground text-sm">{meeting.title}</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      {format(new Date(meeting.startTime), "EEE, MMM d · h:mm a")}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                                      {attendeeNames}
-                                      {topAttendee?.company && ` · ${topAttendee.company.name}`}
-                                    </p>
-                                    <span className="inline-flex items-center text-xs font-medium text-primary hover:underline mt-1">
-                                      View brief
-                                      <ChevronRight className="ml-0.5 h-3 w-3" />
-                                    </span>
-                                  </div>
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
             {/* Client News */}
             <Card>
               <CardHeader>
@@ -494,40 +555,46 @@ export default function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {newsBuckets.length === 0 ? (
+                {newsGroups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No recent client news.
                   </p>
                 ) : (
-                  <div className="space-y-4">
-                    {newsBuckets.map(({ label, items }) => (
-                      <div key={label}>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                          {label}
-                        </h3>
-                        <div className="space-y-0">
-                          {items.slice(0, 5).map((item, idx) => {
+                  <div className="space-y-5">
+                    {newsGroups.map(({ clientName, topImportance, items }) => (
+                      <div key={clientName}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                            {clientName}
+                          </h3>
+                          {topImportance && (
+                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${getPriorityClassName(topImportance)}`}>
+                              {topImportance}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="space-y-0 pl-0.5">
+                          {items.slice(0, 4).map((item) => {
                             const cfg = getSignalTypeConfig(item.type);
                             const IIcon = cfg.icon;
-                            const entity = item.contact
-                              ? `${item.contact.name}${item.contact.company ? ` · ${item.contact.company}` : ""}`
-                              : item.company?.name ?? "Unknown";
                             return (
                               <div
                                 key={item.id}
-                                className="flex gap-3 pb-4 last:pb-0"
+                                className="flex gap-3 pb-3 last:pb-0"
                               >
-                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
+                                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
                                   <IIcon className="h-3 w-3 text-muted-foreground" />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-foreground">
-                                    {item.type === "NEWS" ? item.company?.name ?? entity : entity}
-                                  </p>
+                                  {item.contact?.name && (
+                                    <p className="text-xs font-medium text-foreground">
+                                      {item.contact.name}
+                                    </p>
+                                  )}
                                   <p className="text-xs text-muted-foreground line-clamp-2">
                                     {item.content}
                                   </p>
-                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                  <p className="mt-0.5 text-[11px] text-muted-foreground/70">
                                     {format(new Date(item.date), "MMM d")} · {item.type}
                                   </p>
                                   {item.url && (
@@ -535,7 +602,7 @@ export default function DashboardPage() {
                                       href={item.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="mt-1 inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                      className="mt-0.5 inline-flex items-center text-xs font-medium text-primary hover:underline"
                                     >
                                       Read more
                                       <ExternalLink className="ml-0.5 h-3 w-3" />
