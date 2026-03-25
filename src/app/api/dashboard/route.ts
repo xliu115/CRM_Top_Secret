@@ -5,9 +5,11 @@ import {
   nudgeRepo,
   meetingRepo,
   signalRepo,
+  interactionRepo,
 } from "@/lib/repositories";
 import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
+import { generateMeetingBrief } from "@/lib/services/llm-service";
 import { addDays, isBefore } from "date-fns";
 
 export async function GET(_request: NextRequest) {
@@ -42,10 +44,21 @@ export async function GET(_request: NextRequest) {
       content: s.content,
       url: s.url,
       contact: s.contact
-        ? { name: s.contact.name, company: s.contact.company?.name }
+        ? {
+            name: s.contact.name,
+            importance: s.contact.importance,
+            company: s.contact.company?.name,
+          }
         : null,
       company: s.company ? { id: s.company.id, name: s.company.name } : null,
     }));
+
+    const meetingsWithoutBriefs = upcomingMeetings.filter((m) => !m.generatedBrief);
+    if (meetingsWithoutBriefs.length > 0) {
+      generateMissingBriefs(partnerId, meetingsWithoutBriefs.map((m) => m.id)).catch(
+        (err) => console.error("[dashboard] Background brief generation failed:", err)
+      );
+    }
 
     return NextResponse.json({
       contactCount,
@@ -85,4 +98,44 @@ async function autoRefreshNudges(partnerId: string) {
   const newsCount = await ingestNewsForPartner(partnerId);
   const nudgeCount = await refreshNudgesForPartner(partnerId);
   console.log(`[dashboard] Auto-refresh complete: ${newsCount} news, ${nudgeCount} nudges`);
+}
+
+async function generateMissingBriefs(partnerId: string, meetingIds: string[]) {
+  for (const meetingId of meetingIds.slice(0, 3)) {
+    try {
+      const meeting = await meetingRepo.findById(meetingId, partnerId);
+      if (!meeting || meeting.generatedBrief) continue;
+
+      const attendeeIds = meeting.attendees.map((a) => a.contactId);
+      const [interactions, signals] = await Promise.all([
+        interactionRepo.findByContactIds(attendeeIds),
+        signalRepo.findByContactIds(attendeeIds),
+      ]);
+
+      const attendees = meeting.attendees.map((a) => ({
+        name: a.contact.name,
+        title: a.contact.title,
+        company: a.contact.company.name,
+        recentInteractions: interactions
+          .filter((i) => i.contactId === a.contactId)
+          .slice(0, 3)
+          .map((i) => `${i.type} (${i.date.toISOString().split("T")[0]}): ${i.summary}`),
+        signals: signals
+          .filter((s) => s.contactId === a.contactId)
+          .slice(0, 3)
+          .map((s) => `${s.type}: ${s.content}`),
+      }));
+
+      const brief = await generateMeetingBrief({
+        meetingTitle: meeting.title,
+        meetingPurpose: meeting.purpose || "",
+        attendees,
+      });
+
+      await meetingRepo.updateBrief(meetingId, brief);
+      console.log(`[dashboard] Generated brief for meeting ${meetingId}`);
+    } catch (err) {
+      console.warn(`[dashboard] Failed to generate brief for meeting ${meetingId}:`, err);
+    }
+  }
 }
