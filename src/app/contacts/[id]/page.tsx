@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Mail,
@@ -31,6 +31,7 @@ import {
   CalendarCheck,
   Linkedin,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownPreview } from "@/components/ui/markdown-preview";
+import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
 import { getTierColors } from "@/lib/utils/tier-colors";
 import { importanceDisplayLabel } from "@/lib/utils/importance-labels";
 import {
@@ -322,7 +324,9 @@ function SortButton({
 
 export default function ContactDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params?.id as string;
+  const autoNudgeId = searchParams.get("nudge");
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
@@ -957,6 +961,7 @@ export default function ContactDetailPage() {
                 key={nudge.id}
                 nudge={nudge}
                 onUpdateStatus={handleNudgeStatusUpdate}
+                autoDraft={nudge.id === autoNudgeId}
               />
             ))}
           </div>
@@ -1641,118 +1646,117 @@ function MeetingCard({
 
 // ── Contact Nudge Card ───────────────────────────────────────────────
 
-function ContactNudgeInsightItem({ insight }: { insight: InsightData }) {
-  const cfg = getTypeConfig(insight.type);
-  const Icon = cfg.icon;
-  const linkLabel = insight.type === "LINKEDIN_ACTIVITY" ? "View on LinkedIn"
-    : insight.type === "JOB_CHANGE" ? "View on LinkedIn"
-    : insight.type === "COMPANY_NEWS" ? "Read article"
-    : "View source";
-
-  return (
-    <div className="flex gap-2.5">
-      <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${cfg.bgColor}`}>
-        <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
-          {insight.signalUrl && (
-            <a href={insight.signalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline">
-              <ExternalLink className="h-2.5 w-2.5" />
-              {linkLabel}
-            </a>
-          )}
-        </div>
-        <p className="text-sm text-foreground/80 leading-snug mt-0.5">{insight.reason}</p>
-        {insight.relatedPartners && insight.relatedPartners.length > 0 && (
-          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-            <Users className="h-3 w-3 text-purple-500" />
-            <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-              {insight.relatedPartners.map((p) => p.partnerName).join(", ")} know{insight.relatedPartners.length === 1 ? "s" : ""} {insight.personName ?? "this person"}
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ContactNudgeCard({
   nudge,
   onUpdateStatus,
+  autoDraft = false,
 }: {
   nudge: ContactNudge;
   onUpdateStatus: (id: string, status: string) => void;
+  autoDraft?: boolean;
 }) {
-  const [showDraft, setShowDraft] = useState(false);
-  const [showAllInsights, setShowAllInsights] = useState(false);
+  const [showDraft, setShowDraft] = useState(autoDraft);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (autoDraft && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [autoDraft]);
   const meta = parseMetadata(nudge.metadata);
   const insights = meta?.insights ?? [];
   const cfg = getTypeConfig(nudge.ruleType);
   const CtaIcon = cfg.ctaIcon;
-  const Icon = cfg.icon;
+  const hasMeetingPrep = insights.some((i) => i.type === "MEETING_PREP");
+  const fragments = buildSummaryFragments(nudge, insights);
 
-  const MAX_VISIBLE = 3;
-  const visibleInsights = showAllInsights ? insights : insights.slice(0, MAX_VISIBLE);
-  const hiddenCount = insights.length - MAX_VISIBLE;
+  const seen = new Map<string, string | null>();
+  for (const ins of insights) {
+    if (ins.type === "STALE_CONTACT") continue;
+    if (!seen.has(ins.type)) {
+      seen.set(ins.type, ins.signalUrl ?? null);
+    } else if (!seen.get(ins.type) && ins.signalUrl) {
+      seen.set(ins.type, ins.signalUrl);
+    }
+  }
 
   return (
-    <Card className="overflow-hidden">
-      <div className={`h-1 w-full ${cfg.color.replace("text-", "bg-")}`} />
-      <CardContent className="pt-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cfg.bgColor}`}>
-            <Icon className={`h-4 w-4 ${cfg.color}`} />
+    <Card ref={cardRef} className="overflow-hidden">
+      <CardContent className="space-y-4 pt-5">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+            {nudge.priority}
+          </Badge>
+        </div>
+        <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
-              <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
-                {nudge.priority}
-              </Badge>
-            </div>
-            <p className="mt-1 text-sm text-foreground leading-relaxed">{nudge.reason}</p>
-          </div>
+          <p className="text-sm text-foreground/70 leading-relaxed">
+            {fragments.map((f, i) =>
+              f.bold ? (
+                <strong key={i} className="font-semibold text-foreground/90">{f.text}</strong>
+              ) : (
+                <span key={i}>{f.text}</span>
+              )
+            )}
+          </p>
         </div>
 
-        {insights.length > 0 && (
-          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
-            {visibleInsights.map((insight, i) => (
-              <ContactNudgeInsightItem key={`${insight.type}-${i}`} insight={insight} />
-            ))}
-            {hiddenCount > 0 && !showAllInsights && (
-              <button
-                onClick={() => setShowAllInsights(true)}
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                +{hiddenCount} more
-              </button>
-            )}
-            {showAllInsights && hiddenCount > 0 && (
-              <button
-                onClick={() => setShowAllInsights(false)}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
-              >
-                Show less
-              </button>
-            )}
+        {seen.size > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {[...seen.entries()].map(([type, url]) => {
+              const iCfg = getTypeConfig(type);
+              const IIcon = iCfg.icon;
+              return (
+                <span
+                  key={type}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground/80"
+                >
+                  <IIcon className={`h-3 w-3 ${iCfg.color}`} />
+                  {iCfg.label}
+                  {url && (
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  )}
+                </span>
+              );
+            })}
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => setShowDraft(!showDraft)}>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {hasMeetingPrep && (
+            <Button size="sm" onClick={() => setShowDraft(!showDraft)}>
+              <FileText className="h-4 w-4" />
+              Generate Brief
+            </Button>
+          )}
+          <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} onClick={() => setShowDraft(!showDraft)}>
             <CtaIcon className="h-4 w-4" />
-            {cfg.ctaLabel}
+            {hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "SNOOZED")}>
-            <Moon className="h-4 w-4" />
-            Snooze
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
-            <Check className="h-4 w-4" />
-            Done
-          </Button>
+
+          {nudge.status === "OPEN" && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "SNOOZED")}>
+                <Moon className="h-4 w-4" />
+                Snooze
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+                <Check className="h-4 w-4" />
+                Done
+              </Button>
+            </>
+          )}
+          {nudge.status === "SNOOZED" && (
+            <Button variant="ghost" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+              <Check className="h-4 w-4" />
+              Done
+            </Button>
+          )}
         </div>
 
         {showDraft && (

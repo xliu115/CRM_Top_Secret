@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow, isYesterday } from "date-fns";
+import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
 
 type DashboardData = {
   contactCount: number;
@@ -126,10 +127,6 @@ const NUDGE_TYPE_CONFIG: Record<string, NudgeTypeConfig> = {
 const DEFAULT_TYPE_CONFIG: NudgeTypeConfig = {
   icon: Send, label: "Nudge", color: "text-muted-foreground", bgColor: "bg-muted/50",
 };
-
-function getTypeConfig(ruleType: string): NudgeTypeConfig {
-  return NUDGE_TYPE_CONFIG[ruleType] ?? DEFAULT_TYPE_CONFIG;
-}
 
 function getSignalTypeConfig(type: string): NudgeTypeConfig {
   const map: Record<string, NudgeTypeConfig> = {
@@ -364,63 +361,59 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-4">
                   {topNudges.map((nudge) => {
-                    const cfg = getTypeConfig(nudge.ruleType);
                     const insights = parseInsights(nudge.metadata);
+                    const fragments = buildSummaryFragments(nudge, insights);
                     return (
-                      <div
-                        key={nudge.id}
-                        className="overflow-hidden rounded-lg border border-border bg-card transition-colors hover:bg-muted/30"
-                      >
-                        <div className={`h-1 w-full ${cfg.color.replace("text-", "bg-")}`} />
-                        <div className="flex items-start gap-3 p-4">
-                          <Avatar name={nudge.contact.name} size="sm" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Link
-                                href={`/contacts/${nudge.contact.id}`}
-                                className="font-medium text-foreground hover:text-primary hover:underline transition-colors"
-                              >
-                                {nudge.contact.name}
-                              </Link>
-                              <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
-                                {nudge.priority}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                              {nudge.contact.title} at {nudge.contact.company.name}
-                            </p>
-                            <p className="mt-1.5 text-sm text-foreground leading-relaxed line-clamp-2">
-                              {nudge.reason}
-                            </p>
-                            {insights.length > 0 && (
-                              <div className="mt-2 space-y-1.5">
-                                {insights.slice(0, 3).map((insight, i) => {
-                                  const ic = getTypeConfig(insight.type);
-                                  const IIcon = ic.icon;
-                                  return (
-                                    <div key={i} className="flex items-start gap-2 text-xs">
-                                      <IIcon className={`h-3 w-3 mt-0.5 shrink-0 ${ic.color}`} />
-                                      <span className="text-muted-foreground line-clamp-1">{insight.reason}</span>
-                                    </div>
-                                  );
-                                })}
-                                {insights.length > 3 && (
-                                  <p className="text-xs text-muted-foreground pl-5">+{insights.length - 3} more insights</p>
-                                )}
+                      <Card key={nudge.id} className="overflow-hidden">
+                        <CardHeader className="pb-3 pt-5">
+                          <div className="flex items-start gap-4">
+                            <Avatar name={nudge.contact.name} size="lg" className="shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <CardTitle className="text-lg font-bold">
+                                  <Link href={`/contacts/${nudge.contact.id}`} className="hover:text-primary hover:underline transition-colors">
+                                    {nudge.contact.name}
+                                  </Link>
+                                </CardTitle>
+                                <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                                  {nudge.priority}
+                                </Badge>
                               </div>
-                            )}
-                            <div className="mt-2.5">
-                              <Link
-                                href="/nudges"
-                                className="inline-flex items-center text-xs font-medium text-primary hover:underline"
-                              >
-                                Take action
-                                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-                              </Link>
+                              <CardDescription className="mt-0.5">
+                                {nudge.contact.title} at {nudge.contact.company.name}
+                              </CardDescription>
                             </div>
                           </div>
-                        </div>
-                      </div>
+                        </CardHeader>
+
+                        <CardContent className="space-y-3">
+                          <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                            <div className="flex items-center gap-1.5 mb-2.5">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
+                            </div>
+                            <p className="text-sm text-foreground/70 leading-relaxed">
+                              {fragments.map((f, i) =>
+                                f.bold ? (
+                                  <strong key={i} className="font-semibold text-foreground/90">{f.text}</strong>
+                                ) : (
+                                  <span key={i}>{f.text}</span>
+                                )
+                              )}
+                            </p>
+                          </div>
+
+                          <div>
+                            <Link
+                              href={`/contacts/${nudge.contact.id}?nudge=${nudge.id}`}
+                              className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+                            >
+                              Take action
+                              <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
                     );
                   })}
                 </div>
