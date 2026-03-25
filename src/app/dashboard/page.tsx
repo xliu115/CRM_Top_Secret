@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -18,6 +18,7 @@ import {
   Send,
   ExternalLink,
   Sparkles,
+  Mic,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -33,6 +34,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow } from "date-fns";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 type DashboardData = {
   contactCount: number;
@@ -269,6 +271,30 @@ export default function DashboardPage() {
   const userName = session?.user?.name ?? "Partner";
 
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const pendingVoiceRef = useRef<string | null>(null);
+
+  const handleVoiceResult = useCallback((transcript: string) => {
+    pendingVoiceRef.current = transcript;
+    setChatInput(transcript);
+  }, []);
+
+  const { isListening, transcript: liveTranscript, isSupported, startListening, stopListening } =
+    useSpeechRecognition({ onResult: handleVoiceResult });
+
+  useEffect(() => {
+    if (pendingVoiceRef.current && !isListening) {
+      const text = pendingVoiceRef.current;
+      pendingVoiceRef.current = null;
+      setChatInput("");
+      router.push(`/chat?q=${encodeURIComponent(text)}`);
+    }
+  }, [isListening, router]);
+
+  useEffect(() => {
+    if (isListening && liveTranscript) {
+      setChatInput(liveTranscript);
+    }
+  }, [isListening, liveTranscript]);
 
   function handleChatSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -372,8 +398,32 @@ export default function DashboardPage() {
                     className="flex-1 rounded-lg border border-border bg-background pl-11 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
+                {isSupported && (
+                  <Button
+                    type="button"
+                    variant={isListening ? "destructive" : "ghost"}
+                    size="icon"
+                    onClick={isListening ? stopListening : startListening}
+                    className={`h-11 w-11 shrink-0 relative ${
+                      isListening ? "animate-pulse" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title={isListening ? "Stop listening" : "Voice input"}
+                  >
+                    {isListening ? (
+                      <>
+                        <Mic className="h-4 w-4" />
+                        <span className="absolute inset-0 rounded-md border-2 border-destructive animate-ping opacity-30" />
+                      </>
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                    <span className="sr-only">
+                      {isListening ? "Stop listening" : "Voice input"}
+                    </span>
+                  </Button>
+                )}
                 <Button type="submit" size="default" disabled={!chatInput.trim()}>
-                  Ask
+                  {isListening ? "Listening…" : "Ask"}
                 </Button>
               </div>
               <div className="flex flex-wrap gap-2">
