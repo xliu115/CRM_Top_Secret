@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   ChevronRight,
@@ -18,7 +19,7 @@ import {
   ExternalLink,
   Sparkles,
   Mic,
-  Loader2,
+  Settings,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -35,7 +36,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow } from "date-fns";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
-import { AssistantReply } from "@/components/chat/assistant-reply";
+import { MarkdownContent } from "@/components/ui/markdown-content";
+import {
+  loadDashboardPrefs,
+  type DashboardCardPrefs,
+} from "@/lib/utils/dashboard-prefs";
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -86,14 +91,6 @@ type Nudge = {
   metadata?: string | null;
   contact: { id: string; name: string; title: string; company: { name: string } };
   signal?: { type: string; content: string; url?: string | null } | null;
-};
-
-type Source = { type: string; content: string; date?: string; id?: string; url?: string };
-
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-  sources?: Source[];
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -241,6 +238,36 @@ function groupNewsByClient(news: DashboardData["clientNews"]): {
     .sort((a, b) => (IMPORTANCE_RANK[a.topImportance] ?? 99) - (IMPORTANCE_RANK[b.topImportance] ?? 99));
 }
 
+/* ── Coming Soon placeholder ───────────────────────────────────────── */
+
+function ComingSoonCard({ title, description }: { title: string; description: string }) {
+  return (
+    <Card className="border-dashed">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {title}
+          <Badge variant="outline" className="text-[10px] font-normal">Coming soon</Badge>
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="rounded-full bg-muted p-3 mb-3">
+            <Sparkles className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            This card is under development. Enable it in{" "}
+            <Link href="/dashboard/settings" className="text-primary hover:underline">
+              Dashboard Settings
+            </Link>{" "}
+            to see it here when ready.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ── Dashboard Page ────────────────────────────────────────────────── */
 
 export default function DashboardPage() {
@@ -250,19 +277,23 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Conversational state
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const chatLoadingRef = useRef(false);
+  const router = useRouter();
+
+  // Card visibility prefs
+  const [cardPrefs, setCardPrefs] = useState<DashboardCardPrefs | null>(null);
+
+  useEffect(() => {
+    setCardPrefs(loadDashboardPrefs());
+  }, []);
+
+  // Briefing state
+  const [briefing, setBriefing] = useState<string | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(true);
-  const messagesRef = useRef<Message[]>([]);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
   const pendingVoiceRef = useRef<string | null>(null);
-  const userHasInteracted = useRef(false);
 
-  // Fetch dashboard data + auto-briefing in a single effect to avoid double-fire
+  // Fetch dashboard data + auto-briefing in a single effect
   useEffect(() => {
     let cancelled = false;
 
@@ -304,15 +335,9 @@ export default function DashboardPage() {
         const res = await fetch("/api/dashboard/briefing");
         if (cancelled) return;
         if (res.ok) {
-          const { briefing } = await res.json();
-          if (briefing && !cancelled) {
-            setMessages((prev) => {
-              const alreadyHasBriefing = prev.some(
-                (m) => m.role === "assistant" && m.content === briefing,
-              );
-              if (alreadyHasBriefing) return prev;
-              return [{ role: "assistant", content: briefing }, ...prev];
-            });
+          const data = await res.json();
+          if (data.briefing && !cancelled) {
+            setBriefing(data.briefing);
           }
         }
       } catch {
@@ -326,18 +351,12 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Keep refs in sync
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-  useEffect(() => { chatLoadingRef.current = chatLoading; }, [chatLoading]);
-
-  // Only auto-scroll after the user sends a message, not on briefing load
-  useEffect(() => {
-    if (userHasInteracted.current) {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, chatLoading]);
-
   const userName = session?.user?.name ?? "Partner";
+
+  function navigateToChat(text: string) {
+    if (!text.trim()) return;
+    router.push(`/chat?q=${encodeURIComponent(text.trim())}`);
+  }
 
   const handleVoiceResult = useCallback((transcript: string) => {
     pendingVoiceRef.current = transcript;
@@ -347,49 +366,14 @@ export default function DashboardPage() {
   const { isListening, transcript: liveTranscript, isSupported, startListening, stopListening } =
     useSpeechRecognition({ onResult: handleVoiceResult });
 
-  const handleSend = useCallback(async (text: string) => {
-    if (!text.trim() || chatLoadingRef.current) return;
-    userHasInteracted.current = true;
-    chatLoadingRef.current = true;
-    const userMsg: Message = { role: "user", content: text.trim() };
-    setMessages((prev) => [...prev, userMsg]);
-    setChatLoading(true);
-
-    try {
-      const history = messagesRef.current.map((m) => ({ role: m.role, content: m.content }));
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text.trim(), history }),
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Failed to get response");
-      }
-      const { answer, sources } = await res.json();
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: answer, sources: sources ?? [] },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Sorry, I couldn't process your request. Please try again." },
-      ]);
-    } finally {
-      chatLoadingRef.current = false;
-      setChatLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     if (pendingVoiceRef.current && !isListening) {
       const text = pendingVoiceRef.current;
       pendingVoiceRef.current = null;
       setChatInput("");
-      handleSend(text);
+      navigateToChat(text);
     }
-  }, [isListening, handleSend]);
+  }, [isListening]);
 
   useEffect(() => {
     if (isListening && liveTranscript) {
@@ -402,12 +386,11 @@ export default function DashboardPage() {
     const text = chatInput.trim();
     if (!text) return;
     setChatInput("");
-    handleSend(text);
+    navigateToChat(text);
   }
 
   function handleSuggestedQuestion(q: string) {
-    setChatInput("");
-    handleSend(q);
+    navigateToChat(q);
   }
 
   if (loading) {
@@ -464,10 +447,20 @@ export default function DashboardPage() {
   })();
 
   const firstName = (userName ?? "Partner").split(/\s+/)[0] || userName || "Partner";
-  const hasMessages = messages.length > 0 || briefingLoading;
 
   return (
     <DashboardShell>
+      {/* Settings gear — pinned top-right */}
+      <div className="flex justify-end">
+        <Link
+          href="/dashboard/settings"
+          className="rounded-md p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title="Dashboard Settings"
+        >
+          <Settings className="h-5 w-5" />
+        </Link>
+      </div>
+
       <div className="space-y-8 pt-[8vh]">
         {/* Greeting */}
         <div className="text-center space-y-2">
@@ -484,94 +477,39 @@ export default function DashboardPage() {
         </div>
 
         {/* Conversational Panel — Hero */}
+        {cardPrefs?.aiAssistant !== false && (
         <div className="mx-auto w-full max-w-[80%]">
         <Card className="shadow-md border-primary/10">
-          <div className="flex flex-col" style={{ minHeight: "320px", maxHeight: "50vh" }}>
-            {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-5">
-              {hasMessages ? (
-                <div className="space-y-5">
-                  {/* Briefing loading indicator */}
-                  {briefingLoading && (
-                    <div className="flex gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-base">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                      </div>
-                      <div className="flex items-center gap-2 pt-2">
-                        <div className="flex gap-1">
-                          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "300ms" }} />
-                        </div>
-                        <span className="text-sm text-muted-foreground">
-                          Preparing your briefing...
-                        </span>
-                      </div>
+          <div className="flex flex-col">
+            {/* Briefing area */}
+            <div className="p-5">
+              {briefingLoading ? (
+                <div className="flex gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="flex gap-1">
+                      <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "300ms" }} />
                     </div>
-                  )}
-
-                  {/* Messages */}
-                  {messages.map((msg, i) => (
-                    <div key={i} className="flex gap-3">
-                      {msg.role === "assistant" ? (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                          <Sparkles className="h-4 w-4 text-primary" />
-                        </div>
-                      ) : (
-                        <Avatar
-                          name={session?.user?.name || "User"}
-                          size="sm"
-                        />
-                      )}
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          {msg.role === "assistant"
-                            ? "Activate"
-                            : session?.user?.name || "You"}
-                        </p>
-                        <div
-                          className={
-                            msg.role === "user"
-                              ? "rounded-lg bg-primary/5 px-4 py-3 text-sm text-foreground"
-                              : ""
-                          }
-                        >
-                          {msg.role === "assistant" ? (
-                            <AssistantReply
-                              content={msg.content}
-                              sources={msg.sources ?? []}
-                            />
-                          ) : (
-                            <p className="text-sm">{msg.content}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Chat loading */}
-                  {chatLoading && (
-                    <div className="flex gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                      </div>
-                      <div className="flex items-center gap-2 pt-2">
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                        <span className="text-sm text-muted-foreground">
-                          Searching your data & the web...
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={scrollRef} />
+                    <span className="text-sm text-muted-foreground">
+                      Preparing your briefing...
+                    </span>
+                  </div>
                 </div>
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-sm text-muted-foreground">
-                    Ask a question or wait for your morning briefing...
-                  </p>
+              ) : briefing ? (
+                <div className="flex gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Activate</p>
+                    <MarkdownContent content={briefing} className="text-sm text-foreground" />
+                  </div>
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Input bar */}
@@ -587,8 +525,7 @@ export default function DashboardPage() {
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       placeholder="Ask AI a question or make a request..."
-                      disabled={chatLoading}
-                      className="flex-1 rounded-lg border border-border bg-background pl-11 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                      className="flex-1 rounded-lg border border-border bg-background pl-11 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                   {isSupported && (
@@ -596,7 +533,6 @@ export default function DashboardPage() {
                       type="button"
                       variant={isListening ? "destructive" : "ghost"}
                       size="icon"
-                      disabled={chatLoading}
                       onClick={isListening ? stopListening : startListening}
                       className={`h-11 w-11 shrink-0 relative ${
                         isListening ? "animate-pulse" : "text-muted-foreground hover:text-foreground"
@@ -616,14 +552,8 @@ export default function DashboardPage() {
                       </span>
                     </Button>
                   )}
-                  <Button type="submit" size="default" disabled={!chatInput.trim() || chatLoading}>
-                    {chatLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : isListening ? (
-                      "Listening..."
-                    ) : (
-                      "Ask"
-                    )}
+                  <Button type="submit" size="default" disabled={!chatInput.trim()}>
+                    {isListening ? "Listening..." : "Ask"}
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -631,9 +561,8 @@ export default function DashboardPage() {
                     <button
                       key={q}
                       type="button"
-                      disabled={chatLoading}
                       onClick={() => handleSuggestedQuestion(q)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                     >
                       <Sparkles className="h-3 w-3 text-primary" />
                       {q}
@@ -645,232 +574,333 @@ export default function DashboardPage() {
           </div>
         </Card>
         </div>
+        )}
 
         {/* Data Grid — secondary content */}
         <div className="mt-12 grid gap-6 lg:grid-cols-[3fr_2fr]">
-          {/* Left: Today's Top Nudges */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Today&apos;s Top Nudges</CardTitle>
-              <CardDescription>
-                Your highest-priority open nudges to act on
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {feedItems.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No open nudges right now.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {feedItems.map((item) => {
-                    if (item.kind === "meeting") {
-                      const meeting = item.meeting;
-                      const topAttendee = meeting.attendees[0]?.contact;
-                      const attendeeNames = meeting.attendees
-                        .map((a) => a.contact.name)
-                        .join(", ");
-                      const summarySource = meeting.generatedBrief || meeting.purpose;
-                      const summaryPreview = summarySource
-                        ? summarySource.length > 200
-                          ? summarySource.slice(0, 200).trimEnd() + "\u2026"
-                          : summarySource
-                        : null;
-                      return (
-                        <Card key={`mtg-${meeting.id}`} className="overflow-hidden">
-                          <CardHeader className="pb-3 pt-5">
-                            <div className="flex items-start gap-4">
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/30">
-                                <ClipboardList className="h-5 w-5 text-indigo-600" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <CardTitle className="text-lg font-bold">
-                                    <Link href={`/meetings/${meeting.id}`} className="hover:text-primary hover:underline transition-colors">
-                                      {meeting.title}
-                                    </Link>
-                                  </CardTitle>
-                                  <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-900 dark:bg-indigo-950 dark:text-indigo-400">
-                                    Meeting Prep
-                                  </Badge>
+          {/* Left column */}
+          <div className="space-y-6">
+            {/* Today's Top Nudges */}
+            {cardPrefs?.topNudges !== false && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Today&apos;s Top Nudges</CardTitle>
+                  <CardDescription>
+                    Your highest-priority open nudges to act on
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {feedItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No open nudges right now.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {feedItems.map((item) => {
+                        if (item.kind === "meeting") {
+                          const meeting = item.meeting;
+                          const topAttendee = meeting.attendees[0]?.contact;
+                          const attendeeNames = meeting.attendees
+                            .map((a) => a.contact.name)
+                            .join(", ");
+                          const summarySource = meeting.generatedBrief || meeting.purpose;
+                          const summaryPreview = summarySource
+                            ? summarySource.length > 200
+                              ? summarySource.slice(0, 200).trimEnd() + "\u2026"
+                              : summarySource
+                            : null;
+                          return (
+                            <Card key={`mtg-${meeting.id}`} className="overflow-hidden">
+                              <CardHeader className="pb-3 pt-5">
+                                <div className="flex items-start gap-4">
+                                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/30">
+                                    <ClipboardList className="h-5 w-5 text-indigo-600" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <CardTitle className="text-lg font-bold">
+                                        <Link href={`/meetings/${meeting.id}`} className="hover:text-primary hover:underline transition-colors">
+                                          {meeting.title}
+                                        </Link>
+                                      </CardTitle>
+                                      <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-900 dark:bg-indigo-950 dark:text-indigo-400">
+                                        Meeting Prep
+                                      </Badge>
+                                    </div>
+                                    <CardDescription className="mt-0.5">
+                                      {format(new Date(meeting.startTime), "EEE, MMM d · h:mm a")}
+                                      {topAttendee?.company && ` · ${topAttendee.company.name}`}
+                                    </CardDescription>
+                                  </div>
                                 </div>
-                                <CardDescription className="mt-0.5">
-                                  {format(new Date(meeting.startTime), "EEE, MMM d · h:mm a")}
-                                  {topAttendee?.company && ` · ${topAttendee.company.name}`}
-                                </CardDescription>
-                              </div>
-                            </div>
-                          </CardHeader>
+                              </CardHeader>
 
-                          <CardContent className="space-y-3">
-                            <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
-                              <div className="flex items-center gap-1.5 mb-2">
-                                <Sparkles className="h-4 w-4 text-indigo-600" />
-                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                                  {meeting.generatedBrief ? "Brief" : "Purpose"}
-                                </span>
+                              <CardContent className="space-y-3">
+                                <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <Sparkles className="h-4 w-4 text-indigo-600" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                                      {meeting.generatedBrief ? "Brief" : "Purpose"}
+                                    </span>
+                                  </div>
+                                  {summaryPreview ? (
+                                    <p className="text-sm text-foreground/70 leading-relaxed">{summaryPreview}</p>
+                                  ) : (
+                                    <p className="text-sm text-foreground/70 leading-relaxed">{attendeeNames}</p>
+                                  )}
+                                  {attendeeNames && summaryPreview && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                      {attendeeNames}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <Link
+                                    href={`/meetings/${meeting.id}`}
+                                    className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                  >
+                                    View more
+                                    <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                                  </Link>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+
+                        const nudge = item.nudge;
+                        const insights = parseInsights(nudge.metadata);
+                        const fragments = buildSummaryFragments(nudge, insights);
+                        return (
+                          <Card key={nudge.id} className="overflow-hidden">
+                            <CardHeader className="pb-3 pt-5">
+                              <div className="flex items-start gap-4">
+                                <Avatar name={nudge.contact.name} size="lg" className="shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <CardTitle className="text-lg font-bold">
+                                      <Link href={`/contacts/${nudge.contact.id}`} className="hover:text-primary hover:underline transition-colors">
+                                        {nudge.contact.name}
+                                      </Link>
+                                    </CardTitle>
+                                    <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                                      {nudge.priority}
+                                    </Badge>
+                                  </div>
+                                  <CardDescription className="mt-0.5">
+                                    {nudge.contact.title} at {nudge.contact.company.name}
+                                  </CardDescription>
+                                </div>
                               </div>
-                              {summaryPreview ? (
-                                <p className="text-sm text-foreground/70 leading-relaxed">{summaryPreview}</p>
-                              ) : (
-                                <p className="text-sm text-foreground/70 leading-relaxed">{attendeeNames}</p>
-                              )}
-                              {attendeeNames && summaryPreview && (
-                                <p className="text-xs text-muted-foreground mt-2">
-                                  {attendeeNames}
+                            </CardHeader>
+
+                            <CardContent className="space-y-3">
+                              <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                                <div className="flex items-center gap-1.5 mb-2.5">
+                                  <Sparkles className="h-4 w-4 text-primary" />
+                                  <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
+                                </div>
+                                <p className="text-sm text-foreground/70 leading-relaxed">
+                                  {fragments.map((f, i) =>
+                                    f.bold ? (
+                                      <strong key={i} className="font-semibold text-foreground/90">{f.text}</strong>
+                                    ) : (
+                                      <span key={i}>{f.text}</span>
+                                    )
+                                  )}
+                                </p>
+                              </div>
+
+                              <div>
+                                <Link
+                                  href={`/contacts/${nudge.contact.id}?nudge=${nudge.id}`}
+                                  className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                >
+                                  Take action
+                                  <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                                </Link>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Today's Meetings & Briefs */}
+            {cardPrefs?.todaysMeetings && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Today&apos;s Meetings &amp; Briefs</CardTitle>
+                  <CardDescription>
+                    Your upcoming meetings with AI prep notes
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {(dashboardData?.upcomingMeetings?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No upcoming meetings.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {[...todayMeetings, ...tomorrowMeetings].slice(0, 6).map((meeting) => {
+                        const topAttendee = meeting.attendees[0]?.contact;
+                        const hasPrep = !!meeting.generatedBrief;
+                        return (
+                          <div key={meeting.id} className="flex items-start gap-3 rounded-lg border border-border p-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/30">
+                              <CalendarDays className="h-4 w-4 text-indigo-600" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <Link href={`/meetings/${meeting.id}`} className="text-sm font-medium text-foreground hover:text-primary hover:underline truncate">
+                                  {meeting.title}
+                                </Link>
+                                <Badge variant="outline" className={hasPrep ? "border-green-200 bg-green-50 text-green-600 dark:border-green-900 dark:bg-green-950 dark:text-green-400 text-[10px]" : "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400 text-[10px]"}>
+                                  {hasPrep ? "Brief ready" : "Prep needed"}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {format(new Date(meeting.startTime), "EEE h:mm a")}
+                                {topAttendee?.company && ` · ${topAttendee.company.name}`}
+                              </p>
+                              {meeting.generatedBrief && (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                                  {meeting.generatedBrief}
                                 </p>
                               )}
                             </div>
-
-                            <div>
-                              <Link
-                                href={`/meetings/${meeting.id}`}
-                                className="inline-flex items-center text-xs font-medium text-primary hover:underline"
-                              >
-                                View more
-                                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-                              </Link>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    }
-
-                    const nudge = item.nudge;
-                    const insights = parseInsights(nudge.metadata);
-                    const fragments = buildSummaryFragments(nudge, insights);
-                    return (
-                      <Card key={nudge.id} className="overflow-hidden">
-                        <CardHeader className="pb-3 pt-5">
-                          <div className="flex items-start gap-4">
-                            <Avatar name={nudge.contact.name} size="lg" className="shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <CardTitle className="text-lg font-bold">
-                                  <Link href={`/contacts/${nudge.contact.id}`} className="hover:text-primary hover:underline transition-colors">
-                                    {nudge.contact.name}
-                                  </Link>
-                                </CardTitle>
-                                <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
-                                  {nudge.priority}
-                                </Badge>
-                              </div>
-                              <CardDescription className="mt-0.5">
-                                {nudge.contact.title} at {nudge.contact.company.name}
-                              </CardDescription>
-                            </div>
                           </div>
-                        </CardHeader>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
-                        <CardContent className="space-y-3">
-                          <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
-                            <div className="flex items-center gap-1.5 mb-2.5">
-                              <Sparkles className="h-4 w-4 text-primary" />
-                              <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
-                            </div>
-                            <p className="text-sm text-foreground/70 leading-relaxed">
-                              {fragments.map((f, i) =>
-                                f.bold ? (
-                                  <strong key={i} className="font-semibold text-foreground/90">{f.text}</strong>
-                                ) : (
-                                  <span key={i}>{f.text}</span>
-                                )
-                              )}
-                            </p>
-                          </div>
+            {/* Relationship Radar */}
+            {cardPrefs?.relationshipRadar && (
+              <ComingSoonCard
+                title="Relationship Radar"
+                description="High-importance contacts and clients with no meaningful touch in N days, or declining interaction trends — prioritized by strategic importance."
+              />
+            )}
 
-                          <div>
-                            <Link
-                              href={`/contacts/${nudge.contact.id}?nudge=${nudge.id}`}
-                              className="inline-flex items-center text-xs font-medium text-primary hover:underline"
-                            >
-                              Take action
-                              <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-                            </Link>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            {/* Recent Touch Timeline */}
+            {cardPrefs?.recentTouchTimeline && (
+              <ComingSoonCard
+                title="Recent Touch Timeline"
+                description="Chronological strip of latest emails, calls, and meetings across priority contacts — filterable by client or time window."
+              />
+            )}
+          </div>
 
-          {/* Right column: Client News */}
+          {/* Right column */}
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Client News</CardTitle>
-                <CardDescription>
-                  Recent signals across your contacts and companies
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {newsGroups.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No recent client news.
-                  </p>
-                ) : (
-                  <div className="space-y-5">
-                    {newsGroups.map(({ clientName, topImportance, items }) => (
-                      <div key={clientName}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                            {clientName}
-                          </h3>
-                          {topImportance && (
-                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${getPriorityClassName(topImportance)}`}>
-                              {topImportance}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="space-y-0 pl-0.5">
-                          {items.slice(0, 4).map((item) => {
-                            const cfg = getSignalTypeConfig(item.type);
-                            const IIcon = cfg.icon;
-                            return (
-                              <div
-                                key={item.id}
-                                className="flex gap-3 pb-3 last:pb-0"
-                              >
-                                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
-                                  <IIcon className="h-3 w-3 text-muted-foreground" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  {item.contact?.name && (
-                                    <p className="text-xs font-medium text-foreground">
-                                      {item.contact.name}
+            {/* Client News */}
+            {cardPrefs?.clientNews !== false && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Client News</CardTitle>
+                  <CardDescription>
+                    Recent signals across your contacts and companies
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {newsGroups.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No recent client news.
+                    </p>
+                  ) : (
+                    <div className="space-y-5">
+                      {newsGroups.map(({ clientName, topImportance, items }) => (
+                        <div key={clientName}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                              {clientName}
+                            </h3>
+                            {topImportance && (
+                              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${getPriorityClassName(topImportance)}`}>
+                                {topImportance}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="space-y-0 pl-0.5">
+                            {items.slice(0, 4).map((item) => {
+                              const cfg = getSignalTypeConfig(item.type);
+                              const IIcon = cfg.icon;
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="flex gap-3 pb-3 last:pb-0"
+                                >
+                                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
+                                    <IIcon className="h-3 w-3 text-muted-foreground" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    {item.contact?.name && (
+                                      <p className="text-xs font-medium text-foreground">
+                                        {item.contact.name}
+                                      </p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground line-clamp-2">
+                                      {item.content}
                                     </p>
-                                  )}
-                                  <p className="text-xs text-muted-foreground line-clamp-2">
-                                    {item.content}
-                                  </p>
-                                  <p className="mt-0.5 text-[11px] text-muted-foreground/70">
-                                    {format(new Date(item.date), "MMM d")} · {item.type}
-                                  </p>
-                                  {item.url && (
-                                    <a
-                                      href={item.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="mt-0.5 inline-flex items-center text-xs font-medium text-primary hover:underline"
-                                    >
-                                      Read more
-                                      <ExternalLink className="ml-0.5 h-3 w-3" />
-                                    </a>
-                                  )}
+                                    <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                                      {format(new Date(item.date), "MMM d")} · {item.type}
+                                    </p>
+                                    {item.url && (
+                                      <a
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-0.5 inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                      >
+                                        Read more
+                                        <ExternalLink className="ml-0.5 h-3 w-3" />
+                                      </a>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Pipeline Pulse */}
+            {cardPrefs?.pipelinePulse && (
+              <ComingSoonCard
+                title="Pipeline Pulse"
+                description="Open opportunities sorted by stage gate, close date, or staleness — with next step and last touch."
+              />
+            )}
+
+            {/* Campaign & Content Dissemination Momentum */}
+            {cardPrefs?.campaignMomentum && (
+              <ComingSoonCard
+                title="Campaign & Content Dissemination Momentum"
+                description="Active campaigns with progress metrics (targets touched, replies, next wave) and recommended next actions."
+              />
+            )}
+
+            {/* Whitespace */}
+            {cardPrefs?.whitespace && (
+              <ComingSoonCard
+                title="Whitespace"
+                description="Key clients with open pipeline, recent signals, and coverage gaps (e.g., single-threaded relationships, few senior contacts)."
+              />
+            )}
           </div>
         </div>
       </div>

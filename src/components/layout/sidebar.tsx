@@ -14,6 +14,8 @@ import {
   MessageSquare,
   LogOut,
   TrendingUp,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Avatar } from "@/components/ui/avatar";
@@ -37,7 +39,13 @@ const navItems: NavItem[] = [
   { href: "/chat", label: "Ask Anything", icon: MessageSquare },
 ];
 
-export function Sidebar() {
+export function Sidebar({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [stats, setStats] = useState<{
@@ -54,44 +62,72 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="flex h-screen w-64 flex-col bg-sidebar-bg text-sidebar-fg">
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
-        <ActivateLogo size="md" />
-        <div>
-          <h1 className="text-lg font-bold">Activate</h1>
-        </div>
+    <aside
+      className={cn(
+        "flex h-screen flex-col bg-sidebar-bg text-sidebar-fg transition-all duration-200 ease-in-out",
+        collapsed ? "w-16" : "w-64"
+      )}
+    >
+      {/* Logo */}
+      <div
+        className={cn(
+          "flex items-center border-b border-white/10 transition-all duration-200",
+          collapsed ? "justify-center px-2 py-5" : "gap-3 px-6 py-5"
+        )}
+      >
+        <ActivateLogo size="sm" />
+        {!collapsed && (
+          <h1 className="text-lg font-bold whitespace-nowrap overflow-hidden">
+            Activate
+          </h1>
+        )}
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      {/* Nav */}
+      <nav className="flex-1 px-2 py-4 space-y-1">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
-          const count = item.countKey && stats ? stats[item.countKey] : undefined;
+          const count =
+            item.countKey && stats ? stats[item.countKey] : undefined;
           return (
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center rounded-lg text-sm font-medium transition-colors",
+                collapsed
+                  ? "justify-center px-2 py-2.5"
+                  : "justify-between gap-3 px-3 py-2.5",
                 isActive
                   ? "bg-sidebar-accent text-white"
                   : "text-sidebar-fg/70 hover:bg-sidebar-accent/50 hover:text-white"
               )}
             >
-              <span className="flex items-center gap-3 min-w-0">
+              <span
+                className={cn(
+                  "flex items-center min-w-0",
+                  collapsed ? "gap-0" : "gap-3"
+                )}
+              >
                 <item.icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-                {count !== undefined && (
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
-                      isActive
-                        ? "bg-white/25 text-white"
-                        : "bg-white/15 text-sidebar-fg/90"
+                {!collapsed && (
+                  <>
+                    <span className="truncate">{item.label}</span>
+                    {count !== undefined && (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
+                          isActive
+                            ? "bg-white/25 text-white"
+                            : "bg-white/15 text-sidebar-fg/90"
+                        )}
+                      >
+                        {count}
+                      </span>
                     )}
-                  >
-                    {count}
-                  </span>
+                  </>
                 )}
               </span>
             </Link>
@@ -99,24 +135,54 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-white/10 px-4 py-4">
-        <div className="flex items-center gap-3">
+      {/* User + collapse toggle */}
+      <div className="border-t border-white/10 px-2 py-4 space-y-3">
+        {/* Collapse toggle */}
+        <button
+          onClick={onToggle}
+          className={cn(
+            "flex items-center rounded-lg text-sm font-medium text-sidebar-fg/50 hover:text-white hover:bg-sidebar-accent/50 transition-colors w-full",
+            collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2"
+          )}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? (
+            <ChevronsRight className="h-4 w-4 shrink-0" />
+          ) : (
+            <>
+              <ChevronsLeft className="h-4 w-4 shrink-0" />
+              <span className="truncate">Collapse</span>
+            </>
+          )}
+        </button>
+
+        {/* User profile */}
+        <div
+          className={cn(
+            "flex items-center",
+            collapsed ? "justify-center" : "gap-3 px-1"
+          )}
+        >
           <Avatar name={session?.user?.name || "User"} size="sm" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">
-              {session?.user?.name || "Partner"}
-            </p>
-            <p className="text-xs text-sidebar-fg/60 truncate">
-              {session?.user?.email || ""}
-            </p>
-          </div>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-sidebar-fg/50 hover:text-white transition-colors"
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+          {!collapsed && (
+            <>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {session?.user?.name || "Partner"}
+                </p>
+                <p className="text-xs text-sidebar-fg/60 truncate">
+                  {session?.user?.email || ""}
+                </p>
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="text-sidebar-fg/50 hover:text-white transition-colors"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </aside>
