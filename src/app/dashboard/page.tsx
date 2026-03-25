@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   ChevronRight,
@@ -19,6 +18,7 @@ import {
   ExternalLink,
   Sparkles,
   Mic,
+  Loader2,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -35,6 +35,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow } from "date-fns";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { AssistantReply } from "@/components/chat/assistant-reply";
+
+/* ── Types ─────────────────────────────────────────────────────────── */
 
 type DashboardData = {
   contactCount: number;
@@ -70,6 +73,7 @@ type DashboardData = {
 type InsightData = {
   type: string;
   reason: string;
+  priority: string;
   signalContent?: string;
   signalUrl?: string | null;
 };
@@ -83,6 +87,16 @@ type Nudge = {
   contact: { id: string; name: string; title: string; company: { name: string } };
   signal?: { type: string; content: string; url?: string | null } | null;
 };
+
+type Source = { type: string; content: string; date?: string; id?: string; url?: string };
+
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  sources?: Source[];
+};
+
+/* ── Helpers ───────────────────────────────────────────────────────── */
 
 function parseInsights(metadata?: string | null): InsightData[] {
   if (!metadata) return [];
@@ -173,7 +187,6 @@ const DASHBOARD_SUGGESTED_QUESTIONS = [
 function groupMeetingsByTimeBucket(
   meetings: DashboardData["upcomingMeetings"]
 ): { label: string; meetings: typeof meetings }[] {
-  const now = new Date();
   const today: typeof meetings = [];
   const tomorrow: typeof meetings = [];
   const later: typeof meetings = [];
@@ -228,24 +241,42 @@ function groupNewsByClient(news: DashboardData["clientNews"]): {
     .sort((a, b) => (IMPORTANCE_RANK[a.topImportance] ?? 99) - (IMPORTANCE_RANK[b.topImportance] ?? 99));
 }
 
+/* ── Dashboard Page ────────────────────────────────────────────────── */
+
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const router = useRouter();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [topNudges, setTopNudges] = useState<Nudge[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [chatInput, setChatInput] = useState("");
 
+  // Conversational state
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatLoadingRef = useRef(false);
+  const [briefingLoading, setBriefingLoading] = useState(true);
+  const messagesRef = useRef<Message[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+  const pendingVoiceRef = useRef<string | null>(null);
+  const userHasInteracted = useRef(false);
+
+  // Fetch dashboard data + auto-briefing in a single effect to avoid double-fire
   useEffect(() => {
-    async function fetchData() {
+    let cancelled = false;
+
+    async function fetchAll() {
       setLoading(true);
+      setBriefingLoading(true);
       setError(null);
       try {
         const [dashboardRes, nudgesRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/nudges?status=OPEN"),
         ]);
+
+        if (cancelled) return;
 
         if (!dashboardRes.ok) {
           const body = await dashboardRes.json().catch(() => ({}));
@@ -260,18 +291,53 @@ export default function DashboardPage() {
           setTopNudges(nudges.slice(0, 5));
         }
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : "Something went wrong");
+        setBriefingLoading(false);
+        return;
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
+      }
+
+      // Fetch briefing after dashboard data is loaded
+      try {
+        const res = await fetch("/api/dashboard/briefing");
+        if (cancelled) return;
+        if (res.ok) {
+          const { briefing } = await res.json();
+          if (briefing && !cancelled) {
+            setMessages((prev) => {
+              const alreadyHasBriefing = prev.some(
+                (m) => m.role === "assistant" && m.content === briefing,
+              );
+              if (alreadyHasBriefing) return prev;
+              return [{ role: "assistant", content: briefing }, ...prev];
+            });
+          }
+        }
+      } catch {
+        // Silently fail — the briefing is a nice-to-have
+      } finally {
+        if (!cancelled) setBriefingLoading(false);
       }
     }
-    fetchData();
+    fetchAll();
+
+    return () => { cancelled = true; };
   }, []);
 
-  const userName = session?.user?.name ?? "Partner";
+  // Keep refs in sync
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { chatLoadingRef.current = chatLoading; }, [chatLoading]);
 
-  const chatInputRef = useRef<HTMLInputElement>(null);
-  const pendingVoiceRef = useRef<string | null>(null);
+  // Only auto-scroll after the user sends a message, not on briefing load
+  useEffect(() => {
+    if (userHasInteracted.current) {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, chatLoading]);
+
+  const userName = session?.user?.name ?? "Partner";
 
   const handleVoiceResult = useCallback((transcript: string) => {
     pendingVoiceRef.current = transcript;
@@ -281,14 +347,49 @@ export default function DashboardPage() {
   const { isListening, transcript: liveTranscript, isSupported, startListening, stopListening } =
     useSpeechRecognition({ onResult: handleVoiceResult });
 
+  const handleSend = useCallback(async (text: string) => {
+    if (!text.trim() || chatLoadingRef.current) return;
+    userHasInteracted.current = true;
+    chatLoadingRef.current = true;
+    const userMsg: Message = { role: "user", content: text.trim() };
+    setMessages((prev) => [...prev, userMsg]);
+    setChatLoading(true);
+
+    try {
+      const history = messagesRef.current.map((m) => ({ role: m.role, content: m.content }));
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text.trim(), history }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Failed to get response");
+      }
+      const { answer, sources } = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: answer, sources: sources ?? [] },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Sorry, I couldn't process your request. Please try again." },
+      ]);
+    } finally {
+      chatLoadingRef.current = false;
+      setChatLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (pendingVoiceRef.current && !isListening) {
       const text = pendingVoiceRef.current;
       pendingVoiceRef.current = null;
       setChatInput("");
-      router.push(`/chat?q=${encodeURIComponent(text)}`);
+      handleSend(text);
     }
-  }, [isListening, router]);
+  }, [isListening, handleSend]);
 
   useEffect(() => {
     if (isListening && liveTranscript) {
@@ -301,20 +402,20 @@ export default function DashboardPage() {
     const text = chatInput.trim();
     if (!text) return;
     setChatInput("");
-    router.push(`/chat?q=${encodeURIComponent(text)}`);
+    handleSend(text);
   }
 
   function handleSuggestedQuestion(q: string) {
-    setChatInput(q);
-    chatInputRef.current?.focus();
+    setChatInput("");
+    handleSend(q);
   }
 
   if (loading) {
     return (
       <DashboardShell>
         <div className="space-y-8">
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-32" />
+          <Skeleton className="h-10 w-64 mx-auto" />
+          <Skeleton className="h-80" />
           <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
             <Skeleton className="h-[28rem]" />
             <Skeleton className="h-80" />
@@ -363,11 +464,12 @@ export default function DashboardPage() {
   })();
 
   const firstName = (userName ?? "Partner").split(/\s+/)[0] || userName || "Partner";
+  const hasMessages = messages.length > 0 || briefingLoading;
 
   return (
     <DashboardShell>
-      <div className="space-y-8">
-        {/* Centered greeting above chat — reference design */}
+      <div className="space-y-8 pt-[8vh]">
+        {/* Greeting */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             {timeGreeting}, {firstName}
@@ -381,70 +483,171 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Chat bar */}
-        <Card className="shadow-sm">
-          <CardContent className="pt-6">
-            <form onSubmit={handleChatSubmit} className="space-y-4">
-              <div className="flex gap-2">
-                <div className="relative flex flex-1">
-                  <Sparkles className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    ref={chatInputRef}
-                    id="dashboard-chat"
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask AI a question or make a request…"
-                    className="flex-1 rounded-lg border border-border bg-background pl-11 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-                {isSupported && (
-                  <Button
-                    type="button"
-                    variant={isListening ? "destructive" : "ghost"}
-                    size="icon"
-                    onClick={isListening ? stopListening : startListening}
-                    className={`h-11 w-11 shrink-0 relative ${
-                      isListening ? "animate-pulse" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    title={isListening ? "Stop listening" : "Voice input"}
-                  >
-                    {isListening ? (
-                      <>
-                        <Mic className="h-4 w-4" />
-                        <span className="absolute inset-0 rounded-md border-2 border-destructive animate-ping opacity-30" />
-                      </>
-                    ) : (
-                      <Mic className="h-4 w-4" />
-                    )}
-                    <span className="sr-only">
-                      {isListening ? "Stop listening" : "Voice input"}
-                    </span>
-                  </Button>
-                )}
-                <Button type="submit" size="default" disabled={!chatInput.trim()}>
-                  {isListening ? "Listening…" : "Ask"}
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {DASHBOARD_SUGGESTED_QUESTIONS.map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    onClick={() => handleSuggestedQuestion(q)}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-                  >
-                    <Sparkles className="h-3 w-3 text-primary" />
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        {/* Conversational Panel — Hero */}
+        <div className="mx-auto w-full max-w-[80%]">
+        <Card className="shadow-md border-primary/10">
+          <div className="flex flex-col" style={{ minHeight: "320px", maxHeight: "50vh" }}>
+            {/* Messages area */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {hasMessages ? (
+                <div className="space-y-5">
+                  {/* Briefing loading indicator */}
+                  {briefingLoading && (
+                    <div className="flex gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-base">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex items-center gap-2 pt-2">
+                        <div className="flex gap-1">
+                          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          Preparing your briefing...
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
-        {/* Option D: 60% Nudges | 40% Meetings + News stacked */}
-        <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+                  {/* Messages */}
+                  {messages.map((msg, i) => (
+                    <div key={i} className="flex gap-3">
+                      {msg.role === "assistant" ? (
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                        </div>
+                      ) : (
+                        <Avatar
+                          name={session?.user?.name || "User"}
+                          size="sm"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          {msg.role === "assistant"
+                            ? "Activate"
+                            : session?.user?.name || "You"}
+                        </p>
+                        <div
+                          className={
+                            msg.role === "user"
+                              ? "rounded-lg bg-primary/5 px-4 py-3 text-sm text-foreground"
+                              : ""
+                          }
+                        >
+                          {msg.role === "assistant" ? (
+                            <AssistantReply
+                              content={msg.content}
+                              sources={msg.sources ?? []}
+                            />
+                          ) : (
+                            <p className="text-sm">{msg.content}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Chat loading */}
+                  {chatLoading && (
+                    <div className="flex gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex items-center gap-2 pt-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">
+                          Searching your data & the web...
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={scrollRef} />
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-sm text-muted-foreground">
+                    Ask a question or wait for your morning briefing...
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Input bar */}
+            <div className="border-t border-border p-4">
+              <form onSubmit={handleChatSubmit} className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="relative flex flex-1">
+                    <Sparkles className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      ref={chatInputRef}
+                      id="dashboard-chat"
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="Ask AI a question or make a request..."
+                      disabled={chatLoading}
+                      className="flex-1 rounded-lg border border-border bg-background pl-11 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                    />
+                  </div>
+                  {isSupported && (
+                    <Button
+                      type="button"
+                      variant={isListening ? "destructive" : "ghost"}
+                      size="icon"
+                      disabled={chatLoading}
+                      onClick={isListening ? stopListening : startListening}
+                      className={`h-11 w-11 shrink-0 relative ${
+                        isListening ? "animate-pulse" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                      title={isListening ? "Stop listening" : "Voice input"}
+                    >
+                      {isListening ? (
+                        <>
+                          <Mic className="h-4 w-4" />
+                          <span className="absolute inset-0 rounded-md border-2 border-destructive animate-ping opacity-30" />
+                        </>
+                      ) : (
+                        <Mic className="h-4 w-4" />
+                      )}
+                      <span className="sr-only">
+                        {isListening ? "Stop listening" : "Voice input"}
+                      </span>
+                    </Button>
+                  )}
+                  <Button type="submit" size="default" disabled={!chatInput.trim() || chatLoading}>
+                    {chatLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : isListening ? (
+                      "Listening..."
+                    ) : (
+                      "Ask"
+                    )}
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {DASHBOARD_SUGGESTED_QUESTIONS.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      disabled={chatLoading}
+                      onClick={() => handleSuggestedQuestion(q)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    >
+                      <Sparkles className="h-3 w-3 text-primary" />
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </form>
+            </div>
+          </div>
+        </Card>
+        </div>
+
+        {/* Data Grid — secondary content */}
+        <div className="mt-12 grid gap-6 lg:grid-cols-[3fr_2fr]">
           {/* Left: Today's Top Nudges */}
           <Card>
             <CardHeader>
@@ -470,7 +673,7 @@ export default function DashboardPage() {
                       const summarySource = meeting.generatedBrief || meeting.purpose;
                       const summaryPreview = summarySource
                         ? summarySource.length > 200
-                          ? summarySource.slice(0, 200).trimEnd() + "…"
+                          ? summarySource.slice(0, 200).trimEnd() + "\u2026"
                           : summarySource
                         : null;
                       return (
@@ -596,7 +799,6 @@ export default function DashboardPage() {
 
           {/* Right column: Client News */}
           <div className="space-y-6">
-            {/* Client News */}
             <Card>
               <CardHeader>
                 <CardTitle>Client News</CardTitle>
