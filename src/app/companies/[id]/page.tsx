@@ -21,6 +21,7 @@ import {
   Loader2,
   Copy,
   Check,
+  UserCheck,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -147,6 +148,21 @@ type FirmRelationshipData = {
   totalPartners: number;
   totalContacts: number;
   relationships: FirmRelationship[];
+};
+
+const CLIENT_ACTIVATION_POC: Record<string, string> = {
+  "c-microsoft": "Sarah Chen",
+  "c-apple": "David Park",
+  "c-amazon": "Rachel Nguyen",
+  "c-jpmorgan": "Michael Torres",
+  "c-google": "Emily Zhao",
+  "c-meta": "James Sullivan",
+  "c-nvidia": "Priya Sharma",
+  "c-salesforce": "Alex Rivera",
+  "c-adobe": "Natalie Brooks",
+  "c-netflix": "Daniel Kim",
+  "c-nike": "Olivia Grant",
+  "c-pepsico": "Marcus Johnson",
 };
 
 function TierBadge({ importance }: { importance: string }) {
@@ -517,6 +533,15 @@ export default function CompanyDetailPage() {
                       <Globe className="h-3.5 w-3.5" />
                       Website
                     </a>
+                  )}
+                  {CLIENT_ACTIVATION_POC[company.id] && (
+                    <span className="inline-flex items-center gap-1">
+                      <UserCheck className="h-3.5 w-3.5 text-indigo-500" />
+                      <span className="text-muted-foreground">Client Activation PoC:</span>
+                      <span className="font-medium text-foreground">
+                        {CLIENT_ACTIVATION_POC[company.id]}
+                      </span>
+                    </span>
                   )}
                 </div>
               </div>
