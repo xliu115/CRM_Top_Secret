@@ -1,13 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, Loader2, Trash2, Sparkles } from "lucide-react";
+import { Send, Loader2, Trash2, Sparkles, Mic, MicOff } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 import { AssistantReply } from "@/components/chat/assistant-reply";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 type Source = { type: string; content: string; date?: string; id?: string; url?: string };
 
@@ -36,6 +37,29 @@ function ChatPageContent() {
   const initialQuerySentRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pendingVoiceRef = useRef<string | null>(null);
+
+  const handleVoiceResult = useCallback((transcript: string) => {
+    pendingVoiceRef.current = transcript;
+    setInput(transcript);
+  }, []);
+
+  const { isListening, transcript: liveTranscript, isSupported, startListening, stopListening } =
+    useSpeechRecognition({ onResult: handleVoiceResult });
+
+  useEffect(() => {
+    if (pendingVoiceRef.current && !isListening) {
+      const text = pendingVoiceRef.current;
+      pendingVoiceRef.current = null;
+      handleSend(text);
+    }
+  }, [isListening]);
+
+  useEffect(() => {
+    if (isListening && liveTranscript) {
+      setInput(liveTranscript);
+    }
+  }, [isListening, liveTranscript]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -254,6 +278,31 @@ function ChatPageContent() {
                     Math.min(target.scrollHeight, 120) + "px";
                 }}
               />
+              {isSupported && (
+                <Button
+                  type="button"
+                  variant={isListening ? "destructive" : "ghost"}
+                  size="icon"
+                  disabled={loading}
+                  onClick={isListening ? stopListening : startListening}
+                  className={`h-11 w-11 shrink-0 relative ${
+                    isListening ? "animate-pulse" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={isListening ? "Stop listening" : "Voice input"}
+                >
+                  {loading ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                  {isListening && (
+                    <span className="absolute inset-0 rounded-md border-2 border-destructive animate-ping opacity-30" />
+                  )}
+                  <span className="sr-only">
+                    {isListening ? "Stop listening" : "Voice input"}
+                  </span>
+                </Button>
+              )}
               <Button
                 type="submit"
                 disabled={loading || !input.trim()}
@@ -269,6 +318,12 @@ function ChatPageContent() {
               </Button>
             </form>
             <p className="mt-2 text-center text-xs text-muted-foreground">
+              {isListening && (
+                <span className="mr-1 inline-flex items-center gap-1 text-destructive font-medium">
+                  <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
+                  Listening...
+                </span>
+              )}
               Activate searches your CRM data and the live web to answer
               questions.
               {!process.env.NEXT_PUBLIC_HAS_OPENAI && (
