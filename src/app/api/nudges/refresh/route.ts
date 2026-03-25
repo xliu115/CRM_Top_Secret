@@ -4,6 +4,7 @@ import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import { nudgeRepo, partnerRepo } from "@/lib/repositories";
 import { sendNudgeDigest } from "@/lib/services/email-service";
+import { sendNudgeDigestSms } from "@/lib/services/sms-service";
 
 export async function POST() {
   try {
@@ -16,14 +17,19 @@ export async function POST() {
     // 2. Generate nudges from all signals (including freshly fetched news)
     const count = await refreshNudgesForPartner(partnerId);
 
-    // 3. Send digest email in the background
+    // 3. Send digest via email and SMS channels in the background
     const partner = await partnerRepo.findById(partnerId);
     if (partner && count > 0) {
       const nudges = await nudgeRepo.findByPartnerId(partnerId, {
         status: "OPEN",
       });
+
       sendNudgeDigest(partner.name, partner.email, nudges).catch((err) =>
         console.error("[nudge-refresh] Email send failed:", err)
+      );
+
+      sendNudgeDigestSms(partner.name, partner.email, nudges).catch((err) =>
+        console.error("[nudge-refresh] SMS send failed:", err)
       );
     }
 

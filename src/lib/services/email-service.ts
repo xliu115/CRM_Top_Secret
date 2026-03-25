@@ -1,5 +1,9 @@
 import { Resend } from "resend";
 import type { NudgeWithRelations } from "@/lib/repositories";
+import {
+  buildSummaryFragments,
+  type InsightData,
+} from "@/lib/utils/nudge-summary";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -61,16 +65,38 @@ function ruleTypeCta(ruleType: string): string {
   return ctas[ruleType] ?? "Take Action";
 }
 
+function parseInsights(nudge: NudgeWithRelations): InsightData[] {
+  if (!nudge.metadata) return [];
+  try {
+    const parsed = JSON.parse(nudge.metadata);
+    return Array.isArray(parsed?.insights) ? parsed.insights : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildSummaryHtml(nudge: NudgeWithRelations): string {
+  const insights = parseInsights(nudge);
+  const fragments = buildSummaryFragments(
+    { ruleType: nudge.ruleType, reason: nudge.reason, contact: nudge.contact },
+    insights
+  );
+  return fragments
+    .map((f) =>
+      f.bold
+        ? `<strong style="color: ${MDS.deepBlue};">${f.text}</strong>`
+        : f.text
+    )
+    .join("");
+}
+
 function buildNudgeRow(nudge: NudgeWithRelations, appUrl: string, isLast: boolean): string {
   const ps = priorityStyle(nudge.priority);
   const typeLabel = ruleTypeLabel(nudge.ruleType);
   const ctaLabel = ruleTypeCta(nudge.ruleType);
   const nudgesUrl = `${appUrl}/nudges`;
   const borderBottom = isLast ? "" : `border-bottom: 1px solid ${MDS.border};`;
-
-  const reasonText = nudge.reason.length > 160
-    ? nudge.reason.slice(0, 157) + "..."
-    : nudge.reason;
+  const summaryText = buildSummaryHtml(nudge);
 
   return `
     <tr>
@@ -85,8 +111,9 @@ function buildNudgeRow(nudge: NudgeWithRelations, appUrl: string, isLast: boolea
               <div style="font-size: 12px; color: ${MDS.textLight}; margin-bottom: 8px;">
                 ${nudge.contact.title} at ${nudge.contact.company.name} &middot; ${typeLabel}
               </div>
-              <div style="font-size: 14px; color: ${MDS.text}; line-height: 1.5; margin-bottom: 12px;">
-                ${reasonText}
+              <div style="background: ${MDS.bgLight}; border-radius: 4px; padding: 12px 14px; margin-bottom: 12px;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${MDS.electricBlue}; margin-bottom: 6px;">&#10024; AI Summary</div>
+                <div style="font-size: 13px; color: ${MDS.text}; line-height: 1.55;">${summaryText}</div>
               </div>
               <a href="${nudgesUrl}" style="display: inline-block; padding: 7px 20px; background: ${MDS.electricBlue}; color: ${MDS.white}; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 3px; letter-spacing: 0.2px;">${ctaLabel}</a>
             </td>
