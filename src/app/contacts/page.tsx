@@ -263,7 +263,13 @@ function ContactTableRow({ contact }: ContactRowProps) {
       <div className={`${COL.name} flex items-center gap-3`}>
         <Avatar name={contact.name} size="sm" className="shrink-0" />
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate leading-tight">{contact.name}</p>
+          <Link
+            href={`/contacts/${contact.id}`}
+            className="text-sm font-semibold text-foreground truncate leading-tight block hover:text-primary hover:underline transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {contact.name}
+          </Link>
           <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{contact.title}</p>
         </div>
       </div>

@@ -5,9 +5,10 @@ import Link from "next/link";
 import {
   RefreshCw, Send, Moon, Check, ExternalLink, Settings, Clock, Briefcase, Newspaper,
   CalendarDays, ClipboardList, Ticket, CalendarCheck, BookOpen, Linkedin,
-  Copy, RotateCcw, X, Loader2, Mail, FileText, Users,
+  Copy, RotateCcw, X, Loader2, Mail, FileText, Users, Sparkles,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
 import { Button } from "@/components/ui/button";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -117,14 +118,18 @@ function getTypeConfig(ruleType: string): NudgeTypeConfig {
   return NUDGE_TYPE_CONFIG[ruleType] ?? DEFAULT_TYPE_CONFIG;
 }
 
-function NudgeTypeBadge({ ruleType }: { ruleType: string }) {
-  const cfg = getTypeConfig(ruleType);
-  const Icon = cfg.icon;
+function NudgeSummary({ nudge, insights }: { nudge: Nudge; insights: InsightData[] }) {
+  const fragments = buildSummaryFragments(nudge, insights);
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.bgColor} ${cfg.color}`}>
-      <Icon className="h-3 w-3" />
-      {cfg.label}
-    </span>
+    <>
+      {fragments.map((f, i) =>
+        f.bold ? (
+          <strong key={i} className="font-semibold text-foreground/90">{f.text}</strong>
+        ) : (
+          <span key={i}>{f.text}</span>
+        )
+      )}
+    </>
   );
 }
 
@@ -364,43 +369,6 @@ function MeetingBriefPanel({
   );
 }
 
-function InsightItem({ insight }: { insight: InsightData }) {
-  const cfg = getTypeConfig(insight.type);
-  const Icon = cfg.icon;
-  const linkLabel = insight.type === "LINKEDIN_ACTIVITY" ? "View on LinkedIn"
-    : insight.type === "JOB_CHANGE" ? "View on LinkedIn"
-    : insight.type === "COMPANY_NEWS" ? "Read article"
-    : "View source";
-
-  return (
-    <div className="flex gap-2.5">
-      <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${cfg.bgColor}`}>
-        <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
-          {insight.signalUrl && (
-            <a href={insight.signalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline">
-              <ExternalLink className="h-2.5 w-2.5" />
-              {linkLabel}
-            </a>
-          )}
-        </div>
-        <p className="text-sm text-foreground/80 leading-snug mt-0.5">{insight.reason}</p>
-        {insight.relatedPartners && insight.relatedPartners.length > 0 && (
-          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-            <Users className="h-3 w-3 text-purple-500" />
-            <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-              {insight.relatedPartners.map((p) => p.partnerName).join(", ")} know{insight.relatedPartners.length === 1 ? "s" : ""} {insight.personName ?? "this person"}
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function NudgeCard({
   nudge,
   onUpdateStatus,
@@ -414,17 +382,15 @@ function NudgeCard({
   const cfg = getTypeConfig(nudge.ruleType);
   const CtaIcon = cfg.ctaIcon;
   const hasMeetingPrep = insights.some((i) => i.type === "MEETING_PREP");
-  const insightTypes = [...new Set(insights.map((i) => i.type))];
 
   return (
     <Card className="overflow-hidden">
-      <div className={`h-1 w-full ${cfg.color.replace("text-", "bg-")}`} />
-      <CardHeader className="pb-3 pt-4">
+      <CardHeader className="pb-3 pt-5">
         <div className="flex items-start gap-4">
-          <Avatar name={nudge.contact.name} size="md" />
+          <Avatar name={nudge.contact.name} size="lg" className="shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg font-bold">
                 <Link href={`/contacts/${nudge.contact.id}`} className="hover:text-primary hover:underline transition-colors">
                   {nudge.contact.name}
                 </Link>
@@ -433,24 +399,59 @@ function NudgeCard({
                 {nudge.priority}
               </Badge>
             </div>
-            <CardDescription>
+            <CardDescription className="mt-0.5">
               {nudge.contact.title} at {nudge.contact.company.name}
             </CardDescription>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-foreground leading-relaxed">{nudge.reason}</p>
 
-        {insights.length > 0 && (
-          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
-            {insights.map((insight, i) => (
-              <InsightItem key={`${insight.type}-${i}`} insight={insight} />
-            ))}
+      <CardContent className="space-y-4">
+        <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
           </div>
-        )}
+          <p className="text-sm text-foreground/70 leading-relaxed">
+            <NudgeSummary nudge={nudge} insights={insights} />
+          </p>
+        </div>
 
-        <div className="flex flex-wrap gap-2 pt-1">
+        {insights.length > 0 && (() => {
+          const seen = new Map<string, string | null>();
+          for (const ins of insights) {
+            if (ins.type === "STALE_CONTACT") continue;
+            if (!seen.has(ins.type)) {
+              seen.set(ins.type, ins.signalUrl ?? null);
+            } else if (!seen.get(ins.type) && ins.signalUrl) {
+              seen.set(ins.type, ins.signalUrl);
+            }
+          }
+          return (
+            <div className="flex flex-wrap gap-2">
+              {[...seen.entries()].map(([type, url]) => {
+                const iCfg = getTypeConfig(type);
+                const IIcon = iCfg.icon;
+                return (
+                  <span
+                    key={type}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground/80"
+                  >
+                    <IIcon className={`h-3 w-3 ${iCfg.color}`} />
+                    {iCfg.label}
+                    {url && (
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           {hasMeetingPrep && (
             <Button size="sm" onClick={() => setShowDraft(!showDraft)}>
               <FileText className="h-4 w-4" />
@@ -468,14 +469,14 @@ function NudgeCard({
                 <Moon className="h-4 w-4" />
                 Snooze
               </Button>
-              <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+              <Button variant="ghost" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
                 <Check className="h-4 w-4" />
                 Done
               </Button>
             </>
           )}
           {nudge.status === "SNOOZED" && (
-            <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+            <Button variant="ghost" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
               <Check className="h-4 w-4" />
               Done
             </Button>
