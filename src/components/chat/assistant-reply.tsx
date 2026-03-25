@@ -4,7 +4,7 @@ import Link from "next/link";
 import { User, Mail, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { stripMarkdownToPlainText } from "@/lib/utils/strip-markdown";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 type Source = { type: string; content: string; date?: string; id?: string; url?: string; contactId?: string };
 
@@ -76,7 +76,6 @@ export function AssistantReply({
   content: string;
   sources?: Source[];
 }) {
-  const plainContent = stripMarkdownToPlainText(content);
   const crmSources = sources.filter((s) => isCrmSource(s.type));
   const webSources = sources.filter(
     (s) => s.type === "Web Summary" || s.type === "Web Result"
@@ -84,25 +83,21 @@ export function AssistantReply({
 
   // Extract a brief intro before "From your CRM" / "From the web" only when
   // we have structured sections to render. Otherwise keep the full answer text.
-  const introEnd = plainContent.search(
+  const introEnd = content.search(
     /\*\*From your CRM|From your CRM|From the web\*\*|From the web/i
   );
-  let intro = plainContent;
-  if (introEnd >= 0 && (crmSources.length > 0 || webSources.length > 0)) {
-    intro = plainContent.slice(0, introEnd).trim();
-  }
-  if (crmSources.length > 0 && intro.length > 200) {
-    intro = intro.slice(0, 200).trim() + "…";
-  }
-
   const hasSources = crmSources.length > 0 || webSources.length > 0;
+  let intro = content;
+  if (introEnd >= 0 && hasSources) {
+    intro = content.slice(0, introEnd).trim();
+  }
 
   return (
     <div className="space-y-4">
       {hasSources ? (
         <>
           {intro && (
-            <p className="text-sm leading-relaxed text-foreground">{intro}</p>
+            <MarkdownContent content={intro} className="text-sm text-foreground" />
           )}
 
           {/* CRM sources as cards with CTAs */}
@@ -120,9 +115,7 @@ export function AssistantReply({
           )}
         </>
       ) : (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-          {plainContent}
-        </p>
+        <MarkdownContent content={content} className="text-sm text-foreground" />
       )}
 
       {/* Web sources — compact, collapsible */}
