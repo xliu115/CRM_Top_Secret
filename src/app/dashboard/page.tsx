@@ -288,6 +288,9 @@ export default function DashboardPage() {
 
   // Briefing state
   const [briefing, setBriefing] = useState<string | null>(null);
+  const [briefingActions, setBriefingActions] = useState<
+    { contactName: string; company: string; actionLabel: string; deeplink: string; detail: string }[]
+  >([]);
   const [briefingLoading, setBriefingLoading] = useState(true);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
@@ -336,8 +339,9 @@ export default function DashboardPage() {
         if (cancelled) return;
         if (res.ok) {
           const data = await res.json();
-          if (data.briefing && !cancelled) {
-            setBriefing(data.briefing);
+          if (!cancelled) {
+            if (data.briefing) setBriefing(data.briefing);
+            if (Array.isArray(data.topActions)) setBriefingActions(data.topActions);
           }
         }
       } catch {
@@ -504,9 +508,23 @@ export default function DashboardPage() {
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                     <Sparkles className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="min-w-0 flex-1 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-3">
                     <p className="text-xs font-medium text-muted-foreground">Activate</p>
                     <MarkdownContent content={briefing} className="text-sm text-foreground" />
+                    {briefingActions.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {briefingActions.map((action) => (
+                          <Link
+                            key={action.deeplink}
+                            href={action.deeplink}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                          >
+                            <ChevronRight className="h-3 w-3" />
+                            {action.actionLabel}{action.company ? ` — ${action.contactName}` : ` — ${action.contactName}`}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : null}

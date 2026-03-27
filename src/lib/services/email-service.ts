@@ -243,6 +243,151 @@ function buildDigestHtml(
 </html>`;
 }
 
+// ── Narrative Morning Briefing Email ─────────────────────────────────
+
+export interface BriefingEmailData {
+  partnerName: string;
+  narrative: string;
+  topActions: {
+    contactName: string;
+    company: string;
+    actionLabel: string;
+    detail: string;
+    deeplink: string;
+  }[];
+  todayMeetings?: { title: string; startTime: string; attendeeCount: number; meetingId?: string }[];
+  unsubscribeUrl: string;
+}
+
+export function buildBriefingHtml(data: BriefingEmailData, appUrl: string): string {
+  const firstName = data.partnerName.split(" ")[0];
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+
+  const narrativeParagraphs = data.narrative
+    .split(/\n\n+/)
+    .filter(Boolean)
+    .map((p) => `<p style="margin: 0 0 16px 0; font-size: 15px; color: ${MDS.text}; line-height: 1.7;">${p.trim()}</p>`)
+    .join("");
+
+  const actionRows = data.topActions
+    .map((a, i) => {
+      const url = `${appUrl}${a.deeplink}`;
+      return `
+      <tr>
+        <td style="padding: ${i === 0 ? "0" : "16px"} 0 0 0;">
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+            <tr>
+              <td style="vertical-align: top; width: 28px; padding-top: 2px;">
+                <div style="width: 24px; height: 24px; border-radius: 50%; background: ${MDS.electricBlue}; color: ${MDS.white}; font-size: 12px; font-weight: 700; line-height: 24px; text-align: center;">${i + 1}</div>
+              </td>
+              <td style="vertical-align: top; padding-left: 12px;">
+                <div style="font-weight: 600; font-size: 14px; color: ${MDS.deepBlue};">${a.contactName}${a.company ? ` · ${a.company}` : ""}</div>
+                <div style="font-size: 12px; color: ${MDS.textLight}; margin-top: 2px;">${a.detail}</div>
+                <a href="${url}" style="display: inline-block; margin-top: 8px; padding: 6px 16px; background: ${MDS.electricBlue}; color: ${MDS.white}; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 3px;">${a.actionLabel} &rarr;</a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  const meetingSection = data.todayMeetings?.length
+    ? `<tr>
+        <td style="background: ${MDS.white}; padding: 20px 28px; border-top: 1px solid ${MDS.border};">
+          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${MDS.textLight}; margin-bottom: 12px;">Today's Meetings</div>
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+            ${data.todayMeetings.map((m) => {
+              const mUrl = m.meetingId ? `${appUrl}/meetings/${m.meetingId}` : `${appUrl}/meetings`;
+              return `<tr>
+                <td style="padding: 6px 0;">
+                  <a href="${mUrl}" style="font-size: 13px; font-weight: 600; color: ${MDS.deepBlue}; text-decoration: none;">${m.title}</a>
+                  <span style="font-size: 12px; color: ${MDS.textLight};"> · ${m.startTime} · ${m.attendeeCount} attendee${m.attendeeCount !== 1 ? "s" : ""}</span>
+                </td>
+              </tr>`;
+            }).join("")}
+          </table>
+        </td>
+      </tr>`
+    : "";
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Activate — Morning Briefing</title>
+</head>
+<body style="margin: 0; padding: 0; background: ${MDS.bgLight}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: ${MDS.bgLight};">
+    <tr>
+      <td align="center" style="padding: 40px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 600px; width: 100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background: ${MDS.deepBlue}; padding: 32px 28px;">
+              <div style="font-size: 14px; font-weight: 600; color: ${MDS.electricBlue}; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">Activate</div>
+              <div style="font-size: 24px; font-weight: 700; color: ${MDS.white}; letter-spacing: -0.3px; font-family: Georgia, 'Times New Roman', serif;">
+                ${greeting}, ${firstName}
+              </div>
+              <div style="font-size: 13px; color: #94a3b8; margin-top: 6px;">${today}</div>
+            </td>
+          </tr>
+
+          <!-- Narrative -->
+          <tr>
+            <td style="background: ${MDS.white}; padding: 28px 28px 12px 28px;">
+              ${narrativeParagraphs}
+            </td>
+          </tr>
+
+          <!-- Top Actions -->
+          <tr>
+            <td style="background: ${MDS.white}; padding: 8px 28px 24px 28px; border-top: 1px solid ${MDS.border};">
+              <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${MDS.textLight}; margin-bottom: 16px; padding-top: 16px;">Your Top Actions</div>
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                ${actionRows}
+              </table>
+            </td>
+          </tr>
+
+          ${meetingSection}
+
+          <!-- Footer CTA -->
+          <tr>
+            <td style="background: ${MDS.white}; padding: 24px 28px; text-align: center; border-top: 1px solid ${MDS.border};">
+              <a href="${appUrl}/dashboard" style="display: inline-block; padding: 12px 32px; background: ${MDS.deepBlue}; color: ${MDS.white}; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 3px;">
+                Open Activate
+              </a>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 28px; text-align: center;">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+                You're receiving this because briefings are enabled. &middot;
+                <a href="${data.unsubscribeUrl}" style="color: ${MDS.blue}; text-decoration: none;">Unsubscribe</a> &middot;
+                <a href="${appUrl}/nudges/settings" style="color: ${MDS.blue}; text-decoration: none;">Manage preferences</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export async function sendNudgeDigest(
   partnerName: string,
   partnerEmail: string,
