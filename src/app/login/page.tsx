@@ -15,16 +15,26 @@ const demoPartners = [
 
 export default function LoginPage() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   async function handleLogin(email: string) {
     setLoading(email);
+    setError(null);
     const result = await signIn("credentials", {
       email,
       redirect: false,
+      callbackUrl: "/dashboard",
     });
     if (result?.ok) {
       router.push("/dashboard");
+      router.refresh();
+    } else {
+      setError(
+        result?.error === "CredentialsSignin"
+          ? "Sign-in failed. Is the database seeded and NEXTAUTH_SECRET set in .env?"
+          : result?.error ?? "Could not sign in. Try again."
+      );
     }
     setLoading(null);
   }
@@ -43,6 +53,12 @@ export default function LoginPage() {
             Select a partner to sign in
           </p>
         </div>
+
+        {error && (
+          <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
 
         <div className="space-y-3">
           {demoPartners.map((p) => (

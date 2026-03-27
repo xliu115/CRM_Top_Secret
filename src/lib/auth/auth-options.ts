@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { partnerRepo } from "@/lib/repositories";
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "Partner Login",
