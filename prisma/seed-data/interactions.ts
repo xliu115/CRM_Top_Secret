@@ -88,6 +88,7 @@ export function generateInteractions(contacts: ContactRef[]) {
     summary: string;
     sentiment: Sentiment;
     nextStep: string | null;
+    direction: string | null;
   }[] = [];
 
   const now = new Date();
@@ -137,6 +138,7 @@ export function generateInteractions(contacts: ContactRef[]) {
         summary,
         sentiment,
         nextStep,
+        direction: type === "EMAIL" ? "OUTBOUND" : null,
       });
       idx++;
     }

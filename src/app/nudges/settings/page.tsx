@@ -324,7 +324,7 @@ export default function NudgeSettingsPage() {
                       <span className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
                       <span className={colors.text}>{tier.label}</span> contacts
                     </label>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground-subtle">
                       Alert after N days — {tier.priority} priority
                     </p>
                     <Input

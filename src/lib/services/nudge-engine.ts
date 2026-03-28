@@ -1,6 +1,7 @@
-import { contactRepo, interactionRepo, signalRepo, nudgeRepo, meetingRepo, engagementRepo, nudgeRuleConfigRepo } from "@/lib/repositories";
+import { contactRepo, interactionRepo, signalRepo, nudgeRepo, meetingRepo, engagementRepo, nudgeRuleConfigRepo, sequenceRepo } from "@/lib/repositories";
 import { differenceInDays } from "date-fns";
 import { prisma } from "@/lib/db/prisma";
+import { getWaitingDays, buildSequenceNudgeReason, buildReplyNeededReason } from "./cadence-engine";
 
 interface Insight {
   type: string;
@@ -11,6 +12,15 @@ interface Insight {
   signalUrl?: string | null;
   relatedPartners?: { partnerId: string; partnerName: string }[];
   personName?: string;
+  lastEmailSubject?: string;
+  lastEmailSnippet?: string;
+  inboundSummary?: string;
+  waitingDays?: number;
+  lastInteraction?: {
+    type: string;
+    date: string;
+    summary: string;
+  };
 }
 
 interface NudgeCandidate {
@@ -20,19 +30,23 @@ interface NudgeCandidate {
   reason: string;
   priority: string;
   metadata?: string;
+  sequenceId?: string;
+  cadenceStepId?: string;
 }
 
 const PRIORITY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 const TYPE_RANK: Record<string, number> = {
   MEETING_PREP: 0,
-  STALE_CONTACT: 1,
-  JOB_CHANGE: 2,
-  LINKEDIN_ACTIVITY: 3,
-  EVENT_ATTENDED: 4,
-  EVENT_REGISTERED: 5,
-  ARTICLE_READ: 6,
-  UPCOMING_EVENT: 7,
-  COMPANY_NEWS: 8,
+  REPLY_NEEDED: 1,
+  FOLLOW_UP: 2,
+  STALE_CONTACT: 3,
+  JOB_CHANGE: 4,
+  LINKEDIN_ACTIVITY: 5,
+  EVENT_ATTENDED: 6,
+  EVENT_REGISTERED: 7,
+  ARTICLE_READ: 8,
+  UPCOMING_EVENT: 9,
+  COMPANY_NEWS: 10,
 };
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
@@ -77,6 +91,8 @@ function buildReason(contactName: string, companyName: string, insights: Insight
   if (insights.length === 1) return insights[0].reason;
 
   const typeLabels: Record<string, string> = {
+    REPLY_NEEDED: "unreplied inbound email",
+    FOLLOW_UP: "active outreach follow-up",
     STALE_CONTACT: "overdue for a check-in",
     JOB_CHANGE: "executive transition",
     COMPANY_NEWS: "company news",
@@ -171,9 +187,14 @@ export async function refreshNudgesForPartner(partnerId: string) {
       ? differenceInDays(now, new Date(lastInteraction.date))
       : 999;
 
-    const disabledTypes = new Set<string>(
-      contact.disabledNudgeTypes ? JSON.parse(contact.disabledNudgeTypes) as string[] : []
-    );
+    let parsedDisabled: string[] = [];
+    try {
+      parsedDisabled = contact.disabledNudgeTypes ? JSON.parse(contact.disabledNudgeTypes) as string[] : [];
+      if (!Array.isArray(parsedDisabled)) parsedDisabled = [];
+    } catch {
+      parsedDisabled = [];
+    }
+    const disabledTypes = new Set<string>(parsedDisabled);
 
     const insights: Insight[] = [];
 
@@ -359,20 +380,94 @@ export async function refreshNudgesForPartner(partnerId: string) {
       }
     }
 
+    // Find last non-email interaction for relationship context
+    const lastNonEmailInteraction = interactions
+      .filter((i) => i.type !== "EMAIL" && i.summary)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const lastInteractionCtx = lastNonEmailInteraction
+      ? {
+          type: lastNonEmailInteraction.type,
+          date: new Date(lastNonEmailInteraction.date).toISOString(),
+          summary: lastNonEmailInteraction.summary!,
+        }
+      : undefined;
+
+    // --- Active Sequence Follow-Up ---
+    const activeSeq = await sequenceRepo.findActiveByContactId(contact.id);
+    if (activeSeq) {
+      const waitDays = getWaitingDays(activeSeq);
+      const currentStepObj = activeSeq.steps.find(
+        (s) => s.stepNumber === activeSeq.currentStep
+      );
+      if (currentStepObj && currentStepObj.status !== "RESPONDED") {
+        const lastSentStep = [...activeSeq.steps]
+          .filter((s) => s.status === "SENT" && s.emailSubject)
+          .sort((a, b) => b.stepNumber - a.stepNumber)[0];
+        insights.push({
+          type: "FOLLOW_UP",
+          reason: buildSequenceNudgeReason(contact.name, waitDays),
+          priority: waitDays >= 5 ? "HIGH" : "MEDIUM",
+          lastEmailSubject: lastSentStep?.emailSubject ?? undefined,
+          lastEmailSnippet: lastSentStep?.emailBody
+            ? lastSentStep.emailBody.replace(/\n/g, " ").slice(0, 150)
+            : undefined,
+          waitingDays: waitDays,
+          lastInteraction: lastInteractionCtx,
+        });
+      }
+    }
+
+    // --- Reply Needed (inbound email not responded to) ---
+    if (!disabledTypes.has("REPLY_NEEDED")) {
+      const recentInbound = interactions.filter(
+        (i) =>
+          i.direction === "INBOUND" &&
+          i.type === "EMAIL" &&
+          !i.repliedAt &&
+          differenceInDays(now, new Date(i.date)) >= 1 &&
+          differenceInDays(now, new Date(i.date)) <= 7
+      );
+      if (recentInbound.length > 0) {
+        const oldest = recentInbound[recentInbound.length - 1];
+        const daysSinceEmail = differenceInDays(now, new Date(oldest.date));
+        insights.push({
+          type: "REPLY_NEEDED",
+          reason: buildReplyNeededReason(contact.name, daysSinceEmail),
+          priority:
+            contact.importance === "CRITICAL" || contact.importance === "HIGH"
+              ? "URGENT"
+              : "HIGH",
+          inboundSummary: oldest.summary ?? undefined,
+          waitingDays: daysSinceEmail,
+          lastInteraction: lastInteractionCtx,
+        });
+      }
+    }
+
     // --- Consolidate into one nudge per contact ---
     if (insights.length === 0) continue;
 
     const primary = pickPrimary(insights);
     const reason = buildReason(contact.name, contact.company.name, insights);
 
-    candidates.push({
+    const candidate: NudgeCandidate = {
       contactId: contact.id,
       signalId: primary.signalId,
       ruleType: primary.ruleType,
       reason,
       priority: primary.priority,
       metadata: JSON.stringify({ insights }),
-    });
+    };
+
+    if (activeSeq && primary.ruleType === "FOLLOW_UP") {
+      candidate.sequenceId = activeSeq.id;
+      const currentStepObj = activeSeq.steps.find(
+        (s) => s.stepNumber === activeSeq.currentStep
+      );
+      if (currentStepObj) candidate.cadenceStepId = currentStepObj.id;
+    }
+
+    candidates.push(candidate);
   }
 
   await nudgeRepo.deleteOpenByPartnerId(partnerId);

@@ -96,9 +96,11 @@ export async function GET(
       }),
     ]);
 
-    const signals = [...companySignals, ...contactSignals].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+    const signals = [
+      ...new Map(
+        [...companySignals, ...contactSignals].map((s) => [s.id, s])
+      ).values(),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const allNudges = nudges.flat().filter((n) => n.status === "OPEN");
 

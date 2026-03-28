@@ -30,6 +30,7 @@ export async function getSuggestedTopContactIds(
 
   const now = Date.now();
   const importanceWeight: Record<string, number> = {
+    CRITICAL: 25,
     HIGH: 15,
     MEDIUM: 5,
     LOW: 0,

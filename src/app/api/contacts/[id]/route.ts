@@ -50,7 +50,12 @@ export async function PATCH(
   try {
     const partnerId = await requirePartnerId();
     const { id } = await params;
-    const body = await request.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
     const hasThreshold = "staleThresholdDays" in body;
     const hasNudgeTypes = "disabledNudgeTypes" in body;

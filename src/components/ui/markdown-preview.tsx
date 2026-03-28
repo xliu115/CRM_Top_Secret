@@ -69,7 +69,7 @@ export function MarkdownPreview({ content }: { content: string }) {
       }
       const checked = checkbox[1] !== " ";
       html.push(
-        `<li class="flex items-start gap-2 text-sm leading-relaxed"><span class="mt-0.5 shrink-0 ${checked ? "text-green-600" : "text-muted-foreground"}">${checked ? "&#9745;" : "&#9744;"}</span><span>${parseLine(checkbox[2])}</span></li>`
+        `<li class="flex items-start gap-2 text-sm leading-relaxed"><span class="mt-0.5 shrink-0 ${checked ? "text-green-600" : "text-muted-foreground-subtle"}">${checked ? "&#9745;" : "&#9744;"}</span><span>${parseLine(checkbox[2])}</span></li>`
       );
       continue;
     }

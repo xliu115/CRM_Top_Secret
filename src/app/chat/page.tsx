@@ -13,6 +13,7 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 type Source = { type: string; content: string; date?: string; id?: string; url?: string };
 
 type Message = {
+  id: string;
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
@@ -87,7 +88,7 @@ function ChatPageContent() {
     if (!text || loading) return;
 
     setInput("");
-    const userMsg: Message = { role: "user", content: text };
+    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
@@ -105,12 +106,13 @@ function ChatPageContent() {
       const { answer, sources } = await res.json();
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: answer, sources: sources ?? [] },
+        { id: crypto.randomUUID(), role: "assistant", content: answer, sources: sources ?? [] },
       ]);
     } catch {
       setMessages((prev) => [
         ...prev,
         {
+          id: crypto.randomUUID(),
           role: "assistant",
           content:
             "Sorry, I couldn't process your request. Please try again.",
@@ -154,7 +156,7 @@ function ChatPageContent() {
               variant="ghost"
               size="sm"
               onClick={handleClearChat}
-              className="text-muted-foreground"
+              className="text-muted-foreground-subtle"
             >
               <Trash2 className="h-4 w-4" />
               Clear chat
@@ -187,7 +189,7 @@ function ChatPageContent() {
                       key={q}
                       type="button"
                       onClick={() => handleSend(q)}
-                      className="flex items-start gap-2 rounded-lg border border-border bg-background px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted"
+                      className="flex items-start gap-2 rounded-lg border border-border bg-background px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                       {q}
@@ -197,8 +199,8 @@ function ChatPageContent() {
               </div>
             ) : (
               <div className="space-y-6">
-                {messages.map((msg, i) => (
-                  <div key={i} className="flex gap-3">
+                {messages.map((msg) => (
+                  <div key={msg.id} className="flex gap-3">
                     {msg.role === "assistant" ? (
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-base">
                         🐦
@@ -210,7 +212,7 @@ function ChatPageContent() {
                       />
                     )}
                     <div className="min-w-0 flex-1 space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">
+                      <p className="text-xs font-medium text-muted-foreground-subtle">
                         {msg.role === "assistant"
                           ? "Activate"
                           : session?.user?.name || "You"}
@@ -241,7 +243,7 @@ function ChatPageContent() {
                     </div>
                     <div className="flex items-center gap-2 pt-2">
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm text-muted-foreground-subtle">
                         Searching your data & the web...
                       </span>
                     </div>
@@ -269,7 +271,7 @@ function ChatPageContent() {
                 placeholder="Ask about your clients..."
                 disabled={loading}
                 rows={1}
-                className="flex-1 resize-none rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                className="flex-1 resize-none rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground-subtle focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
                 style={{ maxHeight: "120px" }}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
@@ -286,7 +288,7 @@ function ChatPageContent() {
                   disabled={loading}
                   onClick={isListening ? stopListening : startListening}
                   className={`h-11 w-11 shrink-0 relative ${
-                    isListening ? "animate-pulse" : "text-muted-foreground hover:text-foreground"
+                    isListening ? "animate-pulse" : "text-muted-foreground-subtle hover:text-foreground"
                   }`}
                   title={isListening ? "Stop listening" : "Voice input"}
                 >
@@ -317,7 +319,7 @@ function ChatPageContent() {
                 <span className="sr-only">Send</span>
               </Button>
             </form>
-            <p className="mt-2 text-center text-xs text-muted-foreground">
+            <p className="mt-2 text-center text-xs text-muted-foreground-subtle">
               {isListening && (
                 <span className="mr-1 inline-flex items-center gap-1 text-destructive font-medium">
                   <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
@@ -347,7 +349,7 @@ export default function ChatPage() {
         <DashboardShell>
           <div className="flex h-[calc(100vh-8rem)] flex-col items-center justify-center gap-4">
             <div className="h-16 w-16 animate-pulse rounded-2xl bg-primary/10" />
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <p className="text-sm text-muted-foreground-subtle">Loading...</p>
           </div>
         </DashboardShell>
       }

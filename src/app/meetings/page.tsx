@@ -207,7 +207,7 @@ export default function MeetingsPage() {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Meetings</h1>
             <p className="mt-1 text-muted-foreground">Your client meeting timeline</p>
           </div>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground-subtle">
             <div className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
               <span>{upcoming.length} upcoming</span>
@@ -260,7 +260,7 @@ export default function MeetingsPage() {
             <div className="rounded-lg border border-border bg-card p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
               {/* Attendance */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-muted-foreground w-24 shrink-0">Attendance:</span>
+                <span className="text-sm font-medium text-muted-foreground-subtle w-24 shrink-0">Attendance:</span>
                 {ATTENDANCE_OPTIONS.map((opt) => (
                   <Button key={opt.value} variant={attendance === opt.value ? "default" : "outline"} size="sm" onClick={() => setAttendance(opt.value)}>
                     {opt.label}
@@ -270,7 +270,7 @@ export default function MeetingsPage() {
 
               {/* Tier */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-muted-foreground w-24 shrink-0">Tier:</span>
+                <span className="text-sm font-medium text-muted-foreground-subtle w-24 shrink-0">Tier:</span>
                 {TIER_OPTIONS.map((tier) => {
                   const colors = getTierColors(tier);
                   const isActive = selectedTiers.has(tier);
@@ -294,7 +294,7 @@ export default function MeetingsPage() {
 
               {/* Needs Prep */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-muted-foreground w-24 shrink-0">Prep:</span>
+                <span className="text-sm font-medium text-muted-foreground-subtle w-24 shrink-0">Prep:</span>
                 <Button variant={needsPrep ? "default" : "outline"} size="sm" onClick={() => setNeedsPrep(!needsPrep)}>
                   <ClipboardList className="h-3.5 w-3.5" />
                   Needs Prep
@@ -304,7 +304,7 @@ export default function MeetingsPage() {
               {/* Company */}
               {allCompanies.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-muted-foreground w-24 shrink-0">Company:</span>
+                  <span className="text-sm font-medium text-muted-foreground-subtle w-24 shrink-0">Company:</span>
                   {allCompanies.map((company) => {
                     const isActive = selectedCompanies.has(company);
                     return (
@@ -342,7 +342,7 @@ export default function MeetingsPage() {
                 </span>
               ))}
               {hasActiveFilters && (
-                <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground underline">
+                <button onClick={clearAllFilters} className="text-xs text-muted-foreground-subtle hover:text-foreground underline">
                   Clear all
                 </button>
               )}
@@ -364,7 +364,7 @@ export default function MeetingsPage() {
           </div>
         ) : filtered.length === 0 ? (
           <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
+            <CardContent className="py-12 text-center text-muted-foreground-subtle">
               {meetings.length === 0
                 ? "No meetings found."
                 : "No meetings match your filters. Try adjusting or clearing filters."}
@@ -384,7 +384,7 @@ export default function MeetingsPage() {
                       </div>
                       <div>
                         <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
-                        <p className="text-xs text-muted-foreground">{format(new Date(group.date), "MMM d, yyyy")}</p>
+                        <p className="text-xs text-muted-foreground-subtle">{format(new Date(group.date), "MMM d, yyyy")}</p>
                       </div>
                     </div>
                     <div className="space-y-2 pl-[40px]">
@@ -403,7 +403,7 @@ export default function MeetingsPage() {
                   <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/50" />
                 </div>
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-xs font-medium text-muted-foreground">NOW</span>
+                <span className="text-xs font-medium text-muted-foreground-subtle">NOW</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
             )}
@@ -412,7 +412,7 @@ export default function MeetingsPage() {
               <div className="space-y-2">
                 {!showPast ? (
                   <div className="pl-[40px]">
-                    <Button variant="ghost" size="sm" onClick={() => setShowPast(true)} className="text-muted-foreground">
+                    <Button variant="ghost" size="sm" onClick={() => setShowPast(true)} className="text-muted-foreground-subtle">
                       <ChevronDown className="h-4 w-4" />
                       Show {past.length} past meeting{past.length !== 1 ? "s" : ""}
                     </Button>
@@ -423,11 +423,11 @@ export default function MeetingsPage() {
                       <div key={group.date} className="relative space-y-3">
                         <div className="flex items-center gap-3 pl-0">
                           <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/30 bg-background">
-                            <Calendar className="h-4 w-4 text-muted-foreground/50" />
+                            <Calendar className="h-4 w-4 text-muted-foreground-subtle" />
                           </div>
                           <div>
-                            <h2 className="text-sm font-semibold text-muted-foreground">{group.label}</h2>
-                            <p className="text-xs text-muted-foreground">{format(new Date(group.date), "MMM d, yyyy")}</p>
+                            <h2 className="text-sm font-semibold text-muted-foreground-subtle">{group.label}</h2>
+                            <p className="text-xs text-muted-foreground-subtle">{format(new Date(group.date), "MMM d, yyyy")}</p>
                           </div>
                         </div>
                         <div className="space-y-2 pl-[40px]">
@@ -438,7 +438,7 @@ export default function MeetingsPage() {
                       </div>
                     ))}
                     <div className="pl-[40px]">
-                      <Button variant="ghost" size="sm" onClick={() => setShowPast(false)} className="text-muted-foreground">
+                      <Button variant="ghost" size="sm" onClick={() => setShowPast(false)} className="text-muted-foreground-subtle">
                         <ChevronUp className="h-4 w-4" />
                         Hide past meetings
                       </Button>
@@ -472,7 +472,7 @@ function TimelineMeetingCard({
 
   return (
     <Link href={`/meetings/${meeting.id}`}>
-      <Card className={`transition-colors hover:bg-muted/50 ${isPast ? "opacity-70" : ""}`}>
+      <Card className={`transition-colors hover:bg-muted/50${isPast ? " bg-muted/10" : ""}`}>
         <CardContent className="flex items-start gap-4 py-4">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -490,7 +490,7 @@ function TimelineMeetingCard({
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Past</Badge>
               )}
               {hasOptionalOnly && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">Optional</Badge>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground-subtle">Optional</Badge>
               )}
               {hasPrepNudge && !isPast && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-indigo-200 text-indigo-600 bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 dark:bg-indigo-950/30">
@@ -499,7 +499,7 @@ function TimelineMeetingCard({
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground-subtle">
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
                 {format(meetingDate, "h:mm a")}
@@ -520,14 +520,14 @@ function TimelineMeetingCard({
                   <Avatar key={a.contact.id} name={a.contact.name} size="sm" className="ring-2 ring-background" />
                 ))}
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground-subtle">
                 {meeting.attendees.slice(0, 3).map((a) => a.contact.name.split(" ")[0]).join(", ")}
                 {meeting.attendees.length > 3 && ` +${meeting.attendees.length - 3}`}
               </span>
             </div>
           </div>
 
-          <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+          <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground-subtle" />
         </CardContent>
       </Card>
     </Link>

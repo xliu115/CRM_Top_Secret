@@ -240,7 +240,7 @@ function TableHeader({ sort, onSort }: { sort: SortState; onSort: (key: SortKey)
   return (
     <div
       role="row"
-      className="group/header flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none"
+      className="group/header flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none"
     >
       <div className="w-1 shrink-0" role="presentation" />
       <SortableHeader label="Contact" sizeClass={COL_SIZE.name} sortKey="name" sort={sort} onSort={onSort} />
@@ -270,7 +270,7 @@ function ContactTableRow({ contact }: ContactRowProps) {
           >
             {contact.name}
           </Link>
-          <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{contact.title}</p>
+          <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5">{contact.title}</p>
         </div>
       </div>
       <div className={COL.institution}>
@@ -293,31 +293,31 @@ function ContactTableRow({ contact }: ContactRowProps) {
             </Link>
           )
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
       <div className={`${COL.lastInteraction}`}>
         {contact.lastInteraction ? (
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground leading-tight">
+            <p className="text-xs text-muted-foreground-subtle leading-tight">
               <span className="font-medium text-foreground/80">{contact.lastInteraction.type}</span>
               {" · "}
               {format(new Date(contact.lastInteraction.date), "MMM d, yyyy")}
             </p>
-            <p className="text-xs text-muted-foreground/70 truncate leading-tight mt-0.5">{contact.lastInteraction.summary}</p>
+            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{contact.lastInteraction.summary}</p>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
       <div className={COL.daysSince}>
         {contact.daysSinceLastInteraction !== null ? (
           <span className="text-sm font-semibold tabular-nums text-primary">{contact.daysSinceLastInteraction}d</span>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
-      <div className={`${COL.otherPartners} text-xs text-muted-foreground truncate`}>
+      <div className={`${COL.otherPartners} text-xs text-muted-foreground-subtle truncate`}>
         {contact.otherPartners.length > 0 ? contact.otherPartners.join(", ") : "—"}
       </div>
       <div className={COL.nudge}>
@@ -327,7 +327,7 @@ function ContactTableRow({ contact }: ContactRowProps) {
             {contact.openNudgeCount}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
     </>
@@ -373,15 +373,15 @@ function ContactRowBlock({
             onClick={(e) => e.stopPropagation()}
           >
             <p
-              className="text-xs text-muted-foreground min-w-0 flex-1 leading-snug pt-0.5"
+              className="text-xs text-muted-foreground-subtle min-w-0 flex-1 leading-snug pt-0.5"
               title={recommendation!.reason}
             >
               <span className="font-medium text-foreground">{contact.name}</span>
-              <span className="text-muted-foreground"> — </span>
+              <span className="text-muted-foreground-subtle"> — </span>
               <span className="font-semibold text-foreground">
                 {importanceDisplayLabel(recommendation!.currentTier)} → {importanceDisplayLabel(recommendation!.suggestedTier)}
               </span>
-              <span className="text-muted-foreground"> · </span>
+              <span className="text-muted-foreground-subtle"> · </span>
               {recommendation!.reason}
             </p>
             <div className="flex items-center gap-1 shrink-0">
@@ -402,7 +402,7 @@ function ContactRowBlock({
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                className="h-8 w-8 text-muted-foreground-subtle hover:text-foreground"
                 onClick={(e) => {
                   e.preventDefault();
                   onDismissSuggestion!();
@@ -441,7 +441,7 @@ function TierRecommendationsBulkBar({
       aria-label="Bulk tier suggestions"
     >
       <div className="mx-auto max-w-6xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground flex items-center gap-2 min-w-0">
+        <p className="text-sm text-muted-foreground-subtle flex items-center gap-2 min-w-0">
           <Shield className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <span>
             <span className="font-medium text-foreground">{count}</span> pending {changeWord}
@@ -512,7 +512,7 @@ function ContactListSection({
         <h2 className={`text-base font-semibold tracking-tight ${colors.text}`}>
           {TIER_LABELS[tier] ?? tier}
         </h2>
-        <span className="text-sm text-muted-foreground">
+        <span className="text-sm text-muted-foreground-subtle">
           · {tierContacts.length} contact{tierContacts.length !== 1 ? "s" : ""}
         </span>
       </div>
@@ -529,12 +529,12 @@ function ContactListSection({
               >
                 <span className="transition-transform duration-200">
                   {collapsedCompanies.has(`${tier}:${company.name}`)
-                    ? <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    : <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+                    ? <ChevronRight className="h-4 w-4 text-muted-foreground-subtle" aria-hidden="true" />
+                    : <ChevronDown className="h-4 w-4 text-muted-foreground-subtle" aria-hidden="true" />}
                 </span>
-                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground-subtle shrink-0" aria-hidden="true" />
                 <span className="text-xs font-medium text-foreground">{company.name}</span>
-                <span className="text-[11px] text-muted-foreground">({company.contacts.length})</span>
+                <span className="text-[11px] text-muted-foreground-subtle">({company.contacts.length})</span>
               </button>
               {!collapsedCompanies.has(`${tier}:${company.name}`) && (
                 <div className="divide-y divide-border/30">
@@ -592,7 +592,7 @@ function EmptyChangesOnlyState({ onShowEveryone }: { onShowEveryone: () => void 
     <div className="flex flex-col items-center justify-center py-16 px-6">
       <Users className="h-12 w-12 text-muted-foreground/40 mb-4" aria-hidden="true" />
       <h3 className="text-base font-semibold text-foreground mb-1">No pending tier suggestions</h3>
-      <p className="text-sm text-muted-foreground mb-6 max-w-sm text-center">
+      <p className="text-sm text-muted-foreground-subtle mb-6 max-w-sm text-center">
         All suggestions are cleared, or none matched this list. Switch to everyone to see the full directory.
       </p>
       <Button variant="outline" size="sm" onClick={onShowEveryone}>
@@ -607,7 +607,7 @@ function EmptyFilteredState({ onClear }: { onClear: () => void }) {
     <div className="flex flex-col items-center justify-center py-16 px-6">
       <SearchX className="h-12 w-12 text-muted-foreground/40 mb-4" aria-hidden="true" />
       <h3 className="text-base font-semibold text-foreground mb-1">No contacts match your filters</h3>
-      <p className="text-sm text-muted-foreground mb-6 max-w-sm text-center">
+      <p className="text-sm text-muted-foreground-subtle mb-6 max-w-sm text-center">
         Try adjusting your tier, days since contact, or nudge filters to see more results.
       </p>
       <Button variant="outline" size="sm" onClick={onClear} className="text-primary border-primary/30 hover:bg-primary/5">
@@ -622,7 +622,7 @@ function EmptyInitialState() {
     <div className="flex flex-col items-center justify-center py-20 px-6">
       <Users className="h-16 w-16 text-muted-foreground/30 mb-5" aria-hidden="true" />
       <h3 className="text-lg font-semibold text-foreground mb-1">No contacts yet</h3>
-      <p className="text-sm text-muted-foreground max-w-sm text-center">
+      <p className="text-sm text-muted-foreground-subtle max-w-sm text-center">
         Add contacts to start tracking relationships and nudge follow-ups.
       </p>
     </div>
@@ -756,7 +756,7 @@ function FilterDropdown({
         >
           <div className="flex flex-wrap items-start gap-y-3 px-5 py-4">
             <div className="space-y-2 pr-8 border-r border-border">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Tier</p>
+              <p className="text-[11px] font-semibold text-muted-foreground-subtle uppercase tracking-widest">Tier</p>
               <div className="flex gap-2">
                 {availableTiers.map((t) => {
                   const active = tiers.has(t);
@@ -770,7 +770,7 @@ function FilterDropdown({
                       className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                         active
                           ? "bg-primary/10 text-primary border-primary/30"
-                          : "bg-card text-muted-foreground border-border hover:border-foreground/20"
+                          : "bg-card text-muted-foreground-subtle border-border hover:border-foreground/20"
                       }`}
                     >
                       <span className={`h-2 w-2 rounded-full ${colors.dot}`} />
@@ -782,7 +782,7 @@ function FilterDropdown({
             </div>
 
             <div className="space-y-2 px-8 border-r border-border">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Days since contact</p>
+              <p className="text-[11px] font-semibold text-muted-foreground-subtle uppercase tracking-widest">Days since contact</p>
               <div className="flex gap-2">
                 {DAYS_FILTERS.map((d) => (
                   <button
@@ -793,7 +793,7 @@ function FilterDropdown({
                     className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                       minDays === d.value
                         ? "bg-primary/10 text-primary border-primary/30"
-                        : "bg-card text-muted-foreground border-border hover:border-foreground/20"
+                        : "bg-card text-muted-foreground-subtle border-border hover:border-foreground/20"
                     }`}
                   >
                     {d.label}
@@ -803,7 +803,7 @@ function FilterDropdown({
             </div>
 
             <div className="space-y-2 pl-8">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Nudges</p>
+              <p className="text-[11px] font-semibold text-muted-foreground-subtle uppercase tracking-widest">Nudges</p>
               <button
                 type="button"
                 onClick={() => setHasNudges(!hasNudges)}
@@ -811,7 +811,7 @@ function FilterDropdown({
                 className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   hasNudges
                     ? "bg-primary/10 text-primary border-primary/30"
-                    : "bg-card text-muted-foreground border-border hover:border-foreground/20"
+                    : "bg-card text-muted-foreground-subtle border-border hover:border-foreground/20"
                 }`}
               >
                 Has open nudges
@@ -822,7 +822,7 @@ function FilterDropdown({
           {activeCount > 0 && (
             <div className="px-5 pb-3 pt-0">
               <div className="pt-2 border-t border-border/50">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground-subtle">
                   Showing <span className="font-semibold text-foreground">{filteredCount}</span> contact{filteredCount !== 1 ? "s" : ""}
                 </p>
               </div>
@@ -846,7 +846,7 @@ function SortAnnouncement({ sort }: { sort: SortState }) {
     if (!sort) {
       setMessage("Sort removed");
     } else {
-      const labels: Record<SortKey, string> = { name: "Contact", daysSince: "Days Since", lastInteraction: "Last Interaction", otherPartners: "Other Partners", nudges: "Nudges" };
+      const labels: Record<SortKey, string> = { name: "Contact", daysSince: "Days Since", lastInteraction: "Last Interaction", otherPartners: "Other Partners", nudges: "Nudges", institution: "Institution" };
       setMessage(`Sorted by ${labels[sort.key]}, ${sort.dir === "asc" ? "ascending" : "descending"}`);
     }
   }, [sort]);
@@ -1201,7 +1201,7 @@ function ContactsPageContent() {
 
         {importanceFilter && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Filtered by tier:</span>
+            <span className="text-sm text-muted-foreground-subtle">Filtered by tier:</span>
             <Badge variant="secondary">{importanceFilter.toUpperCase()}</Badge>
             <Button variant="ghost" size="sm" className="h-7 px-2" asChild>
               <Link href="/contacts"><X className="h-3.5 w-3.5" /> Clear filter</Link>
@@ -1215,7 +1215,7 @@ function ContactsPageContent() {
               <Shield className="h-5 w-5 shrink-0 text-primary mt-0.5" aria-hidden="true" />
               <div>
                 <p className="text-sm font-semibold text-foreground">Load tier recommendations</p>
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-sm text-muted-foreground-subtle mt-0.5">
                   We’ll suggest tier changes from your engagement and stale-contact rules. Nothing is applied until you accept.
                 </p>
               </div>
@@ -1241,7 +1241,7 @@ function ContactsPageContent() {
 
         {!loading && contacts.length > 0 && recommendationsLoaded && (
           <div className="rounded-lg border border-primary/20 bg-primary/[0.06] dark:bg-primary/10 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <p className="text-sm text-muted-foreground flex items-start gap-2 min-w-0 flex-1">
+            <p className="text-sm text-muted-foreground-subtle flex items-start gap-2 min-w-0 flex-1">
               <Shield className="h-4 w-4 shrink-0 text-primary mt-0.5" aria-hidden="true" />
               <span>
                 {pendingCount > 0 ? (
@@ -1261,7 +1261,7 @@ function ContactsPageContent() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-9 text-muted-foreground"
+                className="h-9 text-muted-foreground-subtle"
                 onClick={exitRecommendationSession}
               >
                 Exit
@@ -1286,7 +1286,7 @@ function ContactsPageContent() {
 
         {!loading && contacts.length > 0 && recommendationsLoaded && pendingCount > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">View</span>
+            <span className="text-xs font-medium text-muted-foreground-subtle uppercase tracking-wide">View</span>
             <div className="inline-flex rounded-lg border border-border bg-muted/50 p-1">
               <Button
                 type="button"
@@ -1312,7 +1312,7 @@ function ContactsPageContent() {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="relative min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground-subtle" aria-hidden="true" />
             <Input
               placeholder="Search..."
               value={searchInput}

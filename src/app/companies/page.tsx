@@ -132,7 +132,7 @@ function CompanyRow({ company }: { company: Company }) {
           <p className="text-sm font-semibold text-foreground truncate leading-tight">
             {company.name}
           </p>
-          <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
+          <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5">
             {company.description.length > 60
               ? company.description.slice(0, 60) + "…"
               : company.description}
@@ -146,7 +146,7 @@ function CompanyRow({ company }: { company: Company }) {
       </div>
       <div className={COL.contacts}>
         <span className="inline-flex items-center gap-1 text-sm text-foreground">
-          <Users className="h-3.5 w-3.5 text-muted-foreground" />
+          <Users className="h-3.5 w-3.5 text-muted-foreground-subtle" />
           {company.contactCount}
         </span>
       </div>
@@ -156,17 +156,17 @@ function CompanyRow({ company }: { company: Company }) {
             {company.daysSinceLastInteraction}d
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
       <div className={COL.signals}>
         {company.signalCount > 0 ? (
           <span className="inline-flex items-center gap-1 text-sm text-foreground">
-            <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+            <Activity className="h-3.5 w-3.5 text-muted-foreground-subtle" />
             {company.signalCount}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
       <div className={COL.nudges}>
@@ -176,7 +176,7 @@ function CompanyRow({ company }: { company: Company }) {
             {company.openNudgeCount}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
     </Link>
@@ -271,7 +271,7 @@ export default function CompaniesPage() {
         <div className="flex items-center gap-2.5">
           <div className="relative min-w-[200px] max-w-md">
             <Search
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground-subtle"
               aria-hidden="true"
             />
             <Input
@@ -316,7 +316,7 @@ export default function CompaniesPage() {
               <h3 className="text-lg font-semibold text-foreground mb-1">
                 {search ? "No institutions match your search" : "No institutions yet"}
               </h3>
-              <p className="text-sm text-muted-foreground max-w-sm text-center">
+              <p className="text-sm text-muted-foreground-subtle max-w-sm text-center">
                 {search
                   ? "Try a different search term."
                   : "Institutions will appear here once you have contacts associated with them."}
@@ -325,7 +325,7 @@ export default function CompaniesPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+            <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none">
               <SortableHeader
                 label="Institution"
                 sizeClass={COL.name}

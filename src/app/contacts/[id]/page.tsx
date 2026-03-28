@@ -28,10 +28,16 @@ import {
   Newspaper,
   ClipboardList,
   Ticket,
+  BellOff,
   CalendarCheck,
   Linkedin,
   Settings,
   Sparkles,
+  Forward,
+  Pause,
+  CheckCircle,
+  Zap,
+  CheckCircle2,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -56,7 +62,7 @@ import {
   getStaleDaysForTier,
   type PartnerStaleDaysConfig,
 } from "@/lib/utils/tier-review-suggestions";
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 
 type Contact = {
   id: string;
@@ -132,6 +138,48 @@ type ContactMeeting = {
     };
   }[];
 };
+
+type ActiveOutreachSequence = {
+  id: string;
+  contactId: string;
+  status: string;
+  currentStep: number;
+  contact: {
+    id: string;
+    name: string;
+    company: { name: string };
+  };
+  steps: {
+    id: string;
+    stepNumber: number;
+    status: string;
+    executedAt: string | null;
+    scheduledAt: string;
+  }[];
+};
+
+function daysSinceLastExecutedStep(
+  steps: ActiveOutreachSequence["steps"]
+): number | null {
+  const executedDates = steps
+    .map((s) => (s.executedAt ? new Date(s.executedAt) : null))
+    .filter((d): d is Date => d !== null);
+  if (executedDates.length === 0) return null;
+  const last = new Date(
+    Math.max(...executedDates.map((d) => d.getTime()))
+  );
+  return differenceInCalendarDays(new Date(), last);
+}
+
+function formatWaitingSinceLastStep(
+  steps: ActiveOutreachSequence["steps"]
+): string {
+  const d = daysSinceLastExecutedStep(steps);
+  if (d === null) return " · no outbound step logged yet";
+  if (d === 0) return " · today since last step";
+  if (d === 1) return " · 1 day since last step";
+  return ` · ${d} days since last step`;
+}
 
 type ContactNudge = {
   id: string;
@@ -255,7 +303,7 @@ const NUDGE_TYPE_CONFIG: Record<string, NudgeTypeConfig> = {
 };
 
 const DEFAULT_TYPE_CONFIG: NudgeTypeConfig = {
-  icon: Send, label: "Nudge", ctaLabel: "Reach Out", ctaIcon: Send, color: "text-muted-foreground", bgColor: "bg-muted/50",
+  icon: Send, label: "Nudge", ctaLabel: "Reach Out", ctaIcon: Send, color: "text-muted-foreground-subtle", bgColor: "bg-muted/50",
 };
 
 function getTypeConfig(ruleType: string): NudgeTypeConfig {
@@ -267,7 +315,7 @@ function getPriorityClassName(priority: string): string {
     case "URGENT": return "border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400";
     case "HIGH": return "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400";
     case "MEDIUM": return "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400";
-    default: return "border-border bg-muted/50 text-muted-foreground";
+    default: return "border-border bg-muted/50 text-muted-foreground-subtle";
   }
 }
 
@@ -315,7 +363,7 @@ function SortButton({
       className="inline-flex items-center gap-1 font-medium text-inherit hover:text-foreground focus-visible:outline-none focus-visible:underline"
     >
       <span>{label}</span>
-      <span className={active ? "text-foreground" : "text-muted-foreground"}>
+      <span className={active ? "text-foreground" : "text-muted-foreground-subtle"}>
         {active ? (direction === "asc" ? "↑" : "↓") : "↕"}
       </span>
     </button>
@@ -336,6 +384,9 @@ export default function ContactDetailPage() {
   const [campaigns, setCampaigns] = useState<CampaignOutreach[]>([]);
   const [meetings, setMeetings] = useState<ContactMeeting[]>([]);
   const [nudges, setNudges] = useState<ContactNudge[]>([]);
+  const [activeSequence, setActiveSequence] =
+    useState<ActiveOutreachSequence | null>(null);
+  const [sequenceActionLoading, setSequenceActionLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -361,6 +412,8 @@ export default function ContactDetailPage() {
   const [generating, setGenerating] = useState(false);
   const [draftGenerated, setDraftGenerated] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [draftSending, setDraftSending] = useState(false);
+  const [draftSendResult, setDraftSendResult] = useState<{ sent: boolean; sequenceStarted: boolean } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -389,6 +442,27 @@ export default function ContactDetailPage() {
       }
     }
     fetchData();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    async function loadActiveSequence() {
+      try {
+        const res = await fetch("/api/sequences?status=ACTIVE");
+        if (!res.ok) return;
+        const list = (await res.json()) as ActiveOutreachSequence[];
+        if (cancelled) return;
+        const forContact = list.find((s) => s.contactId === id) ?? null;
+        setActiveSequence(forContact);
+      } catch {
+        if (!cancelled) setActiveSequence(null);
+      }
+    }
+    void loadActiveSequence();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -444,6 +518,34 @@ export default function ContactDetailPage() {
     setTimeout(() => setCopySuccess(false), 2000);
   }
 
+  async function handleDraftSendViaActivate() {
+    if (!draftSubject || !draftBody || !contact) return;
+    setDraftSending(true);
+    try {
+      const res = await fetch("/api/outreach/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactId: id,
+          subject: draftSubject,
+          body: draftBody,
+          nudgeReason: "General outreach",
+          ruleType: "STALE_CONTACT",
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to send");
+      }
+      const data = await res.json();
+      setDraftSendResult({ sent: true, sequenceStarted: data.sequenceStarted });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send email");
+    } finally {
+      setDraftSending(false);
+    }
+  }
+
   async function handleTierChange(nextImportance: string) {
     if (!contact || nextImportance === contact.importance) return;
     setSavingTier(true);
@@ -495,6 +597,60 @@ export default function ContactDetailPage() {
     }
     if (contact.staleThresholdDays === parsed) return;
     void handleSaveThreshold(parsed);
+  }
+
+  async function handleSequencePause() {
+    if (!activeSequence) return;
+    setSequenceActionLoading(true);
+    try {
+      const res = await fetch(`/api/sequences/${activeSequence.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "pause" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data?.error === "string" ? data.error : "Failed to pause sequence"
+        );
+      }
+      setActiveSequence(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to pause outreach sequence"
+      );
+    } finally {
+      setSequenceActionLoading(false);
+    }
+  }
+
+  async function handleSequenceMarkResponded() {
+    if (!activeSequence) return;
+    setSequenceActionLoading(true);
+    try {
+      const res = await fetch(`/api/sequences/${activeSequence.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "respond" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data?.error === "string"
+            ? data.error
+            : "Failed to mark sequence as responded"
+        );
+      }
+      setActiveSequence(null);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to mark outreach as responded"
+      );
+    } finally {
+      setSequenceActionLoading(false);
+    }
   }
 
   async function handleNudgeStatusUpdate(nudgeId: string, status: string) {
@@ -749,7 +905,7 @@ export default function ContactDetailPage() {
                 </CardDescription>
                 <div className="mt-1">
                   <button
-                    className="flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs text-muted-foreground-subtle hover:border-border hover:text-foreground transition-colors"
                     onClick={() => setNudgePrefsExpanded(!nudgePrefsExpanded)}
                   >
                     {getDisabledTypes().size > 0 ? (
@@ -759,7 +915,7 @@ export default function ContactDetailPage() {
                     )}
                     <span>Nudge preferences</span>
                     {(contact.staleThresholdDays !== null || getDisabledTypes().size > 0) && (
-                      <span className="text-muted-foreground/70">
+                      <span className="text-muted-foreground-subtle">
                         ({[
                           contact.staleThresholdDays !== null ? `${contact.staleThresholdDays}d stale` : null,
                           getDisabledTypes().size > 0 ? `${getDisabledTypes().size} muted` : null,
@@ -799,7 +955,7 @@ export default function ContactDetailPage() {
               <div>
                 <p className="text-xs font-medium text-foreground mb-1.5">Stale threshold</p>
                 <div className="flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground-subtle shrink-0" />
                   <span className="flex items-center gap-1.5">
                     <Input
                       type="number"
@@ -809,7 +965,7 @@ export default function ContactDetailPage() {
                       value={reconnectDaysInput}
                       onChange={(e) => setReconnectDaysInput(e.target.value)}
                     />
-                    <span className="text-xs text-muted-foreground">days</span>
+                    <span className="text-xs text-muted-foreground-subtle">days</span>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -823,7 +979,7 @@ export default function ContactDetailPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs text-muted-foreground"
+                        className="h-7 px-2 text-xs text-muted-foreground-subtle"
                         disabled={savingThreshold}
                         onClick={() => handleSaveThreshold(null)}
                       >
@@ -845,7 +1001,7 @@ export default function ContactDetailPage() {
                         onClick={() => handleToggleNudgeType(nt.key)}
                         className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
                           isDisabled
-                            ? "border-border bg-muted text-muted-foreground line-through opacity-60"
+                            ? "border-border bg-muted text-muted-foreground-subtle line-through opacity-60"
                             : "border-primary/20 bg-primary/5 text-foreground"
                         } hover:border-primary/40`}
                       >
@@ -879,7 +1035,8 @@ export default function ContactDetailPage() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setShowDraftPanel(false)}
-                  className="h-8 w-8"
+                  className="h-9 w-9"
+                  aria-label="Close draft email"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -887,9 +1044,18 @@ export default function ContactDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {!draftGenerated ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground-subtle">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Generating email draft...
+                </div>
+              ) : draftSendResult?.sent ? (
+                <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-3 text-sm text-green-700 dark:text-green-400 flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    {draftSendResult.sequenceStarted
+                      ? `Sent! Activate will track follow-ups and remind you if ${contact?.name.split(" ")[0]} doesn\u2019t respond.`
+                      : "Sent! Marked as done."}
+                  </span>
                 </div>
               ) : (
                 <>
@@ -912,6 +1078,10 @@ export default function ContactDetailPage() {
                     />
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button onClick={handleDraftSendViaActivate} disabled={draftSending}>
+                      {draftSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                      {draftSending ? "Sending..." : "Send Now"}
+                    </Button>
                     <Button
                       variant="secondary"
                       onClick={handleCopyToClipboard}
@@ -924,7 +1094,7 @@ export default function ContactDetailPage() {
                       ) : (
                         <>
                           <Copy className="h-4 w-4" />
-                          Copy to Clipboard
+                          Copy
                         </>
                       )}
                     </Button>
@@ -947,6 +1117,50 @@ export default function ContactDetailPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {activeSequence && (
+          <div
+            className="rounded-lg border border-violet-200/80 bg-violet-50/40 dark:border-violet-900/50 dark:bg-violet-950/20 px-4 py-3"
+            role="status"
+            aria-label="Active outreach sequence"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2 text-sm font-semibold text-violet-900 dark:text-violet-200">
+                  <Forward className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+                  Active outreach
+                </div>
+                <p className="text-xs text-muted-foreground-subtle">
+                  Waiting for response
+                  {formatWaitingSinceLastStep(activeSequence.steps)}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-violet-200 bg-background hover:bg-violet-50 dark:border-violet-800 dark:hover:bg-violet-950/40"
+                  disabled={sequenceActionLoading}
+                  onClick={() => void handleSequencePause()}
+                >
+                  <Pause className="h-3.5 w-3.5" />
+                  Pause
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-violet-600 hover:bg-violet-700 text-white dark:bg-violet-700 dark:hover:bg-violet-600"
+                  disabled={sequenceActionLoading}
+                  onClick={() => void handleSequenceMarkResponded()}
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Mark Responded
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Open nudges */}
@@ -991,7 +1205,7 @@ export default function ContactDetailPage() {
               </CardHeader>
               <CardContent>
                 {sortedInteractions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground-subtle">
                     No interactions yet.
                   </p>
                 ) : (
@@ -1010,7 +1224,7 @@ export default function ContactDetailPage() {
                             <Badge variant="secondary">
                               {interaction.type}
                             </Badge>
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-sm text-muted-foreground-subtle">
                               {format(
                                 new Date(interaction.date),
                                 "MMM d, yyyy"
@@ -1021,7 +1235,7 @@ export default function ContactDetailPage() {
                             {interaction.summary}
                           </p>
                           {interaction.nextStep && (
-                            <p className="mt-2 text-xs text-muted-foreground">
+                            <p className="mt-2 text-xs text-muted-foreground-subtle">
                               Next: {interaction.nextStep}
                             </p>
                           )}
@@ -1044,7 +1258,7 @@ export default function ContactDetailPage() {
               </CardHeader>
               <CardContent>
                 {sortedSignals.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground-subtle">
                     No signals for this contact.
                   </p>
                 ) : (
@@ -1056,7 +1270,7 @@ export default function ContactDetailPage() {
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <Badge variant="outline">{signal.type}</Badge>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground-subtle">
                             {format(new Date(signal.date), "MMM d, yyyy")} ·{" "}
                             {(signal.confidence * 100).toFixed(0)}% confidence
                           </span>
@@ -1104,12 +1318,12 @@ export default function ContactDetailPage() {
               </CardHeader>
               <CardContent>
                 {firmRelLoading ? (
-                  <div className="flex items-center gap-2 py-8 justify-center text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 py-8 justify-center text-sm text-muted-foreground-subtle">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading firm relationships...
                   </div>
                 ) : !firmRelData || firmRelData.relationships.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">
+                  <p className="text-sm text-muted-foreground-subtle py-4 text-center">
                     No other partners have this contact in their CRM.
                   </p>
                 ) : (
@@ -1126,12 +1340,12 @@ export default function ContactDetailPage() {
                               {rel.isCurrentUser ? "You" : rel.partnerName}
                             </span>
                             {rel.isCurrentUser && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-muted-foreground-subtle">
                                 ({rel.partnerName})
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
+                          <p className="text-xs text-muted-foreground-subtle mt-0.5">
                             {rel.contactsAtCompany} contact{rel.contactsAtCompany !== 1 ? "s" : ""} at {firmRelData.companyName}
                           </p>
                         </div>
@@ -1142,11 +1356,11 @@ export default function ContactDetailPage() {
                             {rel.intensity}
                           </span>
                           <div className="text-right min-w-[100px]">
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground-subtle">
                               {formatDaysAgo(rel.daysSinceLastInteraction)}
                             </p>
                             {rel.interactionCount > 0 && (
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-muted-foreground-subtle">
                                 {rel.interactionCount} interaction{rel.interactionCount !== 1 ? "s" : ""}
                               </p>
                             )}
@@ -1180,13 +1394,13 @@ export default function ContactDetailPage() {
               <CardContent className="p-0">
                 {events.length === 0 ? (
                   <div className="px-6 pb-6">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground-subtle">
                       No event registrations.
                     </p>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none">
                       <div className="w-1 shrink-0" />
                       <div className="flex-[2] min-w-0">
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
@@ -1216,12 +1430,12 @@ export default function ContactDetailPage() {
                           <div className="w-1 shrink-0 self-stretch rounded-r bg-red-500" />
                           <div className="flex-[2] min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate leading-tight">{ev.name}</p>
-                            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5 md:hidden">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</p>
+                            <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5 md:hidden">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</p>
                           </div>
                           <div className="flex-[1.2] min-w-0">
                             <Badge variant={ev.status === "Attended" ? "secondary" : "outline"}>{ev.status}</Badge>
                           </div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</div>
                           <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden lg:block truncate">{ev.practice}</div>
                           <div className="flex-[1] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.type}</div>
                           <div className="flex-[0.9] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.eventSize ?? "—"}</div>
@@ -1229,7 +1443,7 @@ export default function ContactDetailPage() {
                         </div>
                       ))}
                     </div>
-                    {events.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {events.length} events</p>}
+                    {events.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground-subtle">Showing 10 of {events.length} events</p>}
                   </>
                 )}
               </CardContent>
@@ -1252,13 +1466,13 @@ export default function ContactDetailPage() {
               <CardContent className="p-0">
                 {articles.length === 0 ? (
                   <div className="px-6 pb-6">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground-subtle">
                       No article engagements.
                     </p>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none">
                       <div className="w-1 shrink-0" />
                       <div className="flex-[2] min-w-0">
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
@@ -1282,16 +1496,16 @@ export default function ContactDetailPage() {
                           <div className="w-1 shrink-0 self-stretch rounded-r bg-purple-500" />
                           <div className="flex-[2] min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate leading-tight">{art.name}</p>
-                            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5 md:hidden">{art.articleSent}</p>
+                            <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5 md:hidden">{art.articleSent}</p>
                           </div>
                           <div className="flex-[1.6] min-w-0 text-sm text-foreground truncate">{art.articleSent}</div>
                           <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden md:block tabular-nums">{art.views}</div>
                           <div className="flex-[1.2] min-w-0 text-sm text-foreground hidden lg:block truncate">{art.sentFrom ?? "—"}</div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{art.lastViewDate ? format(new Date(art.lastViewDate), "MM/dd/yyyy") : "—"}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{art.lastViewDate ? format(new Date(art.lastViewDate), "MM/dd/yyyy") : "—"}</div>
                         </div>
                       ))}
                     </div>
-                    {articles.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {articles.length} articles</p>}
+                    {articles.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground-subtle">Showing 10 of {articles.length} articles</p>}
                   </>
                 )}
               </CardContent>
@@ -1314,13 +1528,13 @@ export default function ContactDetailPage() {
               <CardContent className="p-0">
                 {campaigns.length === 0 ? (
                   <div className="px-6 pb-6">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground-subtle">
                       No campaign outreach records.
                     </p>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none">
                       <div className="w-1 shrink-0" />
                       <div className="flex-[2] min-w-0">
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
@@ -1342,11 +1556,11 @@ export default function ContactDetailPage() {
                           <div className="flex-[1.2] min-w-0">
                             <Badge variant={camp.status === "Clicked" ? "secondary" : "outline"}>{camp.status}</Badge>
                           </div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{format(new Date(camp.statusDate), "MM/dd/yyyy")}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(camp.statusDate), "MM/dd/yyyy")}</div>
                         </div>
                       ))}
                     </div>
-                    {campaigns.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {campaigns.length} campaigns</p>}
+                    {campaigns.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground-subtle">Showing 10 of {campaigns.length} campaigns</p>}
                   </>
                 )}
               </CardContent>
@@ -1433,7 +1647,7 @@ function PastMeetingsList({
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="flex items-center gap-1 text-sm text-muted-foreground-subtle hover:text-foreground"
       >
         {expanded ? (
           <ChevronUp className="h-3.5 w-3.5" />
@@ -1506,7 +1720,7 @@ function MeetingCard({
     <div
       className={`rounded-lg border p-4 ${
         isPast
-          ? "border-border/50 bg-muted/20 opacity-75"
+          ? "border-border/50 bg-muted/20"
           : "border-primary/20 bg-primary/5"
       }`}
     >
@@ -1526,7 +1740,7 @@ function MeetingCard({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground-subtle">
             <span className="inline-flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />
               {format(meetingDate, "EEE, MMM d 'at' h:mm a")}
@@ -1556,7 +1770,7 @@ function MeetingCard({
                   />
                 ))}
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground-subtle">
                 Also attending:{" "}
                 {otherAttendees
                   .slice(0, 2)
@@ -1717,7 +1931,7 @@ function ContactNudgeCard({
                   <IIcon className={`h-3 w-3 ${iCfg.color}`} />
                   {iCfg.label}
                   {url && (
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground-subtle hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
                       <ExternalLink className="h-2.5 w-2.5" />
                     </a>
                   )}
@@ -1778,6 +1992,8 @@ function ContactNudgeDraftPanel({
   const [loading, setLoading] = useState(true);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ sent: boolean; sequenceStarted: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1821,6 +2037,38 @@ function ContactNudgeDraftPanel({
     }
   }
 
+  async function handleSendViaActivate() {
+    if (!draft) return;
+    setSending(true);
+    setDraftError(null);
+    try {
+      const res = await fetch("/api/outreach/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactId: nudge.contact.id,
+          nudgeId: nudge.id,
+          subject: draft.subject,
+          body: draft.body,
+          nudgeReason: nudge.reason,
+          ruleType: nudge.ruleType,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to send");
+      }
+      const data = await res.json();
+      setSendResult({ sent: true, sequenceStarted: data.sequenceStarted });
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "Failed to send email");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const contactFirst = nudge.contact.name.split(" ")[0];
+
   return (
     <div className="rounded-lg border border-primary/20 bg-card p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
       <div className="flex items-center justify-between">
@@ -1828,13 +2076,13 @@ function ContactNudgeDraftPanel({
           <Mail className="h-4 w-4 text-primary" />
           Email Draft
         </h4>
-        <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close email draft" className="h-9 w-9">
           <X className="h-4 w-4" />
         </Button>
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground-subtle">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-sm">Generating personalized draft...</span>
         </div>
@@ -1846,11 +2094,22 @@ function ContactNudgeDraftPanel({
         </div>
       )}
 
-      {draft && !loading && (
+      {sendResult?.sent && (
+        <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-3 text-sm text-green-700 dark:text-green-400 flex items-start gap-2">
+          <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            {sendResult.sequenceStarted
+              ? `Sent! Activate will track follow-ups and remind you if ${contactFirst} doesn\u2019t respond.`
+              : "Sent! Marked as done."}
+          </span>
+        </div>
+      )}
+
+      {draft && !loading && !sendResult && (
         <>
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Subject</label>
+              <label className="text-xs font-medium text-muted-foreground-subtle">Subject</label>
               <input
                 type="text"
                 value={draft.subject}
@@ -1859,7 +2118,7 @@ function ContactNudgeDraftPanel({
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Body</label>
+              <label className="text-xs font-medium text-muted-foreground-subtle">Body</label>
               <textarea
                 value={draft.body}
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}
@@ -1869,7 +2128,11 @@ function ContactNudgeDraftPanel({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" asChild>
+            <Button size="sm" onClick={handleSendViaActivate} disabled={sending}>
+              {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+              {sending ? "Sending..." : "Send Now"}
+            </Button>
+            <Button variant="outline" size="sm" asChild>
               <a href={`mailto:${nudge.contact.email}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`}>
                 <Send className="h-3.5 w-3.5" />
                 Open in Email

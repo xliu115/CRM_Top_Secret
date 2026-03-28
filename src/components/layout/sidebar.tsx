@@ -95,6 +95,8 @@ export function Sidebar({
               key={item.href}
               href={item.href}
               title={collapsed ? item.label : undefined}
+              aria-label={collapsed ? item.label : undefined}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex items-center rounded-lg text-sm font-medium transition-colors",
                 collapsed
@@ -139,12 +141,15 @@ export function Sidebar({
       <div className="border-t border-white/10 px-2 py-4 space-y-3">
         {/* Collapse toggle */}
         <button
+          type="button"
           onClick={onToggle}
           className={cn(
             "flex items-center rounded-lg text-sm font-medium text-sidebar-fg/50 hover:text-white hover:bg-sidebar-accent/50 transition-colors w-full",
             collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2"
           )}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
             <ChevronsRight className="h-4 w-4 shrink-0" />
@@ -175,9 +180,11 @@ export function Sidebar({
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => signOut({ callbackUrl: "/login" })}
                 className="text-sidebar-fg/50 hover:text-white transition-colors"
                 title="Sign out"
+                aria-label="Sign out"
               >
                 <LogOut className="h-4 w-4" />
               </button>

@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { partnerRepo, nudgeRepo, meetingRepo, signalRepo } from "@/lib/repositories";
+import { partnerRepo, nudgeRepo, meetingRepo, signalRepo, sequenceRepo } from "@/lib/repositories";
 import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import {
@@ -78,10 +78,11 @@ export async function sendMorningBriefing(partnerId: string): Promise<{
     const now = new Date();
     const twoDaysFromNow = addDays(now, 2);
 
-    const [openNudges, allUpcomingMeetings, clientNews] = await Promise.all([
+    const [openNudges, allUpcomingMeetings, clientNews, activeSequences] = await Promise.all([
       nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" }),
       meetingRepo.findUpcomingByPartnerId(partnerId),
       signalRepo.findRecentByPartnerId(partnerId, 10),
+      sequenceRepo.findByPartnerId(partnerId, { status: "ACTIVE" }),
     ]);
 
     const topNudges = openNudges.slice(0, 5).map((n) => {
@@ -125,6 +126,18 @@ export async function sendMorningBriefing(partnerId: string): Promise<{
     };
 
     const briefingResult = await generateNarrativeBriefing(ctx);
+
+    if (activeSequences.length > 0) {
+      const seqSummaries = activeSequences.slice(0, 3).map((seq) => {
+        const currentStep = seq.steps.find((s) => s.stepNumber === seq.currentStep);
+        const waitDays = currentStep?.executedAt
+          ? Math.floor((Date.now() - new Date(currentStep.executedAt).getTime()) / (1000 * 60 * 60 * 24))
+          : 0;
+        return `**${seq.contact.name}** at **${seq.contact.company.name}** (waiting **${waitDays} day${waitDays !== 1 ? "s" : ""}**)`;
+      });
+      const seqLine = `You have **${activeSequences.length}** active follow-up${activeSequences.length !== 1 ? "s" : ""}: ${seqSummaries.join(", ")}.`;
+      briefingResult.narrative = briefingResult.narrative + "\n\n" + seqLine;
+    }
 
     const todayMeetings = allUpcomingMeetings
       .filter((m) => {

@@ -103,7 +103,7 @@ export function AssistantReply({
           {/* CRM sources as cards with CTAs */}
           {crmSources.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground-subtle">
                 From your CRM
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -121,7 +121,7 @@ export function AssistantReply({
       {/* Web sources — compact, collapsible */}
       {webSources.length > 0 && (
         <details className="group">
-          <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
+          <summary className="cursor-pointer text-xs font-medium text-muted-foreground-subtle hover:text-foreground">
             {webSources.length} web source{webSources.length !== 1 ? "s" : ""}
           </summary>
           <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/20 p-3">
@@ -158,7 +158,7 @@ function SourceCard({ source }: { source: Source }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-medium text-foreground">{name}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground-subtle">
               {title && company ? `${title} at ${company}` : company || title || content.slice(0, 60)}
             </p>
           </div>
@@ -194,7 +194,7 @@ function SourceCard({ source }: { source: Source }) {
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30">
         <div className="min-w-0">
           <p className="font-medium text-foreground">{name}</p>
-          <p className="text-xs text-muted-foreground">{company}</p>
+          <p className="text-xs text-muted-foreground-subtle">{company}</p>
           <p className="mt-1 line-clamp-2 text-xs text-foreground">{reason}</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -223,7 +223,7 @@ function SourceCard({ source }: { source: Source }) {
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30">
         <div className="min-w-0">
           <p className="font-medium text-foreground">{name}</p>
-          <p className="text-xs text-muted-foreground">{company}</p>
+          <p className="text-xs text-muted-foreground-subtle">{company}</p>
           {otherPartners && otherPartners !== "None" && (
             <p className="mt-1 text-xs text-foreground">
               Other partners: {otherPartners}
@@ -243,7 +243,7 @@ function SourceCard({ source }: { source: Source }) {
   // Generic CRM source (Interaction, Meeting, etc.)
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-xs font-medium text-muted-foreground">{type}</p>
+      <p className="text-xs font-medium text-muted-foreground-subtle">{type}</p>
       <p className="mt-1 line-clamp-2 text-sm text-foreground">{content.slice(0, 120)}</p>
     </div>
   );
