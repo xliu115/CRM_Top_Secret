@@ -26,21 +26,25 @@ export function generateUnsubscribeToken(partnerId: string): string {
 }
 
 export function verifyUnsubscribeToken(token: string): string | null {
-  const secret = process.env.CRON_SECRET || "dev-secret";
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
+  try {
+    const secret = process.env.CRON_SECRET || "dev-secret";
+    const parts = token.split(".");
+    if (parts.length !== 2) return null;
 
-  const [encoded, sig] = parts;
-  const payload = Buffer.from(encoded, "base64url").toString();
-  const expectedSig = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
+    const [encoded, sig] = parts;
+    const payload = Buffer.from(encoded, "base64url").toString();
+    const expectedSig = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
 
-  if (sig !== expectedSig) return null;
+    if (sig !== expectedSig) return null;
 
-  const [partnerId, expiryStr] = payload.split(":");
-  const expiry = parseInt(expiryStr, 10);
-  if (isNaN(expiry) || expiry < Math.floor(Date.now() / 1000)) return null;
+    const [partnerId, expiryStr] = payload.split(":");
+    const expiry = parseInt(expiryStr, 10);
+    if (isNaN(expiry) || expiry < Math.floor(Date.now() / 1000)) return null;
 
-  return partnerId;
+    return partnerId;
+  } catch {
+    return null;
+  }
 }
 
 export async function sendMorningBriefing(partnerId: string): Promise<{

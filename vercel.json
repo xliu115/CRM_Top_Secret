@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/morning-briefing",
+      "schedule": "0 12 * * 1-5"
+    },
+    {
+      "path": "/api/cron/cadence-advance",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/reply-detection",
+      "schedule": "0 14 * * 1-5"
+    }
+  ]
+}

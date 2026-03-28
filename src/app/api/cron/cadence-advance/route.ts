@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { autoAdvanceDueSequences } from "@/lib/services/cadence-engine";
-
-function verifyCronSecret(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-
-  const fromHeader = request.headers.get("x-cron-secret");
-  if (fromHeader === secret) return true;
-
-  const fromQuery = request.nextUrl.searchParams.get("secret");
-  return fromQuery === secret;
-}
+import { verifyCronSecret } from "@/lib/utils/cron-auth";
 
 export async function GET(request: NextRequest) {
   if (!verifyCronSecret(request)) {

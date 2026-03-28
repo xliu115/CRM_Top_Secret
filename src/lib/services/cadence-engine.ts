@@ -1,7 +1,8 @@
 import { sequenceRepo, nudgeRepo, interactionRepo } from "@/lib/repositories";
 import { generateFollowUpEmail } from "./llm-service";
 import type { SequenceWithRelations } from "@/lib/repositories";
-import { addDays } from "date-fns";
+import { prisma } from "@/lib/db/prisma";
+import { addDays, differenceInDays } from "date-fns";
 
 const STEP_CONFIGS = [
   { type: "INITIAL", label: "Initial outreach", delayDays: 0 },
@@ -91,7 +92,8 @@ export async function advanceSequence(sequenceId: string) {
     .map((s) => s.emailBody!);
 
   const emailDraft = await generateFollowUpEmail({
-    partnerName: "",
+    // SequenceWithRelations has no partner include yet; contact name is a stand-in for salutation context (not the partner org).
+    partnerName: seq.contact.name,
     contactName: seq.contact.name,
     contactTitle: seq.contact.company.name,
     companyName: seq.contact.company.name,
@@ -160,13 +162,21 @@ export async function autoAdvanceDueSequences() {
   const results: { sequenceId: string; advanced: boolean; completed: boolean }[] = [];
 
   for (const seq of dueSequences) {
-    const result = await advanceSequence(seq.id);
-    if (result) {
-      results.push({
-        sequenceId: seq.id,
-        advanced: !result.completed,
-        completed: result.completed ?? false,
-      });
+    try {
+      const result = await advanceSequence(seq.id);
+      if (result) {
+        results.push({
+          sequenceId: seq.id,
+          advanced: !result.completed,
+          completed: result.completed ?? false,
+        });
+      }
+    } catch (err) {
+      console.error(
+        `[cadence-engine] Failed to advance sequence ${seq.id}:`,
+        err instanceof Error ? err.message : err
+      );
+      results.push({ sequenceId: seq.id, advanced: false, completed: false });
     }
   }
 
@@ -206,4 +216,73 @@ export async function detectResponseForContact(contactId: string) {
   if (!activeSeq) return null;
 
   return recordResponse(activeSeq.id);
+}
+
+/**
+ * Scans for inbound emails from priority contacts that haven't been replied to
+ * and creates REPLY_NEEDED nudges if they don't already exist.
+ */
+export async function detectUnrepliedInbound(): Promise<{
+  scanned: number;
+  priorityContacts: number;
+  nudgesCreated: number;
+}> {
+  const now = new Date();
+  const replyWindowDays = 7;
+
+  const unrepliedInbound = await prisma.interaction.findMany({
+    where: {
+      direction: "INBOUND",
+      type: "EMAIL",
+      repliedAt: null,
+      date: {
+        gte: new Date(now.getTime() - replyWindowDays * 24 * 60 * 60 * 1000),
+        lte: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
+      },
+    },
+    include: {
+      contact: { include: { company: true } },
+    },
+  });
+
+  const priorityContacts = unrepliedInbound.filter(
+    (i) => i.contact.importance === "CRITICAL" || i.contact.importance === "HIGH"
+  );
+
+  const existingReplyNudges = await prisma.nudge.findMany({
+    where: {
+      ruleType: "REPLY_NEEDED",
+      status: "OPEN",
+      contactId: { in: priorityContacts.map((i) => i.contactId) },
+    },
+    select: { contactId: true },
+  });
+  const alreadyNudged = new Set(existingReplyNudges.map((n) => n.contactId));
+
+  const contactsNeedingNudge = new Map<string, (typeof priorityContacts)[number]>();
+  for (const interaction of priorityContacts) {
+    if (alreadyNudged.has(interaction.contactId)) continue;
+    if (!contactsNeedingNudge.has(interaction.contactId)) {
+      contactsNeedingNudge.set(interaction.contactId, interaction);
+    }
+  }
+
+  let created = 0;
+  for (const [, interaction] of contactsNeedingNudge) {
+    const daysSince = differenceInDays(now, new Date(interaction.date));
+    await prisma.nudge.create({
+      data: {
+        contactId: interaction.contactId,
+        ruleType: "REPLY_NEEDED",
+        reason: `${interaction.contact.name} emailed you ${daysSince} day${daysSince !== 1 ? "s" : ""} ago — draft a reply?`,
+        priority: interaction.contact.importance === "CRITICAL" ? "URGENT" : "HIGH",
+        status: "OPEN",
+      },
+    });
+    created++;
+  }
+
+  console.log(`[cadence-engine] Reply detection: ${priorityContacts.length} unreplied, ${created} nudges created`);
+
+  return { scanned: unrepliedInbound.length, priorityContacts: priorityContacts.length, nudgesCreated: created };
 }

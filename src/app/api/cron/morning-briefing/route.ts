@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { sendMorningBriefing } from "@/lib/services/briefing-service";
-
-function verifyCronSecret(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-
-  const fromHeader = request.headers.get("x-cron-secret");
-  if (fromHeader === secret) return true;
-
-  const fromQuery = request.nextUrl.searchParams.get("secret");
-  return fromQuery === secret;
-}
+import { verifyCronSecret } from "@/lib/utils/cron-auth";
 
 export async function GET(request: NextRequest) {
   if (!verifyCronSecret(request)) {
@@ -24,12 +14,23 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true },
     });
 
-    const results: { name: string; sent: boolean; error?: string }[] = [];
+    const settled = await Promise.allSettled(
+      partners.map(async (partner) => {
+        const result = await sendMorningBriefing(partner.id);
+        return { name: partner.name, ...result };
+      })
+    );
 
-    for (const partner of partners) {
-      const result = await sendMorningBriefing(partner.id);
-      results.push({ name: partner.name, ...result });
-    }
+    const results: { name: string; sent: boolean; error?: string }[] = settled.map(
+      (s, i) =>
+        s.status === "fulfilled"
+          ? s.value
+          : {
+              name: partners[i].name,
+              sent: false,
+              error: s.reason?.message ?? "Unknown error",
+            }
+    );
 
     const sent = results.filter((r) => r.sent).length;
     const failed = results.filter((r) => !r.sent).length;

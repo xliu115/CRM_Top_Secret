@@ -26,6 +26,8 @@ const protectedPaths = [
   "/api/dashboard",
   "/api/stats",
   "/api/companies",
+  "/api/sequences",
+  "/api/outreach",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -80,5 +82,7 @@ export const config = {
     "/api/dashboard/:path*",
     "/api/stats/:path*",
     "/api/companies/:path*",
+    "/api/sequences/:path*",
+    "/api/outreach/:path*",
   ],
 };
