@@ -44,20 +44,50 @@ Prior review: 2026-03-26 (SCOPE EXPANSION, 2 accepted, 4 deferred)
 | `cron-auth.test.ts` | 5 | Shared cron authentication (NEW) |
 | **Total** | **73** | |
 
-## Scope Decisions — Selective Expansion
+## Scope Decisions — Selective Expansion (All 10 Candidates)
 
-| # | Candidate | Origin | Effort | Decision | Reasoning |
-|---|-----------|--------|--------|----------|-----------|
-| 1 | Relationship Recap on Demand | Competitive landscape (Folk) | S | **ACCEPTED** | Every competitor has this; extends existing RAG pipeline |
-| 2 | Tone-of-Voice Personalization | Competitive landscape (Folk) | M | DEFERRED | Requires sample email data that doesn't exist yet |
-| 3 | Pre-Meeting Brief Auto-Push | Competitive landscape (Dreamteam) | S | DEFERRED | Low effort but calendar sync dependency limits value |
-| 4 | Natural Language Nudge Config | Competitive landscape (Dreamteam) | M | **ACCEPTED** | Differentiating UX; extends chat infrastructure |
-| 5 | Connection Strength Scoring | Competitive landscape (Attio) | S-M | UNRESOLVED | Skipped by user during ceremony |
-| 6 | Draft Card Pattern for All AI Actions | Competitive landscape (Dreamteam) | S | DEFERRED | Marginal — emails already use this pattern |
-| 7 | Relationship Health Dashboard | Original CEO review deferred | M-L | DEFERRED | Depends on Connection Strength Scoring |
-| 8 | Firm-Wide Relationship Graph | Original CEO review deferred | L | DEFERRED | Different user segment, not aligned with pilot |
-| 9 | Nudge Effectiveness Analytics + ROI | Original CEO review deferred | M | DEFERRED | Important for proving value but not pilot-critical |
-| 10 | Voice-First Quick Actions | Original CEO review deferred | M | **ACCEPTED** | Extends existing voice infrastructure |
+| # | Candidate | Origin | Effort | Risk | Decision | Reasoning |
+|---|-----------|--------|--------|------|----------|-----------|
+| 1 | **Relationship Recap on Demand** | Competitive landscape (Folk's Recap Assistant) | S (human: ~4h / CC: ~15min) | Low — extends existing RAG pipeline | **ACCEPTED** | Every competitor has this. Activate's "Ask Anything" chat already retrieves the data — adds a structured relationship summary prompt template. #1 feature gap from competitive landscape. |
+| 2 | **Tone-of-Voice Personalization** | Competitive landscape (Folk's Follow-up Assistant) | M (human: ~1 week / CC: ~30min) | Medium — tone extraction non-trivial, needs sample data, policy review | DEFERRED | High differentiation potential but requires input data (sample emails) that doesn't exist yet. Consulting firm may have policies around storing Partner email content. |
+| 3 | **Pre-Meeting Brief Auto-Push** | Competitive landscape (Dreamteam's Rachel) | S (human: ~3h / CC: ~15min) | Low — reuses `llm-meeting.ts` + `email-service.ts` | DEFERRED | Low effort, high value. Partners get meeting prep delivered to inbox. Blocked only by calendar sync (Phase 4) for auto-created meetings, works for manually seeded meetings. |
+| 4 | **Natural Language Nudge Config** | Competitive landscape (Dreamteam's Alex) | M (human: ~1 week / CC: ~30min) | Medium — intent parsing complex, edge cases around ambiguous commands | **ACCEPTED** | "I want to be reminded about contacts I haven't spoken to in 3 months" instead of settings sliders. Partners configure nudge rules via chat. Differentiating UX innovation. |
+| 5 | **Connection Strength Scoring** | Competitive landscape (Attio's relationship mapping) | S-M (human: ~4h / CC: ~20min) | Low — computed from existing data (interactions, meetings, signals) | UNRESOLVED | Quantify relationships 0-100 from interaction frequency, recency, reciprocity, meeting attendance. Would feed into nudge prioritization. Skipped by user during ceremony. |
+| 6 | **Draft Card Pattern for All AI Actions** | Competitive landscape (Dreamteam) | S | Low | DEFERRED | Every AI action as a reviewable card before execution. Activate already does this for emails — marginal improvement. |
+| 7 | **Relationship Health Dashboard with Trends** | Original CEO review (deferred) | M-L | Low | DEFERRED | Periodic snapshots, trend lines, "fastest declining" alerts. Depends on Connection Strength Scoring (Candidate 5) being built first. |
+| 8 | **Firm-Wide Relationship Graph** | Original CEO review (deferred) | L | Medium | DEFERRED | D3 visualization of all Partners' connections across firms. Different user segment (firm leadership, not individual Partners). Not aligned with pilot focus. |
+| 9 | **Nudge Effectiveness Analytics + ROI** | Original CEO review (deferred) | M | Low | DEFERRED | Track nudge outcomes (viewed, actioned, email sent). Dashboard chart showing effectiveness by type. New NudgeAction model. Important for proving Activate's value but requires instrumentation across multiple UI flows. |
+| 10 | **Voice-First Quick Actions** | Original CEO review (deferred) | M | Medium — command parsing, action confirmation, error handling | **ACCEPTED** | Voice commands for nudge actions: "Dismiss this nudge", "Send the email to Sarah". Extends existing voice input infrastructure. |
+
+### Cherry-Pick Summary
+
+- **ACCEPTED (3):** Relationship Recap on Demand (S), Natural Language Nudge Config (M), Voice-First Quick Actions (M)
+- **DEFERRED (6):** Tone-of-Voice Personalization, Pre-Meeting Brief Auto-Push, Draft Card Pattern, Relationship Health Dashboard, Firm-Wide Relationship Graph, Nudge Effectiveness Analytics
+- **UNRESOLVED (1):** Connection Strength Scoring (skipped during ceremony)
+
+## Section-by-Section User Decisions
+
+### Section 1: Architecture (5 issues)
+1. Split `llm-service.ts` → **A) Split now** — Done
+2. Extract `verifyCronSecret()` → **A) Extract now** — Done
+3. Middleware gap on sequence/outreach routes → **A) Fix now** — Done
+4. Audit logging for email sends → Skipped (unresolved, deferred to TODOS.md)
+5. Sequential partner processing in cron → **A) Switch to Promise.allSettled()** — Done
+
+### Section 2: Error Map
+1. `advanceSequence()` LLM fallback → **A) Fix now** — Already handled by `generateFollowUpEmail` internal fallback + cron try/catch
+
+### Section 3: Security
+1. Cron secret query string leak → **A) Header-only** — Done
+
+### Section 5: Code Quality
+1. Reply-detection bypasses repository layer → **A) Refactor now** — Done
+
+### Section 6: Tests
+1. Zero test coverage → **A) Comprehensive tests** — 39 new tests added
+
+### Section 9: Deployment
+1. Missing `.env.example` + `vercel.json` → **A) Create both** — Done
 
 ## Next Sprint Scope
 
