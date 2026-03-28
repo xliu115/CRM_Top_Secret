@@ -1,12 +1,14 @@
 import { Resend } from "resend";
-import { partnerRepo, nudgeRepo, meetingRepo, signalRepo, sequenceRepo } from "@/lib/repositories";
+import { partnerRepo, nudgeRepo, meetingRepo, signalRepo, sequenceRepo, interactionRepo } from "@/lib/repositories";
 import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import {
   generateNarrativeBriefing,
   type NarrativeBriefingContext,
 } from "@/lib/services/llm-service";
-import { buildBriefingHtml } from "@/lib/services/email-service";
+import { generateMini360, type Contact360Context } from "@/lib/services/llm-contact360";
+import { buildBriefingHtml, buildMini360Html } from "@/lib/services/email-service";
+import { searchWeb } from "@/lib/services/rag-service";
 import { addDays, isBefore, format, differenceInDays } from "date-fns";
 import { createHmac } from "crypto";
 
@@ -156,6 +158,69 @@ export async function sendMorningBriefing(partnerId: string): Promise<{
         meetingId: m.id,
       }));
 
+    // Generate mini-360 for top 3 action contacts
+    let mini360Html = "";
+    const top3Contacts = topNudges.slice(0, 3);
+    if (top3Contacts.length > 0) {
+      const snippets = await Promise.allSettled(
+        top3Contacts.map(async (nudge) => {
+          const [interactions, contactSignals, webNews] = await Promise.allSettled([
+            interactionRepo.findByContactId(nudge.contactId),
+            signalRepo.findByContactId(nudge.contactId),
+            searchWeb(`${nudge.contactName} ${nudge.company} news`, 3),
+          ]);
+
+          const ctx: Contact360Context = {
+            contact: {
+              name: nudge.contactName,
+              title: "",
+              email: "",
+              importance: nudge.priority,
+              notes: null,
+            },
+            company: { name: nudge.company, industry: "", employeeCount: 0, website: "" },
+            interactions: (interactions.status === "fulfilled" ? interactions.value : [])
+              .slice(0, 5)
+              .map((i) => ({
+                type: i.type,
+                date: new Date(i.date).toISOString(),
+                summary: i.summary ?? "",
+                sentiment: i.sentiment ?? "NEUTRAL",
+              })),
+            signals: (contactSignals.status === "fulfilled" ? contactSignals.value : [])
+              .slice(0, 3)
+              .map((s) => ({
+                type: s.type,
+                date: new Date(s.date).toISOString(),
+                content: s.content,
+                url: s.url ?? null,
+              })),
+            meetings: [],
+            nudges: [{ ruleType: nudge.ruleType, reason: nudge.reason, priority: nudge.priority }],
+            sequences: [],
+            firmRelationships: [],
+            webBackground: [],
+            webNews: (webNews.status === "fulfilled" ? webNews.value : [])
+              .filter((d) => d.type !== "Web Summary")
+              .map((d) => ({ title: d.type, content: d.content, url: d.url ?? "" })),
+            engagements: [],
+          };
+
+          const result = await generateMini360(ctx);
+          const contactUrl = `${appUrl}/contacts/${nudge.contactId}`;
+          return buildMini360Html(result.sections, nudge.contactName, contactUrl);
+        })
+      );
+
+      const successfulSnippets = snippets
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+        .map((r) => r.value);
+
+      if (successfulSnippets.length > 0) {
+        mini360Html = successfulSnippets.join("");
+      }
+    }
+
     const unsubscribeToken = generateUnsubscribeToken(partnerId);
     const unsubscribeUrl = `${appUrl}/api/briefing/unsubscribe?token=${unsubscribeToken}`;
 
@@ -166,6 +231,7 @@ export async function sendMorningBriefing(partnerId: string): Promise<{
         topActions: briefingResult.topActions,
         todayMeetings: todayMeetings.length > 0 ? todayMeetings : undefined,
         unsubscribeUrl,
+        mini360Html: mini360Html || undefined,
       },
       appUrl
     );

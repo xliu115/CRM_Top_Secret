@@ -22,6 +22,8 @@ import {
   Copy,
   Check,
   UserCheck,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -336,6 +338,15 @@ export default function CompanyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Company 360
+  const [co360Loading, setCo360Loading] = useState(false);
+  const [co360Result, setCo360Result] = useState<{
+    summary: string;
+    sections: { id: string; title: string; content: string }[];
+  } | null>(null);
+  const [co360Expanded, setCo360Expanded] = useState(true);
+  const [co360CollapsedSections, setCo360CollapsedSections] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (!id) return;
     async function fetchData() {
@@ -365,6 +376,34 @@ export default function CompanyDetailPage() {
     }
     fetchData();
   }, [id]);
+
+  async function handleCompany360() {
+    if (co360Result) {
+      setCo360Expanded(!co360Expanded);
+      return;
+    }
+    setCo360Loading(true);
+    try {
+      const res = await fetch(`/api/companies/${id}/company360`);
+      if (!res.ok) throw new Error("Failed to generate Company 360");
+      const data = await res.json();
+      setCo360Result(data.result);
+      setCo360Expanded(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate Company 360");
+    } finally {
+      setCo360Loading(false);
+    }
+  }
+
+  function toggleCo360Section(sectionId: string) {
+    setCo360CollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) next.delete(sectionId);
+      else next.add(sectionId);
+      return next;
+    });
+  }
 
   if (loading && !company) {
     return (
@@ -510,8 +549,30 @@ export default function CompanyDetailPage() {
                 <Building2 className="h-7 w-7" />
               </div>
               <div className="min-w-0 flex-1 space-y-1">
-                <CardTitle className="text-2xl">{company.name}</CardTitle>
-                <CardDescription>{company.description}</CardDescription>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-2xl">{company.name}</CardTitle>
+                    <CardDescription>{company.description}</CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleCompany360}
+                    disabled={co360Loading}
+                    className="shrink-0"
+                  >
+                    {co360Loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        Company 360
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <div className="flex flex-wrap items-center gap-4 pt-1 text-sm text-muted-foreground-subtle">
                   <Badge variant="outline">{company.industry}</Badge>
                   <span className="inline-flex items-center gap-1">
@@ -548,6 +609,78 @@ export default function CompanyDetailPage() {
             </div>
           </CardHeader>
         </Card>
+
+        {/* Company 360 Dossier */}
+        {co360Loading && !co360Result && (
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Generating Company 360 intelligence...
+              </div>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-1/3" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {co360Result && co360Expanded && (
+          <Card className="border-blue-200 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/50 to-white dark:from-blue-950/20 dark:to-background">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-blue-600" />
+                    Company 360
+                  </CardTitle>
+                  <CardDescription className="text-sm italic mt-1">
+                    {co360Result.summary}
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCo360Expanded(false)}
+                  aria-label="Collapse dossier"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              {co360Result.sections.map((section) => (
+                <div
+                  key={section.id}
+                  className="rounded-lg border border-border bg-background/80"
+                >
+                  <button
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/30 transition-colors"
+                    onClick={() => toggleCo360Section(section.id)}
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {section.title}
+                    </span>
+                    {co360CollapsedSections.has(section.id) ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </button>
+                  {!co360CollapsedSections.has(section.id) && (
+                    <div className="px-4 pb-3">
+                      <MarkdownPreview content={section.content} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats summary */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

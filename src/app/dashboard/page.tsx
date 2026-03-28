@@ -23,6 +23,7 @@ import {
   AlignLeft,
   List,
   Forward,
+  Eye,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -328,10 +329,12 @@ function StructuredBriefingView({
   data,
   actions,
   activeSequences,
+  onQuick360,
 }: {
   data: StructuredBriefingData | null;
   actions: BriefingAction[];
   activeSequences: ActiveSequenceBriefingItem[];
+  onQuick360: (contactName: string) => void;
 }) {
   if (!data) {
     return (
@@ -573,6 +576,16 @@ function StructuredBriefingView({
               {action.actionLabel} — {action.contactName}
             </Link>
           ))}
+          {[...new Map(actions.map((a) => [a.contactName, a.contactName])).values()].map((name) => (
+            <button
+              key={`q360-struct-${name}`}
+              onClick={() => onQuick360(name)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-amber-200/60 bg-amber-50/50 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
+            >
+              <Eye className="h-3 w-3" />
+              Quick 360 — {name}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -714,6 +727,10 @@ export default function DashboardPage() {
   function navigateToChat(text: string) {
     if (!text.trim()) return;
     router.push(`/chat?q=${encodeURIComponent(text.trim())}`);
+  }
+
+  function handleQuick360(contactName: string) {
+    navigateToChat(`Contact 360 for ${contactName}`);
   }
 
   const handleVoiceResult = useCallback((transcript: string) => {
@@ -915,6 +932,17 @@ export default function DashboardPage() {
                                 {action.actionLabel} — {action.contactName}
                               </Link>
                             ))}
+                            {/* Quick 360 buttons — navigate to chat with 360 query */}
+                            {[...new Map(briefingActions.map((a) => [a.contactName, a.contactName])).values()].map((name) => (
+                              <button
+                                key={`q360-${name}`}
+                                onClick={() => handleQuick360(name)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-amber-200/60 bg-amber-50/50 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Quick 360 — {name}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -925,6 +953,7 @@ export default function DashboardPage() {
                       data={structuredData}
                       actions={briefingActions}
                       activeSequences={activeSequences}
+                      onQuick360={handleQuick360}
                     />
                   )}
                 </>

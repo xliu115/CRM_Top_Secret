@@ -415,6 +415,23 @@ export default function ContactDetailPage() {
   const [draftSending, setDraftSending] = useState(false);
   const [draftSendResult, setDraftSendResult] = useState<{ sent: boolean; sequenceStarted: boolean } | null>(null);
 
+  // Contact 360
+  const [c360Loading, setC360Loading] = useState(false);
+  const [c360Result, setC360Result] = useState<{
+    summary: string;
+    sections: { id: string; title: string; content: string }[];
+    talkingPoints: string[];
+  } | null>(null);
+  const [c360Expanded, setC360Expanded] = useState(true);
+  const [c360CollapsedSections, setC360CollapsedSections] = useState<Set<string>>(new Set());
+  const [c360FollowUp, setC360FollowUp] = useState("");
+  const [c360FollowUpLoading, setC360FollowUpLoading] = useState(false);
+  const [c360FollowUpAnswer, setC360FollowUpAnswer] = useState("");
+  const [c360ShareEmail, setC360ShareEmail] = useState("");
+  const [c360ShareOpen, setC360ShareOpen] = useState(false);
+  const [c360ShareSending, setC360ShareSending] = useState(false);
+  const [c360ShareSent, setC360ShareSent] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     async function fetchData() {
@@ -509,6 +526,112 @@ export default function ContactDetailPage() {
     } finally {
       setGenerating(false);
     }
+  }
+
+  async function handleContact360() {
+    if (c360Result) {
+      setC360Expanded(!c360Expanded);
+      return;
+    }
+    setC360Loading(true);
+    try {
+      const res = await fetch(`/api/contacts/${id}/contact360`);
+      if (!res.ok) throw new Error("Failed to generate Contact 360");
+      const data = await res.json();
+      setC360Result(data.result);
+      setC360Expanded(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate Contact 360");
+    } finally {
+      setC360Loading(false);
+    }
+  }
+
+  async function handleC360FollowUp() {
+    if (!c360FollowUp.trim() || !c360Result) return;
+    setC360FollowUpLoading(true);
+    try {
+      const contextMsg = `[Contact 360 context for ${contact?.name}]\n${c360Result.summary}\n${c360Result.sections.map((s) => `${s.title}: ${s.content}`).join("\n")}`;
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: c360FollowUp,
+          history: [
+            { role: "assistant", content: contextMsg },
+            { role: "user", content: c360FollowUp },
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to get answer");
+      const data = await res.json();
+      setC360FollowUpAnswer(data.answer);
+      setC360FollowUp("");
+    } catch (err) {
+      setC360FollowUpAnswer(err instanceof Error ? err.message : "Failed to get answer");
+    } finally {
+      setC360FollowUpLoading(false);
+    }
+  }
+
+  async function handleC360Share() {
+    if (!c360ShareEmail.trim() || !c360Result) return;
+    setC360ShareSending(true);
+    try {
+      const res = await fetch(`/api/contacts/${id}/contact360/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientEmail: c360ShareEmail,
+          result: c360Result,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to share");
+      setC360ShareSent(true);
+      setTimeout(() => {
+        setC360ShareOpen(false);
+        setC360ShareSent(false);
+        setC360ShareEmail("");
+      }, 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to share dossier");
+    } finally {
+      setC360ShareSending(false);
+    }
+  }
+
+  async function handleC360DraftEmail() {
+    if (!c360Result) return;
+    setGenerating(true);
+    setShowDraftPanel(true);
+    try {
+      const context = c360Result.talkingPoints.length > 0
+        ? `Context from Contact 360: ${c360Result.summary}. Talking points: ${c360Result.talkingPoints.join("; ")}`
+        : `Context: ${c360Result.summary}`;
+      const res = await fetch(`/api/contacts/${id}/draft-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nudgeReason: context }),
+      });
+      if (!res.ok) throw new Error("Failed to generate email");
+      const { subject, body } = await res.json();
+      setDraftSubject(subject);
+      setDraftBody(body);
+      setDraftGenerated(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate email");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function toggleC360Section(sectionId: string) {
+    setC360CollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) next.delete(sectionId);
+      else next.add(sectionId);
+      return next;
+    });
   }
 
   function handleCopyToClipboard() {
@@ -925,26 +1048,44 @@ export default function ContactDetailPage() {
                   </button>
                 </div>
               </div>
-              <Button
-                onClick={() => {
-                  setShowDraftPanel(true);
-                  if (!draftGenerated) handleGenerateEmail();
-                }}
-                disabled={generating}
-                className="shrink-0"
-              >
-                {generating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Pencil className="h-4 w-4" />
-                    Draft an Email
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  onClick={handleContact360}
+                  disabled={c360Loading}
+                >
+                  {c360Loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Contact 360
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowDraftPanel(true);
+                    if (!draftGenerated) handleGenerateEmail();
+                  }}
+                  disabled={generating}
+                >
+                  {generating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Pencil className="h-4 w-4" />
+                      Draft an Email
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardHeader>
         </Card>
@@ -1018,6 +1159,172 @@ export default function ContactDetailPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Contact 360 Dossier */}
+        {c360Loading && !c360Result && (
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Generating Contact 360 intelligence...
+              </div>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-1/3" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {c360Result && c360Expanded && (
+          <Card className="border-blue-200 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/50 to-white dark:from-blue-950/20 dark:to-background">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-blue-600" />
+                    Contact 360
+                  </CardTitle>
+                  <CardDescription className="text-sm italic mt-1">
+                    {c360Result.summary}
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    onClick={() => setC360ShareOpen(!c360ShareOpen)}
+                  >
+                    <Forward className="h-3.5 w-3.5" />
+                    Share
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    onClick={handleC360DraftEmail}
+                    disabled={generating}
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    Draft Email
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setC360Expanded(false)}
+                    aria-label="Collapse dossier"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+
+            {c360ShareOpen && (
+              <div className="mx-6 mb-3 flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border">
+                <Input
+                  type="email"
+                  placeholder="Colleague's email..."
+                  className="h-8 text-sm"
+                  value={c360ShareEmail}
+                  onChange={(e) => setC360ShareEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleC360Share()}
+                />
+                <Button
+                  size="sm"
+                  className="h-8 px-3 text-xs shrink-0"
+                  onClick={handleC360Share}
+                  disabled={c360ShareSending || !c360ShareEmail.trim()}
+                >
+                  {c360ShareSent ? (
+                    <><Check className="h-3.5 w-3.5" /> Sent!</>
+                  ) : c360ShareSending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <><Send className="h-3.5 w-3.5" /> Send</>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            <CardContent className="pt-0 space-y-3">
+              {c360Result.sections.map((section) => (
+                <div
+                  key={section.id}
+                  className="rounded-lg border border-border bg-background/80"
+                >
+                  <button
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/30 transition-colors"
+                    onClick={() => toggleC360Section(section.id)}
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {section.title}
+                    </span>
+                    {c360CollapsedSections.has(section.id) ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </button>
+                  {!c360CollapsedSections.has(section.id) && (
+                    <div className="px-4 pb-3">
+                      {section.id === "talking_points" ? (
+                        <div className="space-y-2">
+                          {c360Result.talkingPoints.map((tp, i) => (
+                            <div
+                              key={i}
+                              className="flex gap-2 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 px-3 py-2"
+                            >
+                              <span className="text-blue-600 dark:text-blue-400 font-semibold text-sm shrink-0">{i + 1}.</span>
+                              <span className="text-sm text-foreground">{tp}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <MarkdownPreview content={section.content} />
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Follow-up question input */}
+              <div className="pt-2 space-y-2">
+                {c360FollowUpAnswer && (
+                  <div className="rounded-lg bg-muted/50 border border-border p-3">
+                    <MarkdownPreview content={c360FollowUpAnswer} />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Ask a follow-up question..."
+                    className="h-9 text-sm"
+                    value={c360FollowUp}
+                    onChange={(e) => setC360FollowUp(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleC360FollowUp()}
+                    disabled={c360FollowUpLoading}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-9 px-3 shrink-0"
+                    onClick={handleC360FollowUp}
+                    disabled={c360FollowUpLoading || !c360FollowUp.trim()}
+                  >
+                    {c360FollowUpLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Email draft panel */}
