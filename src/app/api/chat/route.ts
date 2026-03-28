@@ -4,7 +4,7 @@ import { contactRepo, partnerRepo, interactionRepo, signalRepo, meetingRepo } fr
 import { prisma } from "@/lib/db/prisma";
 import { retrieveContext, searchWeb } from "@/lib/services/rag-service";
 import { generateChatAnswer } from "@/lib/services/llm-service";
-import { generateMini360, type Contact360Context } from "@/lib/services/llm-contact360";
+import { generateQuick360, type Contact360Context } from "@/lib/services/llm-contact360";
 
 const CONTACT_360_INTENT =
   /\b(tell me (?:everything|all) about|contact ?360|recap|dossier|what do (?:you|we) know about|full (?:intel|intelligence) on|brief me on|quick ?360)\b/i;
@@ -161,21 +161,27 @@ export async function POST(request: NextRequest) {
                 engagements: [],
               };
 
-              const result = await generateMini360(ctx);
+              const q360 = await generateQuick360(ctx);
+
+              const tpFormatted = q360.talkingPoints.length > 0
+                ? q360.talkingPoints.map((tp, i) => `${i + 1}. ${tp}`).join("\n")
+                : "1. Ask about their current priorities and how things have evolved.";
 
               const md = [
-                `## Quick 360: ${contact.name}`,
-                contact.title ? `**${contact.title}**${company?.name ? ` at ${company.name}` : ""}` : "",
+                `## Quick 360: ${q360.contactName}`,
+                q360.title ? `**${q360.title}**${q360.companyName ? ` at ${q360.companyName}` : ""}` : "",
                 "",
-                `*${result.summary}*`,
+                `### Insight Summary`,
+                q360.insight,
                 "",
-                ...result.sections.map(
-                  (s: { title: string; content: string }) =>
-                    `### ${s.title}\n${s.content}`
-                ),
-                "",
-                `---`,
-                `*[View full profile →](/contacts/${contact.id})*`,
+                `### Talking Points`,
+                tpFormatted,
+                `<!--QUICK_ACTIONS:${JSON.stringify([
+                  { label: "Full Contact 360", href: `/contacts/${contact.id}` },
+                  { label: "Company 360", href: `/companies/${contact.companyId}` },
+                  { label: "Draft Email", href: `/contacts/${contact.id}?action=email` },
+                  { label: "Share Dossier", href: `/contacts/${contact.id}?action=share` },
+                ])}-->`,
               ].filter(Boolean).join("\n\n");
               return NextResponse.json({ answer: md, sources: [] });
             }

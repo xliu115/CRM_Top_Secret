@@ -23,7 +23,6 @@ import {
   AlignLeft,
   List,
   Forward,
-  Eye,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -580,9 +579,9 @@ function StructuredBriefingView({
             <button
               key={`q360-struct-${name}`}
               onClick={() => onQuick360(name)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-amber-200/60 bg-amber-50/50 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
             >
-              <Eye className="h-3 w-3" />
+              <ChevronRight className="h-3 w-3" />
               Quick 360 — {name}
             </button>
           ))}
@@ -937,9 +936,9 @@ export default function DashboardPage() {
                               <button
                                 key={`q360-${name}`}
                                 onClick={() => handleQuick360(name)}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-amber-200/60 bg-amber-50/50 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                               >
-                                <Eye className="h-3 w-3" />
+                                <ChevronRight className="h-3 w-3" />
                                 Quick 360 — {name}
                               </button>
                             ))}

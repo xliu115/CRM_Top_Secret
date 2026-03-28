@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { User, Mail, ExternalLink, FileText } from "lucide-react";
+import { User, Mail, ExternalLink, FileText, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+
+type QuickAction = { label: string; href: string };
 
 type Source = { type: string; content: string; date?: string; id?: string; url?: string; contactId?: string };
 
@@ -69,6 +71,20 @@ function isCrmSource(type: string): boolean {
   return CRM_SOURCE_TYPES.has(type) || type.startsWith("Signal (");
 }
 
+function extractQuickActions(text: string): { cleanContent: string; actions: QuickAction[] } {
+  const marker = /<!--QUICK_ACTIONS:([\s\S]*?)-->/;
+  const match = text.match(marker);
+  if (!match) return { cleanContent: text, actions: [] };
+
+  try {
+    const actions: QuickAction[] = JSON.parse(match[1]);
+    const cleanContent = text.replace(marker, "").replace(/\n{3,}/g, "\n\n").trim();
+    return { cleanContent, actions };
+  } catch {
+    return { cleanContent: text, actions: [] };
+  }
+}
+
 export function AssistantReply({
   content,
   sources = [],
@@ -81,15 +97,15 @@ export function AssistantReply({
     (s) => s.type === "Web Summary" || s.type === "Web Result"
   );
 
-  // Extract a brief intro before "From your CRM" / "From the web" only when
-  // we have structured sections to render. Otherwise keep the full answer text.
-  const introEnd = content.search(
+  const { cleanContent, actions: quickActions } = extractQuickActions(content);
+
+  const introEnd = cleanContent.search(
     /\*\*From your CRM|From your CRM|From the web\*\*|From the web/i
   );
   const hasSources = crmSources.length > 0 || webSources.length > 0;
-  let intro = content;
+  let intro = cleanContent;
   if (introEnd >= 0 && hasSources) {
-    intro = content.slice(0, introEnd).trim();
+    intro = cleanContent.slice(0, introEnd).trim();
   }
 
   return (
@@ -115,7 +131,23 @@ export function AssistantReply({
           )}
         </>
       ) : (
-        <MarkdownContent content={content} className="text-sm text-foreground" />
+        <MarkdownContent content={cleanContent} className="text-sm text-foreground" />
+      )}
+
+      {/* Quick Actions — styled pill buttons */}
+      {quickActions.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {quickActions.map((action) => (
+            <Link
+              key={action.href}
+              href={action.href}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              <ChevronRight className="h-3 w-3" />
+              {action.label}
+            </Link>
+          ))}
+        </div>
       )}
 
       {/* Web sources — compact, collapsible */}

@@ -111,6 +111,21 @@ Output format:
   {"id":"signals","title":"Key Signals","content":"..."}
 ]`;
 
+const QUICK360_SYSTEM_PROMPT = `You are a senior intelligence analyst briefing a consulting Partner before a meeting. Write a concise, strategic insight summary followed by actionable talking points. Tone: like a trusted chief of staff — crisp, specific, strategic. NO bullet points in the insight summary.
+
+Rules:
+- Insight Summary: 3-5 sentences synthesizing who this person is, the state of the relationship, key signals/news, and what matters right now. Use **bold** for names, companies, dates, key numbers.
+- Talking Points: Exactly 3 specific, natural conversation starters that combine news + shared context + relationship history. Each should be 1-2 sentences the Partner could literally say in a meeting.
+- Be honest about gaps — "No recent interactions" is better than fabricating.
+
+Output format:
+---INSIGHT---
+<insight paragraph>
+---TALKING_POINTS---
+1. <talking point>
+2. <talking point>
+3. <talking point>`;
+
 // ── Contact 360 (full 7-section dossier) ────────────────────────────
 
 export async function generateContact360(
@@ -171,6 +186,112 @@ export async function generateMini360(
   }
 
   return generateMini360Template(ctx);
+}
+
+// ── Quick 360 (insight + talking points for chat) ────────────────────
+
+export interface Quick360Result {
+  contactName: string;
+  title: string;
+  companyName: string;
+  insight: string;
+  talkingPoints: string[];
+}
+
+export async function generateQuick360(
+  ctx: Contact360Context
+): Promise<Quick360Result> {
+  const userPrompt = buildContact360Prompt(ctx);
+  const result = await callLLM(QUICK360_SYSTEM_PROMPT, userPrompt);
+
+  const base = {
+    contactName: ctx.contact.name,
+    title: ctx.contact.title,
+    companyName: ctx.company.name,
+  };
+
+  if (result) {
+    const parsed = parseQuick360Response(result);
+    if (parsed) return { ...base, ...parsed };
+  }
+
+  return generateQuick360Template(ctx);
+}
+
+function parseQuick360Response(raw: string): { insight: string; talkingPoints: string[] } | null {
+  try {
+    const insightMatch = raw.match(/---INSIGHT---\s*([\s\S]*?)(?=---TALKING_POINTS---|$)/);
+    const tpMatch = raw.match(/---TALKING_POINTS---\s*([\s\S]*)/);
+
+    const insight = insightMatch?.[1]?.trim();
+    if (!insight) return null;
+
+    const talkingPoints = (tpMatch?.[1] ?? "")
+      .split("\n")
+      .map((line) => line.replace(/^\d+\.\s*/, "").trim())
+      .filter((line) => line.length > 0)
+      .slice(0, 3);
+
+    return { insight, talkingPoints };
+  } catch {
+    return null;
+  }
+}
+
+function generateQuick360Template(ctx: Contact360Context): Quick360Result {
+  const now = new Date();
+  const lastInteraction = ctx.interactions[0];
+  const daysSince = lastInteraction
+    ? differenceInDays(now, new Date(lastInteraction.date))
+    : null;
+
+  const parts: string[] = [];
+  parts.push(`**${ctx.contact.name}** is ${ctx.contact.title} at **${ctx.company.name}**${ctx.company.industry ? ` (${ctx.company.industry})` : ""}.`);
+
+  if (daysSince !== null) {
+    parts.push(`Your last interaction was **${daysSince} days ago** via ${lastInteraction.type.toLowerCase()}${lastInteraction.summary ? `: "${lastInteraction.summary.slice(0, 80)}"` : ""}.`);
+  } else {
+    parts.push("No interactions recorded yet — this is a new or untracked relationship.");
+  }
+
+  if (ctx.firmRelationships.length > 1) {
+    const others = ctx.firmRelationships.filter((r) => !r.isCurrentUser);
+    parts.push(`${others.length} other partner${others.length !== 1 ? "s" : ""} at the firm also know this contact: ${others.map((r) => `**${r.partnerName}** (${r.intensity})`).join(", ")}.`);
+  }
+
+  if (ctx.signals.length > 0 || ctx.webNews.length > 0) {
+    const newsItem = ctx.webNews[0] ?? ctx.signals[0];
+    if (newsItem) {
+      const content = "content" in newsItem ? newsItem.content : "";
+      parts.push(`Recent signal: ${content.slice(0, 120)}.`);
+    }
+  }
+
+  const tp: string[] = [];
+  if (ctx.webNews.length > 0) {
+    tp.push(`I saw the news about "${ctx.webNews[0].content.slice(0, 80)}..." — how is that affecting your team?`);
+  }
+  if (ctx.meetings.length > 0) {
+    tp.push(`Looking forward to "${ctx.meetings[0].title}" — what's top of mind for you going in?`);
+  }
+  if (ctx.firmRelationships.length > 1) {
+    const other = ctx.firmRelationships.find((r) => !r.isCurrentUser);
+    if (other) {
+      tp.push(`My colleague ${other.partnerName} mentioned your work together — I'd love to hear your perspective on the broader engagement.`);
+    }
+  }
+  if (tp.length === 0) {
+    tp.push(`What are your biggest priorities at ${ctx.company.name} right now?`);
+    tp.push(`How have things evolved since we last connected?`);
+  }
+
+  return {
+    contactName: ctx.contact.name,
+    title: ctx.contact.title,
+    companyName: ctx.company.name,
+    insight: parts.join(" "),
+    talkingPoints: tp.slice(0, 3),
+  };
 }
 
 // ── Prompt Builders ─────────────────────────────────────────────────
