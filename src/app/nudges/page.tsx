@@ -6,6 +6,7 @@ import {
   RefreshCw, Send, Moon, Check, ExternalLink, Settings, Clock, Briefcase, Newspaper,
   CalendarDays, ClipboardList, Ticket, CalendarCheck, BookOpen, Linkedin,
   Copy, RotateCcw, X, Loader2, Mail, FileText, Users, Sparkles,
+  Reply, Forward, Filter, Zap, CheckCircle2,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
@@ -25,6 +26,8 @@ type Nudge = {
   status: string;
   generatedEmail?: string | null;
   metadata?: string | null;
+  sequenceId?: string | null;
+  cadenceStepId?: string | null;
   contact: {
     id: string;
     name: string;
@@ -85,7 +88,7 @@ function getPriorityClassName(priority: string): string {
     case "URGENT": return "border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400";
     case "HIGH": return "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400";
     case "MEDIUM": return "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400";
-    default: return "border-border bg-muted/50 text-muted-foreground";
+    default: return "border-border bg-muted/50 text-muted-foreground-subtle";
   }
 }
 
@@ -108,10 +111,12 @@ const NUDGE_TYPE_CONFIG: Record<string, NudgeTypeConfig> = {
   EVENT_REGISTERED: { icon: CalendarCheck, label: "Event Outreach", ctaLabel: "Draft Pre-Event Note", ctaIcon: Mail, color: "text-cyan-600", bgColor: "bg-cyan-50 dark:bg-cyan-950/30" },
   ARTICLE_READ: { icon: BookOpen, label: "Content Follow-Up", ctaLabel: "Draft Content Email", ctaIcon: Mail, color: "text-rose-600", bgColor: "bg-rose-50 dark:bg-rose-950/30" },
   LINKEDIN_ACTIVITY: { icon: Linkedin, label: "LinkedIn Activity", ctaLabel: "Draft LinkedIn Email", ctaIcon: Mail, color: "text-sky-600", bgColor: "bg-sky-50 dark:bg-sky-950/30" },
+  FOLLOW_UP: { icon: Forward, label: "Active Outreach", ctaLabel: "Continue Follow-up", ctaIcon: Forward, color: "text-violet-600", bgColor: "bg-violet-50 dark:bg-violet-950/30" },
+  REPLY_NEEDED: { icon: Reply, label: "Reply Needed", ctaLabel: "Draft Reply", ctaIcon: Reply, color: "text-red-600", bgColor: "bg-red-50 dark:bg-red-950/30" },
 };
 
 const DEFAULT_TYPE_CONFIG: NudgeTypeConfig = {
-  icon: Send, label: "Nudge", ctaLabel: "Reach Out", ctaIcon: Send, color: "text-muted-foreground", bgColor: "bg-muted/50",
+  icon: Send, label: "Nudge", ctaLabel: "Reach Out", ctaIcon: Send, color: "text-muted-foreground-subtle", bgColor: "bg-muted/50",
 };
 
 function getTypeConfig(ruleType: string): NudgeTypeConfig {
@@ -134,12 +139,14 @@ function NudgeSummary({ nudge, insights }: { nudge: Nudge; insights: InsightData
 }
 
 function DraftEmailPanel({
-  nudge, onClose,
-}: { nudge: Nudge; onClose: () => void }) {
+  nudge, onClose, onNudgeSent,
+}: { nudge: Nudge; onClose: () => void; onNudgeSent?: () => void }) {
   const [draft, setDraft] = useState<DraftEmail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ sent: boolean; sequenceStarted: boolean } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const fetchDraft = useCallback(async () => {
@@ -167,6 +174,41 @@ function DraftEmailPanel({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleSendViaActivate() {
+    if (!draft) return;
+    setSending(true);
+    setError(null);
+    try {
+      const meta = parseMetadata(nudge.metadata);
+      const insights = meta?.insights ?? [];
+      const res = await fetch("/api/outreach/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactId: nudge.contact.id,
+          nudgeId: nudge.id,
+          subject: draft.subject,
+          body: draft.body,
+          nudgeReason: nudge.reason,
+          ruleType: insights[0]?.type ?? nudge.ruleType,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to send");
+      }
+      const data = await res.json();
+      setSendResult({ sent: true, sequenceStarted: data.sequenceStarted });
+      onNudgeSent?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send email");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const contactFirst = nudge.contact.name.split(" ")[0];
+
   return (
     <div ref={panelRef} className="mt-4 rounded-lg border border-primary/20 bg-card p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
       <div className="flex items-center justify-between">
@@ -174,13 +216,13 @@ function DraftEmailPanel({
           <Mail className="h-4 w-4 text-primary" />
           Email Draft
         </h4>
-        <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close email draft" className="h-9 w-9">
           <X className="h-4 w-4" />
         </Button>
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground-subtle">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-sm">Generating personalized draft...</span>
         </div>
@@ -192,11 +234,22 @@ function DraftEmailPanel({
         </div>
       )}
 
-      {draft && !loading && (
+      {sendResult?.sent && (
+        <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-3 text-sm text-green-700 dark:text-green-400 flex items-start gap-2">
+          <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            {sendResult.sequenceStarted
+              ? `Sent! Activate will track follow-ups and remind you if ${contactFirst} doesn\u2019t respond.`
+              : "Sent! Marked as done."}
+          </span>
+        </div>
+      )}
+
+      {draft && !loading && !sendResult && (
         <>
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Subject</label>
+              <label className="text-xs font-medium text-muted-foreground-subtle">Subject</label>
               <input
                 type="text"
                 value={draft.subject}
@@ -205,7 +258,7 @@ function DraftEmailPanel({
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Body</label>
+              <label className="text-xs font-medium text-muted-foreground-subtle">Body</label>
               <textarea
                 value={draft.body}
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}
@@ -215,7 +268,11 @@ function DraftEmailPanel({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" asChild>
+            <Button size="sm" onClick={handleSendViaActivate} disabled={sending}>
+              {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+              {sending ? "Sending..." : "Send Now"}
+            </Button>
+            <Button variant="outline" size="sm" asChild>
               <a href={`mailto:${nudge.contact.email}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`}>
                 <Send className="h-3.5 w-3.5" />
                 Open in Email
@@ -308,13 +365,13 @@ function MeetingBriefPanel({
           <ClipboardList className="h-4 w-4 text-indigo-600" />
           Meeting Brief
         </h4>
-        <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close meeting brief" className="h-9 w-9">
           <X className="h-4 w-4" />
         </Button>
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+        <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground-subtle">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-sm">Generating meeting brief...</span>
         </div>
@@ -328,7 +385,7 @@ function MeetingBriefPanel({
 
       {data && !loading && (
         <>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground-subtle">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-1 font-medium text-indigo-600 dark:text-indigo-400">
               <CalendarDays className="h-3 w-3" />
               {data.meetingTitle}
@@ -345,7 +402,7 @@ function MeetingBriefPanel({
               if (line.startsWith("## ")) return <h3 key={i} className="text-sm font-semibold mt-4 mb-1 text-indigo-700 dark:text-indigo-400">{line.slice(3)}</h3>;
               if (line.startsWith("### ")) return <h4 key={i} className="text-sm font-medium mt-3 mb-1">{line.slice(4)}</h4>;
               if (line.startsWith("- [ ] ")) return <label key={i} className="flex items-start gap-2 text-sm my-1"><input type="checkbox" className="mt-0.5 rounded" /><span>{line.slice(6)}</span></label>;
-              if (line.startsWith("- ")) return <p key={i} className="text-sm my-0.5 pl-4 before:content-['•'] before:mr-2 before:text-muted-foreground">{line.slice(2)}</p>;
+              if (line.startsWith("- ")) return <p key={i} className="text-sm my-0.5 pl-4 before:content-['•'] before:mr-2 before:text-muted-foreground-subtle">{line.slice(2)}</p>;
               if (/^\d+\.\s/.test(line)) return <p key={i} className="text-sm my-0.5 pl-4">{line}</p>;
               if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="text-sm font-semibold mt-2 mb-0.5">{line.replace(/\*\*/g, "")}</p>;
               if (line.trim() === "") return <div key={i} className="h-2" />;
@@ -372,9 +429,11 @@ function MeetingBriefPanel({
 function NudgeCard({
   nudge,
   onUpdateStatus,
+  onRefresh,
 }: {
   nudge: Nudge;
   onUpdateStatus: (id: string, status: string) => void;
+  onRefresh?: () => void;
 }) {
   const [showDraft, setShowDraft] = useState(false);
   const meta = parseMetadata(nudge.metadata);
@@ -382,9 +441,15 @@ function NudgeCard({
   const cfg = getTypeConfig(nudge.ruleType);
   const CtaIcon = cfg.ctaIcon;
   const hasMeetingPrep = insights.some((i) => i.type === "MEETING_PREP");
+  const isFollowUp = nudge.ruleType === "FOLLOW_UP";
+  const isReplyNeeded = nudge.ruleType === "REPLY_NEEDED";
+  const isSequenceNudge = isFollowUp || isReplyNeeded;
+
+  const waitingMatch = nudge.reason.match(/no response in (\d+) day/);
+  const waitingDays = waitingMatch ? parseInt(waitingMatch[1]) : null;
 
   return (
-    <Card className="overflow-hidden">
+    <Card className={`overflow-hidden ${isSequenceNudge ? "border-l-4 border-l-violet-400 dark:border-l-violet-600" : ""}`}>
       <CardHeader className="pb-3 pt-5">
         <div className="flex items-start gap-4">
           <Avatar name={nudge.contact.name} size="lg" className="shrink-0" />
@@ -398,10 +463,27 @@ function NudgeCard({
               <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
                 {nudge.priority}
               </Badge>
+              {isFollowUp && (
+                <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-600 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-400">
+                  <Forward className="h-3 w-3 mr-1" />
+                  Active Outreach
+                </Badge>
+              )}
+              {isReplyNeeded && (
+                <Badge variant="outline" className="border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+                  <Reply className="h-3 w-3 mr-1" />
+                  Reply Needed
+                </Badge>
+              )}
             </div>
             <CardDescription className="mt-0.5">
               {nudge.contact.title} at {nudge.contact.company.name}
             </CardDescription>
+            {isFollowUp && waitingDays !== null && (
+              <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">
+                Active outreach — waiting for response ({waitingDays} day{waitingDays !== 1 ? "s" : ""})
+              </p>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -421,6 +503,7 @@ function NudgeCard({
           const seen = new Map<string, string | null>();
           for (const ins of insights) {
             if (ins.type === "STALE_CONTACT") continue;
+            if (ins.type === "FOLLOW_UP" || ins.type === "REPLY_NEEDED") continue;
             if (!seen.has(ins.type)) {
               seen.set(ins.type, ins.signalUrl ?? null);
             } else if (!seen.get(ins.type) && ins.signalUrl) {
@@ -440,7 +523,7 @@ function NudgeCard({
                     <IIcon className={`h-3 w-3 ${iCfg.color}`} />
                     {iCfg.label}
                     {url && (
-                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground-subtle hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()} aria-label={`Open ${iCfg.label} source (opens in new tab)`}>
                         <ExternalLink className="h-2.5 w-2.5" />
                       </a>
                     )}
@@ -487,7 +570,7 @@ function NudgeCard({
           <MeetingBriefPanel nudge={nudge} onClose={() => setShowDraft(false)} />
         )}
         {showDraft && !hasMeetingPrep && (
-          <DraftEmailPanel nudge={nudge} onClose={() => setShowDraft(false)} />
+          <DraftEmailPanel nudge={nudge} onClose={() => setShowDraft(false)} onNudgeSent={onRefresh} />
         )}
       </CardContent>
     </Card>
@@ -499,6 +582,7 @@ export default function NudgesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [followUpsOnly, setFollowUpsOnly] = useState(false);
   const [nudges, setNudges] = useState<Nudge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -559,13 +643,23 @@ export default function NudgesPage() {
     }
   }
 
-  const filteredNudges = typeFilter
+  const followUpCount = nudges.filter(
+    (n) => n.ruleType === "FOLLOW_UP" || n.ruleType === "REPLY_NEEDED"
+  ).length;
+
+  let filteredNudges = typeFilter
     ? nudges.filter((n) => {
         if (n.ruleType === typeFilter) return true;
         const meta = parseMetadata(n.metadata);
         return meta?.insights?.some((i) => i.type === typeFilter) ?? false;
       })
     : nudges;
+
+  if (followUpsOnly) {
+    filteredNudges = filteredNudges.filter(
+      (n) => n.ruleType === "FOLLOW_UP" || n.ruleType === "REPLY_NEEDED"
+    );
+  }
 
   const sortedNudges = [...filteredNudges].sort(
     (a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99)
@@ -624,15 +718,26 @@ export default function NudgesPage() {
         <div className="space-y-3">
           <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-card p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Status:</span>
+              <span className="text-sm font-medium text-muted-foreground-subtle">Status:</span>
               {STATUS_OPTIONS.map((opt) => (
                 <Button key={opt.value} variant={statusFilter === opt.value ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(opt.value)}>
                   {opt.label}
                 </Button>
               ))}
+              {followUpCount > 0 && (
+                <Button
+                  variant={followUpsOnly ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFollowUpsOnly(!followUpsOnly)}
+                  className={followUpsOnly ? "bg-violet-600 hover:bg-violet-700 text-white" : ""}
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  Follow-ups ({followUpCount})
+                </Button>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Priority:</span>
+              <span className="text-sm font-medium text-muted-foreground-subtle">Priority:</span>
               {PRIORITY_OPTIONS.map((opt) => (
                 <Button key={opt.value} variant={priorityFilter === opt.value ? "default" : "outline"} size="sm" onClick={() => setPriorityFilter(opt.value)}>
                   {opt.label}
@@ -644,11 +749,12 @@ export default function NudgesPage() {
           {/* Type filter chips */}
           {Object.keys(typeCounts).length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Type:</span>
+              <span className="text-sm font-medium text-muted-foreground-subtle">Type:</span>
               <Button variant={typeFilter === "" ? "default" : "outline"} size="sm" onClick={() => setTypeFilter("")}>
                 All ({nudges.length})
               </Button>
               {Object.entries(typeCounts)
+                .filter(([type]) => type !== "FOLLOW_UP" && type !== "REPLY_NEEDED")
                 .sort(([, a], [, b]) => b - a)
                 .map(([type, count]) => {
                   const cfg = getTypeConfig(type);
@@ -668,13 +774,13 @@ export default function NudgesPage() {
         <div className="space-y-4">
           {sortedNudges.length === 0 ? (
             <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
+              <CardContent className="py-12 text-center text-muted-foreground-subtle">
                 No nudges found. Try adjusting your filters or refresh to generate new nudges.
               </CardContent>
             </Card>
           ) : (
             sortedNudges.map((nudge) => (
-              <NudgeCard key={nudge.id} nudge={nudge} onUpdateStatus={handleUpdateStatus} />
+              <NudgeCard key={nudge.id} nudge={nudge} onUpdateStatus={handleUpdateStatus} onRefresh={fetchNudges} />
             ))
           )}
         </div>

@@ -5,7 +5,10 @@ import { nudgeRuleConfigRepo } from "@/lib/repositories";
 export async function GET() {
   try {
     const partnerId = await requirePartnerId();
-    const config = await nudgeRuleConfigRepo.upsert(partnerId, {});
+    let config = await nudgeRuleConfigRepo.findByPartnerId(partnerId);
+    if (!config) {
+      config = await nudgeRuleConfigRepo.upsert(partnerId, {});
+    }
     return NextResponse.json(config);
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {
@@ -40,7 +43,12 @@ const INT_FIELDS = [
 export async function PATCH(request: NextRequest) {
   try {
     const partnerId = await requirePartnerId();
-    const body = await request.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
     const updates: Record<string, boolean | number> = {};
 

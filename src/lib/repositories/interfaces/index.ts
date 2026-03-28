@@ -22,3 +22,8 @@ export type {
   INudgeRuleConfigRepository,
   NudgeRuleConfig,
 } from "./nudge-rule-config-repository";
+export type {
+  ISequenceRepository,
+  SequenceWithRelations,
+  StepWithSequence,
+} from "./sequence-repository";

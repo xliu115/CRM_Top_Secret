@@ -428,13 +428,14 @@ export interface NarrativeBriefingContext extends DashboardBriefingContext {
 const NARRATIVE_SYSTEM_PROMPT = `You are a trusted chief of staff writing a morning briefing for a senior consulting Partner. Your tone is warm, direct, and efficient — like a colleague who knows their priorities.
 
 Rules:
-- Write flowing prose, 3-4 short paragraphs. NO bullet points, NO headers, NO markdown.
+- Write flowing prose, 3-4 short paragraphs. NO bullet points, NO headers.
 - Lead with the single most important action — the one that would keep the Partner up at night if missed.
 - Reference people by full name on first mention, first name only after.
 - Weave nudges, meetings, and news into a coherent narrative — don't list them separately.
 - End with a brief "on the radar" note for lower-priority signals worth noting.
 - Keep it under 250 words — this is a 2-minute read over coffee.
 - Be specific: use actual names, companies, days-since numbers, meeting times.
+- Use **bold** (markdown) to highlight key information that should catch the reader's eye: contact full names on first mention, company names, days-since numbers, meeting titles, and key news headlines. Do NOT bold generic phrases — only specific names, numbers, and facts.
 
 After the narrative, output a JSON block with exactly 3 top actions in this format:
 ---ACTIONS---
@@ -571,31 +572,32 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
 
   if (ctx.nudges.length > 0) {
     const top = ctx.nudges[0];
-    const daysPart = top.daysSince ? ` — it's been ${top.daysSince} days since your last conversation` : "";
+    const daysPart = top.daysSince ? ` — it's been **${top.daysSince} days** since your last conversation` : "";
     paragraphs.push(
-      `${firstName}, your most important move today is reaching out to ${top.contactName} at ${top.company}${daysPart}. ${top.reason}`
+      `${firstName}, your most important move today is reaching out to **${top.contactName}** at **${top.company}**${daysPart}. ${top.reason}`
     );
 
     if (ctx.nudges.length > 1) {
-      const others = ctx.nudges.slice(1, 3).map((n) => `${n.contactName} at ${n.company}`).join(" and ");
+      const others = ctx.nudges.slice(1, 3).map((n) => `**${n.contactName}** at **${n.company}**`).join(" and ");
       paragraphs.push(
-        `You also have ${others} on your radar. ${ctx.nudges.length > 3 ? `That's ${ctx.nudges.length} total nudges to work through today.` : ""}`
+        `You also have ${others} on your radar. ${ctx.nudges.length > 3 ? `That's **${ctx.nudges.length} total nudges** to work through today.` : ""}`
       );
     }
   }
 
   if (ctx.meetings.length > 0) {
     const m = ctx.meetings[0];
-    const attendees = m.attendeeNames.join(", ");
+    const attendees = m.attendeeNames.map((n) => `**${n}**`).join(", ");
     paragraphs.push(
-      `Coming up: "${m.title}" at ${m.startTime} with ${attendees}.${ctx.meetings.length > 1 ? ` Plus ${ctx.meetings.length - 1} more meeting${ctx.meetings.length > 2 ? "s" : ""} this week.` : ""}`
+      `Coming up: **"${m.title}"** at **${m.startTime}** with ${attendees}.${ctx.meetings.length > 1 ? ` Plus ${ctx.meetings.length - 1} more meeting${ctx.meetings.length > 2 ? "s" : ""} this week.` : ""}`
     );
   }
 
   if (ctx.clientNews.length > 0) {
     const news = ctx.clientNews[0];
+    const headline = news.content.slice(0, 120) + (news.content.length > 120 ? "..." : "");
     paragraphs.push(
-      `On the radar: ${news.company ? `${news.company} is in the news — ` : ""}${news.content.slice(0, 120)}${news.content.length > 120 ? "..." : ""}`
+      `On the radar: ${news.company ? `**${news.company}** is in the news — ` : ""}${headline}`
     );
   }
 
@@ -608,5 +610,236 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
   return {
     narrative: paragraphs.join("\n\n"),
     topActions: buildFallbackActions(ctx),
+  };
+}
+
+// ── Follow-Up Email for Cadence Engine ─────────────────────────────
+
+export interface FollowUpEmailContext {
+  partnerName: string;
+  contactName: string;
+  contactTitle: string;
+  companyName: string;
+  stepNumber: number;
+  totalSteps: number;
+  stepType: string;
+  angleStrategy: string;
+  previousEmails: string[];
+  recentInteractions: string[];
+  daysSinceLastStep: number;
+}
+
+export async function generateFollowUpEmail(
+  ctx: FollowUpEmailContext
+): Promise<{ subject: string; body: string }> {
+  const angleMap: Record<string, string> = {
+    "check-in": "a warm check-in angle",
+    "value-add": "sharing a relevant insight or resource",
+    "news-reference": "referencing recent company news",
+    "event-followup": "following up after a shared event",
+  };
+  const angleDesc = angleMap[ctx.angleStrategy] ?? "a professional follow-up";
+
+  const prevEmailsSummary = ctx.previousEmails.length > 0
+    ? `Previous emails sent in this sequence:\n${ctx.previousEmails.map((e, i) => `--- Email ${i + 1} ---\n${e.slice(0, 300)}`).join("\n")}`
+    : "This is the first email in the sequence.";
+
+  const interactionCtx = ctx.recentInteractions.length > 0
+    ? `Recent interactions:\n${ctx.recentInteractions.map((i) => `- ${i}`).join("\n")}`
+    : "No recent interactions.";
+
+  const result = await callLLM(
+    `You are an expert relationship manager writing follow-up outreach emails. Each follow-up must use a DIFFERENT angle than previous emails. Be warm, concise, and professional. Return JSON with "subject" and "body" keys only.`,
+    `Write a follow-up email from ${ctx.partnerName || "the partner"} to ${ctx.contactName} (${ctx.contactTitle} at ${ctx.companyName}).
+
+This is follow-up step ${ctx.stepNumber + 1}. The approach is ${angleDesc}.
+It has been ${ctx.daysSinceLastStep} days since the last outreach.
+
+${prevEmailsSummary}
+
+${interactionCtx}
+
+IMPORTANT: Use a completely different angle from any previous emails. Keep under 150 words. Return valid JSON: {"subject": "...", "body": "..."}`
+  );
+
+  if (result) {
+    try {
+      const cleaned = result.replace(/```json\n?|\n?```/g, "").trim();
+      return JSON.parse(cleaned);
+    } catch {
+      return generateFollowUpTemplate(ctx);
+    }
+  }
+  return generateFollowUpTemplate(ctx);
+}
+
+function generateFollowUpTemplate(ctx: FollowUpEmailContext): {
+  subject: string;
+  body: string;
+} {
+  const firstName = ctx.contactName.split(" ")[0];
+  const partnerFirst = ctx.partnerName?.split(" ")[0] || "Best";
+
+  const templates = [
+    {
+      subject: `Following up — ${ctx.companyName}`,
+      body: `Hi ${firstName},\n\nI wanted to follow up on my earlier note. I know things can get busy, so no worries if the timing wasn't right.\n\nWould love to find 20 minutes to connect when it works for you.\n\nBest,\n${partnerFirst}`,
+    },
+    {
+      subject: `Quick thought for ${ctx.companyName}`,
+      body: `Hi ${firstName},\n\nI came across something that made me think of your work at ${ctx.companyName} and wanted to share.\n\nWould you be open to a brief call to discuss? Happy to work around your schedule.\n\nBest,\n${partnerFirst}`,
+    },
+    {
+      subject: `Checking in — ${ctx.companyName}`,
+      body: `Hi ${firstName},\n\nI hope all is going well at ${ctx.companyName}. I wanted to reach out one more time — I think there could be some valuable things to discuss.\n\nIf the timing is better now, I'd be glad to set something up. No pressure either way.\n\nBest regards,\n${partnerFirst}`,
+    },
+  ];
+
+  return templates[Math.min(ctx.stepNumber, templates.length - 1)];
+}
+
+// ── Reply Draft for Inbound Email ──────────────────────────────────
+
+export interface ReplyDraftContext {
+  partnerName: string;
+  contactName: string;
+  contactTitle: string;
+  companyName: string;
+  inboundSummary: string;
+  recentInteractions: string[];
+}
+
+export async function generateReplyDraft(
+  ctx: ReplyDraftContext
+): Promise<{ subject: string; body: string }> {
+  const interactionCtx = ctx.recentInteractions.length > 0
+    ? `Recent interaction history:\n${ctx.recentInteractions.map((i) => `- ${i}`).join("\n")}`
+    : "";
+
+  const result = await callLLM(
+    `You are an expert relationship manager drafting a reply to an inbound email. Be warm, responsive, and professional. Return JSON with "subject" and "body" keys only.`,
+    `Draft a reply from ${ctx.partnerName} to ${ctx.contactName} (${ctx.contactTitle} at ${ctx.companyName}).
+
+They sent an email with this summary: "${ctx.inboundSummary}"
+
+${interactionCtx}
+
+Write a thoughtful, personalized reply. Keep under 150 words. Return valid JSON: {"subject": "...", "body": "..."}`
+  );
+
+  if (result) {
+    try {
+      const cleaned = result.replace(/```json\n?|\n?```/g, "").trim();
+      return JSON.parse(cleaned);
+    } catch {
+      return {
+        subject: `Re: ${ctx.contactName}`,
+        body: `Hi ${ctx.contactName.split(" ")[0]},\n\nThank you for reaching out. I appreciate you getting in touch.\n\nLet me take a look and get back to you shortly.\n\nBest,\n${ctx.partnerName.split(" ")[0]}`,
+      };
+    }
+  }
+
+  return {
+    subject: `Re: ${ctx.contactName}`,
+    body: `Hi ${ctx.contactName.split(" ")[0]},\n\nThank you for reaching out. I appreciate you getting in touch.\n\nLet me take a look and get back to you shortly.\n\nBest,\n${ctx.partnerName.split(" ")[0]}`,
+  };
+}
+
+// ── Sequence Classifier ────────────────────────────────────────────
+
+export interface SequenceClassifyContext {
+  ruleType: string;
+  nudgeReason: string;
+  emailSubject: string;
+  emailBody: string;
+  contactImportance: string;
+  daysSinceLastContact?: number;
+}
+
+export async function classifySequenceWorthy(
+  ctx: SequenceClassifyContext
+): Promise<{ shouldSequence: boolean; reason: string }> {
+  const result = await callLLM(
+    `You are an expert CRM analyst deciding if a sent outreach email warrants automated follow-up tracking (a multi-step sequence). Answer with JSON: {"shouldSequence": true/false, "reason": "one sentence explanation"}.
+
+Rules:
+- Meeting prep emails are NEVER sequence-worthy (the meeting itself is the follow-up).
+- Emails asking for a meeting, call, or response ARE sequence-worthy.
+- Congratulatory or FYI-only emails are NOT sequence-worthy unless the contact is CRITICAL importance.
+- CRITICAL/HIGH importance contacts should almost always get sequences for any outreach.
+- If the email contains a question or call-to-action, it's likely sequence-worthy.`,
+    `Rule type: ${ctx.ruleType}
+Nudge reason: ${ctx.nudgeReason}
+Email subject: ${ctx.emailSubject}
+Email body (first 500 chars): ${ctx.emailBody.slice(0, 500)}
+Contact importance: ${ctx.contactImportance}
+Days since last contact: ${ctx.daysSinceLastContact ?? "unknown"}
+
+Should this outreach get automated follow-up tracking? Return valid JSON only.`
+  );
+
+  if (result) {
+    try {
+      const cleaned = result.replace(/```json\n?|\n?```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      if (typeof parsed.shouldSequence === "boolean") {
+        return parsed;
+      }
+    } catch {
+      // fall through to template
+    }
+  }
+
+  return classifySequenceTemplate(ctx);
+}
+
+function classifySequenceTemplate(
+  ctx: SequenceClassifyContext
+): { shouldSequence: boolean; reason: string } {
+  const importance = ctx.contactImportance.toUpperCase();
+  const isHighValue = importance === "CRITICAL" || importance === "HIGH";
+
+  if (ctx.ruleType === "MEETING_PREP") {
+    return { shouldSequence: false, reason: "Meeting prep emails don't need follow-up sequences" };
+  }
+
+  if (ctx.ruleType === "REPLY_NEEDED") {
+    return { shouldSequence: false, reason: "Reply emails are responses, not outreach that needs tracking" };
+  }
+
+  if (ctx.ruleType === "STALE_CONTACT" && isHighValue) {
+    return { shouldSequence: true, reason: "Re-engagement outreach to high-value contact warrants follow-up" };
+  }
+
+  if (ctx.ruleType === "JOB_CHANGE") {
+    return { shouldSequence: true, reason: "Congratulations on role change — expect a response" };
+  }
+
+  if (["COMPANY_NEWS", "UPCOMING_EVENT", "EVENT_REGISTERED"].includes(ctx.ruleType)) {
+    return { shouldSequence: true, reason: "Proactive outreach referencing timely event — follow-up warranted" };
+  }
+
+  if (["EVENT_ATTENDED", "ARTICLE_READ", "LINKEDIN_ACTIVITY"].includes(ctx.ruleType)) {
+    return {
+      shouldSequence: isHighValue,
+      reason: isHighValue
+        ? "Engagement-based outreach to high-value contact — track follow-up"
+        : "Light engagement signal — one-off outreach sufficient",
+    };
+  }
+
+  if (ctx.ruleType === "STALE_CONTACT") {
+    return { shouldSequence: false, reason: "Lower-priority stale contact — one-off check-in" };
+  }
+
+  if (ctx.ruleType === "FOLLOW_UP") {
+    return { shouldSequence: false, reason: "Already part of an active sequence" };
+  }
+
+  return {
+    shouldSequence: isHighValue,
+    reason: isHighValue
+      ? "High-value contact — default to follow-up tracking"
+      : "Standard outreach — no follow-up tracking needed",
   };
 }

@@ -42,7 +42,7 @@ export async function GET() {
 
     const signalCountByCompany = new Map<string, number>();
     for (const s of signalCounts) {
-      const companyId = s.companyId ?? s.contact?.companyId ?? null;
+      const companyId = s.companyId ?? null;
       if (!companyId) continue;
       signalCountByCompany.set(
         companyId,

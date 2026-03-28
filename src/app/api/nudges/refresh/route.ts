@@ -28,7 +28,7 @@ export async function POST() {
         console.error("[nudge-refresh] Email send failed:", err)
       );
 
-      sendNudgeDigestSms(partner.name, partner.email, nudges).catch((err) =>
+      sendNudgeDigestSms(partner.name, "", nudges).catch((err) =>
         console.error("[nudge-refresh] SMS send failed:", err)
       );
     }

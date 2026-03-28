@@ -12,6 +12,7 @@ import {
   generateArticleEngagements,
   generateCampaignOutreaches,
 } from "./seed-data/engagements";
+import { generateSequenceData } from "./seed-data/sequences";
 
 const adapter = new PrismaBetterSqlite3({
   url: process.env.DATABASE_URL ?? "file:./dev.db",
@@ -21,7 +22,9 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("🌱 Seeding database...\n");
 
-  // Clear existing data
+  // Clear existing data (order matters for FK constraints)
+  await prisma.cadenceStep.deleteMany();
+  await prisma.outreachSequence.deleteMany();
   await prisma.campaignOutreach.deleteMany();
   await prisma.articleEngagement.deleteMany();
   await prisma.eventRegistration.deleteMany();
@@ -58,6 +61,7 @@ async function main() {
     id: c.id,
     name: c.name,
     companyId: c.companyId,
+    partnerId: c.partnerId,
     title: c.title,
   }));
   const interactions = generateInteractions(contactRefs);
@@ -139,16 +143,58 @@ async function main() {
     await prisma.campaignOutreach.createMany({ data: batch });
   }
 
+  // Cadence engine demo data: sequences, steps, follow-up nudges
+  const seqData = generateSequenceData(contactRefs);
+
+  const allSeqInteractions = [
+    ...seqData.inboundInteractions,
+    ...seqData.outboundInteractions,
+  ];
+  if (allSeqInteractions.length > 0) {
+    console.log(`Creating ${allSeqInteractions.length} cadence interactions...`);
+    await prisma.interaction.createMany({ data: allSeqInteractions });
+  }
+
+  // Origin nudges must exist before sequences reference them
+  const originNudges = seqData.sequenceNudges.filter(
+    (n) => n.id.startsWith("nudge-origin-")
+  );
+  if (originNudges.length > 0) {
+    console.log(`Creating ${originNudges.length} origin nudges...`);
+    await prisma.nudge.createMany({ data: originNudges });
+  }
+
+  console.log(`Creating ${seqData.sequences.length} outreach sequences...`);
+  for (const seq of seqData.sequences) {
+    await prisma.outreachSequence.create({ data: seq });
+  }
+
+  if (seqData.cadenceSteps.length > 0) {
+    console.log(`Creating ${seqData.cadenceSteps.length} cadence steps...`);
+    await prisma.cadenceStep.createMany({ data: seqData.cadenceSteps });
+  }
+
+  const activeNudges = seqData.sequenceNudges.filter(
+    (n) => !n.id.startsWith("nudge-origin-")
+  );
+  if (activeNudges.length > 0) {
+    console.log(`Creating ${activeNudges.length} sequence/reply nudges...`);
+    await prisma.nudge.createMany({ data: activeNudges });
+  }
+
   console.log("\n✅ Seed complete!");
   console.log(`   Partners:     ${partners.length}`);
   console.log(`   Companies:    ${companies.length}`);
   console.log(`   Contacts:     ${contacts.length}`);
-  console.log(`   Interactions: ${interactions.length}`);
+  console.log(`   Interactions: ${interactions.length + allSeqInteractions.length}`);
   console.log(`   Signals:      ${signals.length}`);
   console.log(`   Meetings:     ${meetings.length}`);
   console.log(`   Events:       ${eventRegs.length}`);
   console.log(`   Articles:     ${articleEngs.length}`);
   console.log(`   Campaigns:    ${campaignOuts.length}`);
+  console.log(`   Sequences:    ${seqData.sequences.length}`);
+  console.log(`   Steps:        ${seqData.cadenceSteps.length}`);
+  console.log(`   Seq Nudges:   ${seqData.sequenceNudges.length}`);
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {

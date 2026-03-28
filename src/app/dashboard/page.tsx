@@ -20,6 +20,9 @@ import {
   Sparkles,
   Mic,
   Settings,
+  AlignLeft,
+  List,
+  Forward,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -33,7 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, isToday, isTomorrow } from "date-fns";
+import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -93,6 +96,32 @@ type Nudge = {
   signal?: { type: string; content: string; url?: string | null } | null;
 };
 
+type StructuredBriefingData = {
+  nudges: {
+    contactName: string;
+    company: string;
+    reason: string;
+    priority: string;
+    contactId: string;
+    nudgeId: string;
+    ruleType: string;
+    daysSince?: number;
+  }[];
+  meetings: {
+    title: string;
+    startTime: string;
+    attendeeNames: string[];
+    meetingId: string;
+  }[];
+  news: {
+    content: string;
+    contactName?: string;
+    company?: string;
+    companyId?: string;
+    url?: string | null;
+  }[];
+};
+
 /* ── Helpers ───────────────────────────────────────────────────────── */
 
 function parseInsights(metadata?: string | null): InsightData[] {
@@ -112,9 +141,9 @@ function getPriorityClassName(priority: string): string {
     case "MEDIUM":
       return "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400";
     case "LOW":
-      return "border-border bg-muted/50 text-muted-foreground";
+      return "border-border bg-muted/50 text-muted-foreground-subtle";
     default:
-      return "border-border bg-muted/50 text-muted-foreground";
+      return "border-border bg-muted/50 text-muted-foreground-subtle";
   }
 }
 
@@ -138,7 +167,7 @@ const NUDGE_TYPE_CONFIG: Record<string, NudgeTypeConfig> = {
 };
 
 const DEFAULT_TYPE_CONFIG: NudgeTypeConfig = {
-  icon: Send, label: "Nudge", color: "text-muted-foreground", bgColor: "bg-muted/50",
+  icon: Send, label: "Nudge", color: "text-muted-foreground-subtle", bgColor: "bg-muted/50",
 };
 
 function getSignalTypeConfig(type: string): NudgeTypeConfig {
@@ -238,6 +267,318 @@ function groupNewsByClient(news: DashboardData["clientNews"]): {
     .sort((a, b) => (IMPORTANCE_RANK[a.topImportance] ?? 99) - (IMPORTANCE_RANK[b.topImportance] ?? 99));
 }
 
+/* ── Structured Briefing View ──────────────────────────────────────── */
+
+const RULE_TYPE_LABELS: Record<string, string> = {
+  STALE_CONTACT: "overdue for a check-in",
+  JOB_CHANGE: "executive transition",
+  COMPANY_NEWS: "company news",
+  UPCOMING_EVENT: "upcoming event",
+  MEETING_PREP: "meeting prep",
+  EVENT_ATTENDED: "event follow-up",
+  EVENT_REGISTERED: "event outreach",
+  ARTICLE_READ: "content engagement",
+  LINKEDIN_ACTIVITY: "LinkedIn activity",
+};
+
+function summarizeNudgeReasons(nudges: StructuredBriefingData["nudges"], contactName: string, company: string): string {
+  const contactNudges = nudges.filter(
+    (n) => n.contactName === contactName && n.company === company
+  );
+  if (contactNudges.length === 0) return "";
+  const reasons = contactNudges.map((n) => RULE_TYPE_LABELS[n.ruleType] ?? n.ruleType.toLowerCase().replace(/_/g, " "));
+  const unique = [...new Set(reasons)];
+  const count = unique.length;
+  if (count <= 3) return unique.join(", ");
+  return unique.slice(0, 2).join(", ") + `, and ${count - 2} more`;
+}
+
+type BriefingAction = {
+  contactName: string;
+  company: string;
+  actionLabel: string;
+  deeplink: string;
+  detail: string;
+};
+
+/** Shape returned by GET /api/sequences (Prisma JSON). */
+type ActiveSequenceBriefingItem = {
+  id: string;
+  currentStep: number;
+  contact: { id: string; name: string; company: { name: string } };
+  steps: Array<{ stepNumber: number; executedAt: string | null }>;
+};
+
+function formatActiveSequenceStatus(seq: ActiveSequenceBriefingItem): string {
+  const current = seq.steps.find((s) => s.stepNumber === seq.currentStep);
+  if (!current?.executedAt) {
+    return "Ready to reach out";
+  }
+  const days = Math.max(
+    0,
+    differenceInCalendarDays(new Date(), new Date(current.executedAt)),
+  );
+  if (days === 0) {
+    return "Waiting for response (today)";
+  }
+  return `Waiting for response (${days} day${days === 1 ? "" : "s"})`;
+}
+
+function StructuredBriefingView({
+  data,
+  actions,
+  activeSequences,
+}: {
+  data: StructuredBriefingData | null;
+  actions: BriefingAction[];
+  activeSequences: ActiveSequenceBriefingItem[];
+}) {
+  if (!data) {
+    return (
+      <p className="text-sm text-muted-foreground px-2">
+        No briefing data available.
+      </p>
+    );
+  }
+
+  // Group contacts and sort groups by highest priority within
+  const contactMap = new Map<string, StructuredBriefingData["nudges"][number][]>();
+  for (const n of data.nudges) {
+    const key = `${n.contactName}||${n.company}`;
+    const list = contactMap.get(key) ?? [];
+    list.push(n);
+    contactMap.set(key, list);
+  }
+
+  const sortedContacts = [...contactMap.entries()].sort((a, b) => {
+    const bestA = Math.min(...a[1].map((n) => PRIORITY_RANK[n.priority] ?? 99));
+    const bestB = Math.min(...b[1].map((n) => PRIORITY_RANK[n.priority] ?? 99));
+    return bestA - bestB;
+  });
+
+  // Group news by company, sorted by whether the company has a priority contact
+  const nudgeCompanies = new Set(data.nudges.map((n) => n.company));
+  const newsGrouped = new Map<string, StructuredBriefingData["news"]>();
+  for (const item of data.news) {
+    const key = item.company ?? "Other";
+    const list = newsGrouped.get(key) ?? [];
+    list.push(item);
+    newsGrouped.set(key, list);
+  }
+
+  const sortedNews = [...newsGrouped.entries()].sort((a, b) => {
+    const aHasPriority = nudgeCompanies.has(a[0]) ? 0 : 1;
+    const bHasPriority = nudgeCompanies.has(b[0]) ? 0 : 1;
+    return aHasPriority - bHasPriority;
+  });
+
+  return (
+    <div className="space-y-6 px-1">
+      {/* Priority Contacts */}
+      {sortedContacts.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-orange-100 dark:bg-orange-950/40">
+              <Clock className="h-3.5 w-3.5 text-orange-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Priority contacts for today
+            </h3>
+          </div>
+          <div className="space-y-3 pl-8">
+            {sortedContacts.map(([key, nudges]) => {
+              const first = nudges[0];
+              const bestPriority = nudges.reduce(
+                (best, n) => ((PRIORITY_RANK[n.priority] ?? 99) < (PRIORITY_RANK[best] ?? 99) ? n.priority : best),
+                nudges[0].priority,
+              );
+              const reasonsSummary = summarizeNudgeReasons(data.nudges, first.contactName, first.company);
+              return (
+                <div key={key} className="group">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <Link
+                      href={`/contacts/${first.contactId}${first.nudgeId ? `?nudge=${first.nudgeId}` : ""}`}
+                      className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
+                    >
+                      {first.contactName}
+                    </Link>
+                    <span className="text-sm text-muted-foreground">
+                      at {first.company}
+                    </span>
+                    {bestPriority === "URGENT" && (
+                      <Badge variant="outline" className="ml-1 border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400 text-[10px] py-0">
+                        Urgent
+                      </Badge>
+                    )}
+                    {bestPriority === "HIGH" && (
+                      <Badge variant="outline" className="ml-1 border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400 text-[10px] py-0">
+                        High
+                      </Badge>
+                    )}
+                  </div>
+                  {first.daysSince != null && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      It&apos;s been {first.daysSince} days since your last conversation.
+                    </p>
+                  )}
+                  {nudges.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {nudges.length} {nudges.length === 1 ? "reason" : "reasons"} to reach out: {reasonsSummary}.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Active follow-ups (outreach sequences) */}
+      {activeSequences.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 dark:bg-violet-950/40">
+              <Forward className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Active follow-ups
+            </h3>
+          </div>
+          <div className="space-y-3 pl-8">
+            {activeSequences.map((seq) => (
+              <div key={seq.id}>
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <Link
+                    href={`/contacts/${seq.contact.id}`}
+                    className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
+                  >
+                    {seq.contact.name}
+                  </Link>
+                  <span className="text-sm text-muted-foreground">
+                    at {seq.contact.company.name}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatActiveSequenceStatus(seq)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Upcoming Meetings */}
+      {data.meetings.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-950/40">
+              <CalendarDays className="h-3.5 w-3.5 text-indigo-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Upcoming meetings
+            </h3>
+          </div>
+          <div className="space-y-2.5 pl-8">
+            {data.meetings.map((m) => (
+              <div key={m.meetingId}>
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <Link
+                    href={`/meetings/${m.meetingId}`}
+                    className="text-sm font-medium text-foreground hover:text-primary hover:underline transition-colors"
+                  >
+                    &ldquo;{m.title}&rdquo;
+                  </Link>
+                  <span className="text-xs text-muted-foreground">
+                    at {m.startTime}
+                  </span>
+                  {m.attendeeNames.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      with {m.attendeeNames.join(", ")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Company News — sorted by priority companies first */}
+      {sortedNews.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-950/40">
+              <Newspaper className="h-3.5 w-3.5 text-blue-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Company news
+            </h3>
+          </div>
+          <div className="space-y-3 pl-8">
+            {sortedNews.map(([company, items]) => (
+              <div key={company}>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-foreground">{company}</p>
+                  {nudgeCompanies.has(company) && (
+                    <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary text-[10px] py-0">
+                      Priority
+                    </Badge>
+                  )}
+                </div>
+                <ul className="mt-1 space-y-1">
+                  {items.map((item, idx) => (
+                    <li key={idx} className="text-xs text-muted-foreground leading-relaxed">
+                      <span className="mr-1">•</span>
+                      {item.content.length > 150
+                        ? item.content.slice(0, 147) + "..."
+                        : item.content}
+                      {item.url && (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-1 inline-flex items-center text-primary hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {data.nudges.length === 0 &&
+        data.meetings.length === 0 &&
+        data.news.length === 0 &&
+        activeSequences.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Nothing pressing on your plate today. Nice!
+        </p>
+      )}
+
+      {/* CTA Actions — same as narrative view */}
+      {actions.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-2">
+          {actions.map((action, i) => (
+            <Link
+              key={`${action.deeplink}-${i}`}
+              href={action.deeplink}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              <ChevronRight className="h-3 w-3" />
+              {action.actionLabel} — {action.contactName}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Coming Soon placeholder ───────────────────────────────────────── */
 
 function ComingSoonCard({ title, description }: { title: string; description: string }) {
@@ -253,9 +594,9 @@ function ComingSoonCard({ title, description }: { title: string; description: st
       <CardContent>
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className="rounded-full bg-muted p-3 mb-3">
-            <Sparkles className="h-5 w-5 text-muted-foreground" />
+            <Sparkles className="h-5 w-5 text-muted-foreground-subtle" />
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground-subtle">
             This card is under development. Enable it in{" "}
             <Link href="/dashboard/settings" className="text-primary hover:underline">
               Dashboard Settings
@@ -291,6 +632,9 @@ export default function DashboardPage() {
   const [briefingActions, setBriefingActions] = useState<
     { contactName: string; company: string; actionLabel: string; deeplink: string; detail: string }[]
   >([]);
+  const [structuredData, setStructuredData] = useState<StructuredBriefingData | null>(null);
+  const [activeSequences, setActiveSequences] = useState<ActiveSequenceBriefingItem[]>([]);
+  const [briefingView, setBriefingView] = useState<"conversational" | "structured">("conversational");
   const [briefingLoading, setBriefingLoading] = useState(true);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
@@ -333,15 +677,25 @@ export default function DashboardPage() {
         if (!cancelled) setLoading(false);
       }
 
-      // Fetch briefing after dashboard data is loaded
+      // Fetch briefing + active sequences after dashboard data is loaded
       try {
-        const res = await fetch("/api/dashboard/briefing");
+        const [briefingRes, sequencesRes] = await Promise.all([
+          fetch("/api/dashboard/briefing"),
+          fetch("/api/sequences?status=ACTIVE"),
+        ]);
         if (cancelled) return;
-        if (res.ok) {
-          const data = await res.json();
+        if (briefingRes.ok) {
+          const data = await briefingRes.json();
           if (!cancelled) {
             if (data.briefing) setBriefing(data.briefing);
             if (Array.isArray(data.topActions)) setBriefingActions(data.topActions);
+            if (data.structured) setStructuredData(data.structured);
+          }
+        }
+        if (sequencesRes.ok) {
+          const sequences = await sequencesRes.json();
+          if (!cancelled && Array.isArray(sequences)) {
+            setActiveSequences(sequences as ActiveSequenceBriefingItem[]);
           }
         }
       } catch {
@@ -458,8 +812,9 @@ export default function DashboardPage() {
       <div className="flex justify-end">
         <Link
           href="/dashboard/settings"
-          className="rounded-md p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="inline-flex items-center justify-center rounded-md p-2.5 min-h-11 min-w-11 text-muted-foreground-subtle hover:text-foreground hover:bg-muted transition-colors"
           title="Dashboard Settings"
+          aria-label="Dashboard settings"
         >
           <Settings className="h-5 w-5" />
         </Link>
@@ -498,35 +853,81 @@ export default function DashboardPage() {
                       <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
                       <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "300ms" }} />
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-muted-foreground-subtle">
                       Preparing your briefing...
                     </span>
                   </div>
                 </div>
-              ) : briefing ? (
-                <div className="flex gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <Sparkles className="h-4 w-4 text-primary" />
+              ) : (briefing || structuredData) ? (
+                <>
+                  {/* View toggle */}
+                  <div className="flex items-center justify-end mb-3">
+                    <div className="inline-flex items-center rounded-lg border border-border bg-muted/50 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setBriefingView("conversational")}
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          briefingView === "conversational"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground-subtle hover:text-foreground"
+                        }`}
+                        aria-label="Conversational view"
+                      >
+                        <AlignLeft className="h-3.5 w-3.5" />
+                        Narrative
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBriefingView("structured")}
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          briefingView === "structured"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground-subtle hover:text-foreground"
+                        }`}
+                        aria-label="Structured view"
+                      >
+                        <List className="h-3.5 w-3.5" />
+                        Structured
+                      </button>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1 space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground">Activate</p>
-                    <MarkdownContent content={briefing} className="text-sm text-foreground" />
-                    {briefingActions.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {briefingActions.map((action) => (
-                          <Link
-                            key={action.deeplink}
-                            href={action.deeplink}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                          >
-                            <ChevronRight className="h-3 w-3" />
-                            {action.actionLabel}{action.company ? ` — ${action.contactName}` : ` — ${action.contactName}`}
-                          </Link>
-                        ))}
+
+                  {briefingView === "conversational" ? (
+                    /* ── Conversational (narrative) view ── */
+                    <div className="flex gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                        <Sparkles className="h-4 w-4 text-primary" />
                       </div>
-                    )}
-                  </div>
-                </div>
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground-subtle">Activate</p>
+                        {briefing && (
+                          <MarkdownContent content={briefing} className="text-sm text-foreground" />
+                        )}
+                        {briefingActions.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {briefingActions.map((action, i) => (
+                              <Link
+                                key={`${action.deeplink}-${i}`}
+                                href={action.deeplink}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                              >
+                                <ChevronRight className="h-3 w-3" />
+                                {action.actionLabel} — {action.contactName}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* ── Structured (bullet-point) view ── */
+                    <StructuredBriefingView
+                      data={structuredData}
+                      actions={briefingActions}
+                      activeSequences={activeSequences}
+                    />
+                  )}
+                </>
               ) : null}
             </div>
 
@@ -535,7 +936,7 @@ export default function DashboardPage() {
               <form onSubmit={handleChatSubmit} className="space-y-3">
                 <div className="flex gap-2">
                   <div className="relative flex flex-1">
-                    <Sparkles className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Sparkles className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground-subtle" />
                     <input
                       ref={chatInputRef}
                       id="dashboard-chat"
@@ -543,7 +944,7 @@ export default function DashboardPage() {
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       placeholder="Ask AI a question or make a request..."
-                      className="flex-1 rounded-lg border border-border bg-background pl-11 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="flex-1 rounded-lg border border-border bg-background pl-11 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground-subtle focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                   {isSupported && (
@@ -553,7 +954,7 @@ export default function DashboardPage() {
                       size="icon"
                       onClick={isListening ? stopListening : startListening}
                       className={`h-11 w-11 shrink-0 relative ${
-                        isListening ? "animate-pulse" : "text-muted-foreground hover:text-foreground"
+                        isListening ? "animate-pulse" : "text-muted-foreground-subtle hover:text-foreground"
                       }`}
                       title={isListening ? "Stop listening" : "Voice input"}
                     >
@@ -580,7 +981,7 @@ export default function DashboardPage() {
                       key={q}
                       type="button"
                       onClick={() => handleSuggestedQuestion(q)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       <Sparkles className="h-3 w-3 text-primary" />
                       {q}
@@ -782,7 +1183,7 @@ export default function DashboardPage() {
                                   {hasPrep ? "Brief ready" : "Prep needed"}
                                 </Badge>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
+                              <p className="text-xs text-muted-foreground-subtle mt-0.5">
                                 {format(new Date(meeting.startTime), "EEE h:mm a")}
                                 {topAttendee?.company && ` · ${topAttendee.company.name}`}
                               </p>
@@ -858,7 +1259,7 @@ export default function DashboardPage() {
                                   className="flex gap-3 pb-3 last:pb-0"
                                 >
                                   <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
-                                    <IIcon className="h-3 w-3 text-muted-foreground" />
+                                    <IIcon className="h-3 w-3 text-muted-foreground-subtle" />
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     {item.contact?.name && (
@@ -869,7 +1270,7 @@ export default function DashboardPage() {
                                     <p className="text-xs text-muted-foreground line-clamp-2">
                                       {item.content}
                                     </p>
-                                    <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                                    <p className="mt-0.5 text-[11px] text-muted-foreground-subtle">
                                       {format(new Date(item.date), "MMM d")} · {item.type}
                                     </p>
                                     {item.url && (

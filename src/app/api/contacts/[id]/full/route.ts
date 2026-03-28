@@ -36,9 +36,11 @@ export async function GET(
         nudgeRepo.findByContactId(id),
       ]);
 
-    const signals = [...contactSignals, ...companySignals].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+    const signals = [
+      ...new Map(
+        [...contactSignals, ...companySignals].map((s) => [s.id, s])
+      ).values(),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const openNudges = nudges.filter((n) => n.status === "OPEN");
 

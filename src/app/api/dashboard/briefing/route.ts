@@ -62,9 +62,22 @@ export async function GET(_request: NextRequest) {
 
     const result = await generateNarrativeBriefing(ctx);
 
+    const newsWithUrls = clientNews.slice(0, 5).map((s) => ({
+      content: s.content,
+      contactName: s.contact?.name,
+      company: s.contact?.company?.name ?? s.company?.name,
+      companyId: s.company?.id,
+      url: s.url,
+    }));
+
     return NextResponse.json({
       briefing: result.narrative,
       topActions: result.topActions,
+      structured: {
+        nudges: topNudges,
+        meetings: nearMeetings,
+        news: newsWithUrls,
+      },
     });
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {

@@ -20,9 +20,11 @@ export async function GET(
       signalRepo.findByContactId(id),
       signalRepo.findByCompanyId(contact.companyId),
     ]);
-    const signals = [...contactSignals, ...companySignals].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+    const signals = [
+      ...new Map(
+        [...contactSignals, ...companySignals].map((s) => [s.id, s])
+      ).values(),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return NextResponse.json(signals);
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {

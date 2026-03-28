@@ -14,6 +14,15 @@ const FROM_ADDRESS = process.env.RESEND_FROM || "Activate <onboarding@resend.dev
 
 const MAX_NUDGES_PER_EMAIL = 5;
 
+function escHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const MDS = {
   deepBlue: "#051C2C",
   blue: "#0070AD",
@@ -84,8 +93,8 @@ function buildSummaryHtml(nudge: NudgeWithRelations): string {
   return fragments
     .map((f) =>
       f.bold
-        ? `<strong style="color: ${MDS.deepBlue};">${f.text}</strong>`
-        : f.text
+        ? `<strong style="color: ${MDS.deepBlue};">${escHtml(f.text)}</strong>`
+        : escHtml(f.text)
     )
     .join("");
 }
@@ -105,11 +114,11 @@ function buildNudgeRow(nudge: NudgeWithRelations, appUrl: string, isLast: boolea
           <tr>
             <td style="vertical-align: top;">
               <div style="margin-bottom: 6px;">
-                <span style="font-weight: 600; font-size: 15px; color: ${MDS.deepBlue};">${nudge.contact.name}</span>
-                <span style="display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; color: ${ps.color}; background: ${ps.bg}; margin-left: 8px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.3px;">${ps.label}</span>
+                <span style="font-weight: 600; font-size: 15px; color: ${MDS.deepBlue};">${escHtml(nudge.contact.name)}</span>
+                <span style="display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; color: ${ps.color}; background: ${ps.bg}; margin-left: 8px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.3px;">${escHtml(ps.label)}</span>
               </div>
               <div style="font-size: 12px; color: ${MDS.textLight}; margin-bottom: 8px;">
-                ${nudge.contact.title} at ${nudge.contact.company.name} &middot; ${typeLabel}
+                ${escHtml(nudge.contact.title)} at ${escHtml(nudge.contact.company.name)} &middot; ${escHtml(typeLabel)}
               </div>
               <div style="background: ${MDS.bgLight}; border-radius: 4px; padding: 12px 14px; margin-bottom: 12px;">
                 <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${MDS.electricBlue}; margin-bottom: 6px;">&#10024; AI Summary</div>
@@ -434,6 +443,51 @@ export async function sendNudgeDigest(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("[email-service] Failed to send:", msg);
+    return { sent: false, error: msg };
+  }
+}
+
+/**
+ * Send an outreach email to a contact as part of a cadence sequence.
+ * Returns success status and the Resend message ID if available.
+ */
+export async function sendOutreachEmail(params: {
+  fromName: string;
+  toEmail: string;
+  toName: string;
+  subject: string;
+  body: string;
+}): Promise<{ sent: boolean; error?: string; messageId?: string }> {
+  if (!resend) {
+    console.warn("[email-service] Resend not configured, skipping outreach send");
+    return { sent: false, error: "Resend not configured" };
+  }
+
+  const htmlBody = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: ${MDS.text};">
+  <div style="white-space: pre-line; font-size: 14px; line-height: 1.7;">
+${escHtml(params.body)}
+  </div>
+</div>`;
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: `${escHtml(params.fromName)} <${FROM_ADDRESS.replace(/.*<|>.*/g, "")}>`,
+      to: params.toEmail,
+      subject: params.subject,
+      html: htmlBody,
+    });
+
+    if (error) {
+      console.error("[email-service] Outreach send error:", error);
+      return { sent: false, error: error.message };
+    }
+
+    console.log(`[email-service] Outreach sent to ${params.toEmail}`);
+    return { sent: true, messageId: data?.id };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error("[email-service] Outreach send failed:", msg);
     return { sent: false, error: msg };
   }
 }

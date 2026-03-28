@@ -31,11 +31,17 @@ export async function POST(
 
     const nudgeReason = requestBody?.nudgeReason ?? "General check-in";
 
-    const [partner, interactions, signals] = await Promise.all([
+    const [partner, interactions, contactSignals, companySignals] = await Promise.all([
       partnerRepo.findById(partnerId),
       interactionRepo.findByContactId(id),
       signalRepo.findByContactId(id),
+      signalRepo.findByCompanyId(contact.companyId),
     ]);
+    const signals = [
+      ...new Map(
+        [...contactSignals, ...companySignals].map((s) => [s.id, s])
+      ).values(),
+    ];
     if (!partner) {
       return NextResponse.json({ error: "Partner not found" }, { status: 404 });
     }

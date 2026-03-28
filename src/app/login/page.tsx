@@ -15,18 +15,27 @@ const demoPartners = [
 
 export default function LoginPage() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   async function handleLogin(email: string) {
     setLoading(email);
-    const result = await signIn("credentials", {
-      email,
-      redirect: false,
-    });
-    if (result?.ok) {
-      router.push("/dashboard");
+    setError(null);
+    try {
+      const result = await signIn("credentials", {
+        email,
+        redirect: false,
+      });
+      if (result?.ok) {
+        router.push("/dashboard");
+      } else {
+        setError(result?.error ?? "Sign-in failed. Please try again.");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(null);
     }
-    setLoading(null);
   }
 
   return (
@@ -44,6 +53,12 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {error && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         <div className="space-y-3">
           {demoPartners.map((p) => (
             <button
@@ -60,7 +75,7 @@ export default function LoginPage() {
               </div>
               <div className="flex-1">
                 <p className="font-medium text-sm">{p.name}</p>
-                <p className="text-xs text-muted-foreground">{p.email}</p>
+                <p className="text-xs text-muted-foreground-subtle">{p.email}</p>
               </div>
               {loading === p.email && (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -69,7 +84,7 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-muted-foreground-subtle">
           All company names, contacts, and data shown are entirely fictional and
           for demonstration purposes only.
         </p>

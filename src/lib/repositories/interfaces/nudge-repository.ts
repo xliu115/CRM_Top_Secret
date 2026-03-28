@@ -21,6 +21,8 @@ export interface INudgeRepository {
       reason: string;
       priority: string;
       metadata?: string;
+      sequenceId?: string;
+      cadenceStepId?: string;
     }[]
   ): Promise<number>;
   deleteOpenByPartnerId(partnerId: string): Promise<number>;

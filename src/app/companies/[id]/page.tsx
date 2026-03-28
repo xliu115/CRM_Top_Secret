@@ -231,7 +231,7 @@ function SortButton({
       className="inline-flex items-center gap-1 font-medium text-inherit hover:text-foreground focus-visible:outline-none focus-visible:underline"
     >
       <span>{label}</span>
-      <span className={active ? "text-foreground" : "text-muted-foreground"}>
+      <span className={active ? "text-foreground" : "text-muted-foreground-subtle"}>
         {active ? (direction === "asc" ? "↑" : "↓") : "↕"}
       </span>
     </button>
@@ -261,7 +261,7 @@ function ContactTableRow({ contact }: { contact: ContactSummary }) {
           <p className="text-sm font-semibold text-foreground truncate leading-tight">
             {contact.name}
           </p>
-          <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
+          <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5">
             {contact.title}
           </p>
         </div>
@@ -269,19 +269,19 @@ function ContactTableRow({ contact }: { contact: ContactSummary }) {
       <div className={COL.lastInteraction}>
         {contact.lastInteraction ? (
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground leading-tight">
+            <p className="text-xs text-muted-foreground-subtle leading-tight">
               <span className="font-medium text-foreground/80">
                 {contact.lastInteraction.type}
               </span>
               {" · "}
               {format(new Date(contact.lastInteraction.date), "MMM d, yyyy")}
             </p>
-            <p className="text-xs text-muted-foreground/70 truncate leading-tight mt-0.5">
+            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
               {contact.lastInteraction.summary}
             </p>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
       <div className={COL.daysSince}>
@@ -290,11 +290,11 @@ function ContactTableRow({ contact }: { contact: ContactSummary }) {
             {contact.daysSinceLastInteraction}d
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
       <div
-        className={`${COL.otherPartners} text-xs text-muted-foreground truncate`}
+        className={`${COL.otherPartners} text-xs text-muted-foreground-subtle truncate`}
       >
         {contact.otherPartners.length > 0
           ? contact.otherPartners.join(", ")
@@ -307,7 +307,7 @@ function ContactTableRow({ contact }: { contact: ContactSummary }) {
             {contact.openNudgeCount}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground/60">—</span>
+          <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
     </Link>
@@ -512,7 +512,7 @@ export default function CompanyDetailPage() {
               <div className="min-w-0 flex-1 space-y-1">
                 <CardTitle className="text-2xl">{company.name}</CardTitle>
                 <CardDescription>{company.description}</CardDescription>
-                <div className="flex flex-wrap items-center gap-4 pt-1 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-4 pt-1 text-sm text-muted-foreground-subtle">
                   <Badge variant="outline">{company.industry}</Badge>
                   <span className="inline-flex items-center gap-1">
                     <Users className="h-3.5 w-3.5" />
@@ -537,7 +537,7 @@ export default function CompanyDetailPage() {
                   {CLIENT_ACTIVATION_POC[company.id] && (
                     <span className="inline-flex items-center gap-1">
                       <UserCheck className="h-3.5 w-3.5 text-indigo-500" />
-                      <span className="text-muted-foreground">Client Activation PoC:</span>
+                      <span className="text-muted-foreground-subtle">Client Activation PoC:</span>
                       <span className="font-medium text-foreground">
                         {CLIENT_ACTIVATION_POC[company.id]}
                       </span>
@@ -559,7 +559,7 @@ export default function CompanyDetailPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{contacts.length}</p>
-                  <p className="text-xs text-muted-foreground">Contacts</p>
+                  <p className="text-xs text-muted-foreground-subtle">Contacts</p>
                 </div>
               </div>
             </CardContent>
@@ -572,7 +572,7 @@ export default function CompanyDetailPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{interactions.length}</p>
-                  <p className="text-xs text-muted-foreground">Interactions</p>
+                  <p className="text-xs text-muted-foreground-subtle">Interactions</p>
                 </div>
               </div>
             </CardContent>
@@ -585,7 +585,7 @@ export default function CompanyDetailPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{signals.length}</p>
-                  <p className="text-xs text-muted-foreground">Signals</p>
+                  <p className="text-xs text-muted-foreground-subtle">Signals</p>
                 </div>
               </div>
             </CardContent>
@@ -598,7 +598,7 @@ export default function CompanyDetailPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{meetings.length}</p>
-                  <p className="text-xs text-muted-foreground">Meetings</p>
+                  <p className="text-xs text-muted-foreground-subtle">Meetings</p>
                 </div>
               </div>
             </CardContent>
@@ -630,13 +630,13 @@ export default function CompanyDetailPage() {
               <CardContent className="p-0">
                 {contacts.length === 0 ? (
                   <div className="px-6 pb-6">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground-subtle">
                       No contacts at this company.
                     </p>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none">
                       <div className="w-1 shrink-0" />
                       <div className={COL.name}>Contact</div>
                       <div className={COL.lastInteraction}>
@@ -708,7 +708,7 @@ export default function CompanyDetailPage() {
               </CardHeader>
               <CardContent>
                 {interactions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground-subtle">
                     No interactions yet.
                   </p>
                 ) : (
@@ -727,7 +727,7 @@ export default function CompanyDetailPage() {
                             <Badge variant="secondary">
                               {interaction.type}
                             </Badge>
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-sm text-muted-foreground-subtle">
                               {format(
                                 new Date(interaction.date),
                                 "MMM d, yyyy"
@@ -738,7 +738,7 @@ export default function CompanyDetailPage() {
                             {interaction.summary}
                           </p>
                           {interaction.nextStep && (
-                            <p className="mt-2 text-xs text-muted-foreground">
+                            <p className="mt-2 text-xs text-muted-foreground-subtle">
                               Next: {interaction.nextStep}
                             </p>
                           )}
@@ -762,7 +762,7 @@ export default function CompanyDetailPage() {
               </CardHeader>
               <CardContent>
                 {signals.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground-subtle">
                     No signals for this company.
                   </p>
                 ) : (
@@ -774,7 +774,7 @@ export default function CompanyDetailPage() {
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <Badge variant="outline">{signal.type}</Badge>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground-subtle">
                             {format(new Date(signal.date), "MMM d, yyyy")} ·{" "}
                             {(signal.confidence * 100).toFixed(0)}% confidence
                           </span>
@@ -822,13 +822,13 @@ export default function CompanyDetailPage() {
               <CardContent className="p-0">
                 {events.length === 0 ? (
                   <div className="px-6 pb-6">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground-subtle">
                       No event registrations.
                     </p>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none">
                       <div className="w-1 shrink-0" />
                       <div className="flex-[2] min-w-0">
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
@@ -858,12 +858,12 @@ export default function CompanyDetailPage() {
                           <div className="w-1 shrink-0 self-stretch rounded-r bg-red-500" />
                           <div className="flex-[2] min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate leading-tight">{ev.name}</p>
-                            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5 md:hidden">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</p>
+                            <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5 md:hidden">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</p>
                           </div>
                           <div className="flex-[1.2] min-w-0">
                             <Badge variant={ev.status === "Attended" ? "secondary" : "outline"}>{ev.status}</Badge>
                           </div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</div>
                           <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden lg:block truncate">{ev.practice}</div>
                           <div className="flex-[1] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.type}</div>
                           <div className="flex-[0.9] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.eventSize ?? "—"}</div>
@@ -871,7 +871,7 @@ export default function CompanyDetailPage() {
                         </div>
                       ))}
                     </div>
-                    {events.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {events.length} events</p>}
+                    {events.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground-subtle">Showing 10 of {events.length} events</p>}
                   </>
                 )}
               </CardContent>
@@ -894,13 +894,13 @@ export default function CompanyDetailPage() {
               <CardContent className="p-0">
                 {articles.length === 0 ? (
                   <div className="px-6 pb-6">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground-subtle">
                       No article engagements.
                     </p>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none">
                       <div className="w-1 shrink-0" />
                       <div className="flex-[2] min-w-0">
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
@@ -924,16 +924,16 @@ export default function CompanyDetailPage() {
                           <div className="w-1 shrink-0 self-stretch rounded-r bg-purple-500" />
                           <div className="flex-[2] min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate leading-tight">{art.name}</p>
-                            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5 md:hidden">{art.articleSent}</p>
+                            <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5 md:hidden">{art.articleSent}</p>
                           </div>
                           <div className="flex-[1.6] min-w-0 text-sm text-foreground truncate">{art.articleSent}</div>
                           <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden md:block tabular-nums">{art.views}</div>
                           <div className="flex-[1.2] min-w-0 text-sm text-foreground hidden lg:block truncate">{art.sentFrom ?? "—"}</div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{art.lastViewDate ? format(new Date(art.lastViewDate), "MM/dd/yyyy") : "—"}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{art.lastViewDate ? format(new Date(art.lastViewDate), "MM/dd/yyyy") : "—"}</div>
                         </div>
                       ))}
                     </div>
-                    {articles.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {articles.length} articles</p>}
+                    {articles.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground-subtle">Showing 10 of {articles.length} articles</p>}
                   </>
                 )}
               </CardContent>
@@ -956,13 +956,13 @@ export default function CompanyDetailPage() {
               <CardContent className="p-0">
                 {campaigns.length === 0 ? (
                   <div className="px-6 pb-6">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground-subtle">
                       No campaign outreach records.
                     </p>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground select-none">
+                    <div className="flex items-center gap-6 px-5 h-11 border-b border-border text-sm text-muted-foreground-subtle select-none">
                       <div className="w-1 shrink-0" />
                       <div className="flex-[2] min-w-0">
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
@@ -984,11 +984,11 @@ export default function CompanyDetailPage() {
                           <div className="flex-[1.2] min-w-0">
                             <Badge variant={camp.status === "Clicked" ? "secondary" : "outline"}>{camp.status}</Badge>
                           </div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground hidden md:block">{format(new Date(camp.statusDate), "MM/dd/yyyy")}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(camp.statusDate), "MM/dd/yyyy")}</div>
                         </div>
                       ))}
                     </div>
-                    {campaigns.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground">Showing 10 of {campaigns.length} campaigns</p>}
+                    {campaigns.length > 10 && <p className="mt-2 px-6 text-xs text-muted-foreground-subtle">Showing 10 of {campaigns.length} campaigns</p>}
                   </>
                 )}
               </CardContent>
@@ -1075,7 +1075,7 @@ function FirmRelationshipTab({
             </div>
           </div>
           {firmRelData && contactsWithPartners.length > 0 && (
-            <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:justify-end sm:text-right">
+            <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground-subtle sm:justify-end sm:text-right">
               <span>
                 <span className="font-semibold tabular-nums text-foreground">
                   {contactsWithPartners.length}
@@ -1096,7 +1096,7 @@ function FirmRelationshipTab({
       </CardHeader>
       <CardContent className="p-0">
         {contactsWithPartners.length === 0 ? (
-          <p className="px-6 py-8 text-center text-sm text-muted-foreground">
+          <p className="px-6 py-8 text-center text-sm text-muted-foreground-subtle">
             No firm relationships found for this institution.
           </p>
         ) : (
@@ -1123,7 +1123,7 @@ function FirmRelationshipTab({
                     <div className="pointer-events-none relative z-10 flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:gap-4">
                       <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                         <span
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground shadow-sm"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground-subtle shadow-sm"
                           aria-hidden
                         >
                           {isExpanded ? (
@@ -1145,7 +1145,7 @@ function FirmRelationshipTab({
                             {c.contactName}
                           </p>
                           {c.contactTitle ? (
-                            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
+                            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground-subtle">
                               {c.contactTitle}
                             </p>
                           ) : null}
@@ -1182,7 +1182,7 @@ function FirmRelationshipTab({
                       aria-labelledby={`firm-contact-label-${c.contactId}`}
                       className="border-t border-border/50 bg-muted/25 px-5 pb-5 pt-1"
                     >
-                      <p className="px-1 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <p className="px-1 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground-subtle">
                         Partners
                       </p>
                       <ul className="overflow-hidden rounded-lg border border-border/70 bg-background shadow-sm divide-y divide-border/50">
@@ -1203,7 +1203,7 @@ function FirmRelationshipTab({
                                     <p className="text-sm font-semibold leading-tight text-foreground">
                                       {rel.isCurrentUser ? "You" : rel.partnerName}
                                       {rel.isCurrentUser ? (
-                                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                                        <span className="ml-1.5 text-xs font-normal text-muted-foreground-subtle">
                                           ({rel.partnerName})
                                         </span>
                                       ) : null}
@@ -1217,7 +1217,7 @@ function FirmRelationshipTab({
                                       {rel.intensity}
                                     </span>
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground-subtle">
                                     <span className="inline-flex items-center gap-1.5 tabular-nums">
                                       <Activity className="h-3.5 w-3.5 shrink-0 opacity-70" />
                                       {rel.interactionCount}{" "}
@@ -1291,7 +1291,7 @@ function CompanyMeetingCard({
     <div
       className={`rounded-lg border p-4 ${
         isPast
-          ? "border-border/50 bg-muted/20 opacity-75"
+          ? "border-border/50 bg-muted/20"
           : "border-primary/20 bg-primary/5"
       }`}
     >
@@ -1314,7 +1314,7 @@ function CompanyMeetingCard({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground-subtle">
             <span className="inline-flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />
               {format(meetingDate, "EEE, MMM d 'at' h:mm a")}
@@ -1344,7 +1344,7 @@ function CompanyMeetingCard({
                   />
                 ))}
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground-subtle">
                 {meeting.attendees
                   .slice(0, 2)
                   .map((a) => a.contact.name)
@@ -1437,7 +1437,7 @@ function PastMeetingsSection({ meetings }: { meetings: CompanyMeeting[] }) {
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="flex items-center gap-1 text-sm text-muted-foreground-subtle hover:text-foreground"
       >
         {expanded ? (
           <ChevronUp className="h-3.5 w-3.5" />

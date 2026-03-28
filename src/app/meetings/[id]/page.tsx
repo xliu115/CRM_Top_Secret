@@ -46,6 +46,7 @@ export default function MeetingDetailPage() {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [briefError, setBriefError] = useState<string | null>(null);
   const [generatingBrief, setGeneratingBrief] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -73,6 +74,7 @@ export default function MeetingDetailPage() {
   async function handleGenerateBrief() {
     if (!id) return;
     setGeneratingBrief(true);
+    setBriefError(null);
     try {
       const res = await fetch(`/api/meetings/${id}/brief`, {
         method: "POST",
@@ -90,7 +92,7 @@ export default function MeetingDetailPage() {
         prev ? { ...prev, generatedBrief: brief } : null
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate brief");
+      setBriefError(err instanceof Error ? err.message : "Failed to generate brief");
     } finally {
       setGeneratingBrief(false);
     }
@@ -227,6 +229,9 @@ export default function MeetingDetailPage() {
                     "Generate Brief"
                   )}
                 </Button>
+                {briefError && (
+                  <p className="text-sm text-destructive">{briefError}</p>
+                )}
               </div>
             )}
           </CardContent>
