@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef, useCallback } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Send, Loader2, Trash2, Sparkles, Mic, MicOff } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
@@ -8,16 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 import { AssistantReply } from "@/components/chat/assistant-reply";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
-
-type Source = { type: string; content: string; date?: string; id?: string; url?: string };
-
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  sources?: Source[];
-};
+import { useChatSession } from "@/hooks/use-chat-session";
 
 const SUGGESTED_QUESTIONS = [
   "What's the latest news about Microsoft?",
@@ -32,43 +23,23 @@ const SUGGESTED_QUESTIONS = [
 function ChatPageContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
   const initialQuerySentRef = useRef(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const pendingVoiceRef = useRef<string | null>(null);
 
-  const handleVoiceResult = useCallback((transcript: string) => {
-    pendingVoiceRef.current = transcript;
-    setInput(transcript);
-  }, []);
-
-  const { isListening, transcript: liveTranscript, isSupported, startListening, stopListening } =
-    useSpeechRecognition({ onResult: handleVoiceResult });
-
-  useEffect(() => {
-    if (pendingVoiceRef.current && !isListening) {
-      const text = pendingVoiceRef.current;
-      pendingVoiceRef.current = null;
-      handleSend(text);
-    }
-  }, [isListening]);
-
-  useEffect(() => {
-    if (isListening && liveTranscript) {
-      setInput(liveTranscript);
-    }
-  }, [isListening, liveTranscript]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [loading]);
+  const {
+    messages,
+    input,
+    setInput,
+    loading,
+    scrollRef,
+    inputRef,
+    handleSend,
+    handleClearChat,
+    handleKeyDown,
+    isListening,
+    voiceSupported,
+    startListening,
+    stopListening,
+  } = useChatSession();
 
   useEffect(() => {
     const q = searchParams.get("q");
@@ -77,63 +48,7 @@ function ChatPageContent() {
       window.history.replaceState({}, "", "/chat");
       handleSend(q);
     }
-  }, [searchParams]);
-
-  function buildHistory(): { role: "user" | "assistant"; content: string }[] {
-    return messages.map((m) => ({ role: m.role, content: m.content }));
-  }
-
-  async function handleSend(message?: string) {
-    const text = (message ?? input).trim();
-    if (!text || loading) return;
-
-    setInput("");
-    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setLoading(true);
-
-    try {
-      const history = buildHistory();
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history }),
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Failed to get response");
-      }
-      const { answer, sources } = await res.json();
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "assistant", content: answer, sources: sources ?? [] },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content:
-            "Sorry, I couldn't process your request. Please try again.",
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleClearChat() {
-    setMessages([]);
-    setInput("");
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }
+  }, [searchParams, handleSend]);
 
   const isEmpty = messages.length === 0;
   const partnerName = session?.user?.name?.split(" ")[0] ?? "there";
@@ -165,7 +80,6 @@ function ChatPageContent() {
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
-          {/* Messages area */}
           <div className="flex-1 overflow-y-auto p-4">
             {isEmpty && !loading ? (
               <div className="flex h-full flex-col items-center justify-center gap-6">
@@ -255,7 +169,6 @@ function ChatPageContent() {
             )}
           </div>
 
-          {/* Input area */}
           <div className="border-t border-border p-4">
             <form
               onSubmit={(e) => {
@@ -281,7 +194,7 @@ function ChatPageContent() {
                     Math.min(target.scrollHeight, 120) + "px";
                 }}
               />
-              {isSupported && (
+              {voiceSupported && (
                 <Button
                   type="button"
                   variant={isListening ? "destructive" : "ghost"}

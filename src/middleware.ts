@@ -12,6 +12,7 @@ const VALID_PARTNER_IDS = [
 
 const protectedPaths = [
   "/dashboard",
+  "/mobile",
   "/nudges",
   "/contacts",
   "/companies",
@@ -30,6 +31,8 @@ const protectedPaths = [
   "/api/outreach",
 ];
 
+const MOBILE_UA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i;
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -44,7 +47,15 @@ export async function middleware(request: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  if (token) return NextResponse.next();
+  if (token) {
+    if (pathname === "/dashboard") {
+      const ua = request.headers.get("user-agent") || "";
+      if (MOBILE_UA.test(ua)) {
+        return NextResponse.redirect(new URL("/mobile", request.url));
+      }
+    }
+    return NextResponse.next();
+  }
 
   // Dev/verification bypass: accept partner_id cookie for API routes
   if (
@@ -68,6 +79,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/mobile/:path*",
     "/nudges/:path*",
     "/contacts/:path*",
     "/companies/:path*",

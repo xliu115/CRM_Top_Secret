@@ -89,10 +89,12 @@ export function AssistantReply({
   content,
   sources = [],
   onSendMessage,
+  mobile = false,
 }: {
   content: string;
   sources?: Source[];
   onSendMessage?: (message: string) => void;
+  mobile?: boolean;
 }) {
   const crmSources = sources.filter((s) => isCrmSource(s.type));
   const webSources = sources.filter(
@@ -110,34 +112,38 @@ export function AssistantReply({
     intro = cleanContent.slice(0, introEnd).trim();
   }
 
+  const textClass = mobile
+    ? "text-[15px] leading-relaxed text-foreground"
+    : "text-sm text-foreground";
+
   return (
     <div className="space-y-4">
       {hasSources ? (
         <>
           {intro && (
-            <MarkdownContent content={intro} className="text-sm text-foreground" />
+            <MarkdownContent content={intro} className={textClass} />
           )}
 
-          {/* CRM sources as cards with CTAs */}
           {crmSources.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground-subtle">
+              <p className={`font-medium uppercase tracking-wider text-muted-foreground-subtle ${mobile ? "text-[11px]" : "text-xs"}`}>
                 From your CRM
               </p>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className={`grid gap-3 ${mobile ? "grid-cols-1" : "sm:grid-cols-2"}`}>
                 {crmSources.map((s, j) => (
-                  <SourceCard key={j} source={s} />
+                  <SourceCard key={j} source={s} mobile={mobile} />
                 ))}
               </div>
             </div>
           )}
         </>
       ) : (
-        <MarkdownContent content={cleanContent} className="text-sm text-foreground" />
+        <MarkdownContent content={cleanContent} className={textClass} />
       )}
 
-      {/* Quick Actions — styled pill buttons */}
-      {quickActions.length > 0 && (
+      {/* Quick Actions: on mobile the bottom pill bar is the single source of truth,
+          so hide inline actions. On desktop, show them here. */}
+      {!mobile && quickActions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
           {quickActions.map((action, i) =>
             action.query && onSendMessage ? (
@@ -163,22 +169,21 @@ export function AssistantReply({
         </div>
       )}
 
-      {/* Web sources — compact, collapsible */}
       {webSources.length > 0 && (
         <details className="group">
-          <summary className="cursor-pointer text-xs font-medium text-muted-foreground-subtle hover:text-foreground">
+          <summary className={`cursor-pointer font-medium text-muted-foreground-subtle hover:text-foreground ${mobile ? "text-[13px] py-1" : "text-xs"}`}>
             {webSources.length} web source{webSources.length !== 1 ? "s" : ""}
           </summary>
           <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/20 p-3">
             {webSources.map((s, j) => (
-              <div key={j} className="text-xs">
+              <div key={j} className={mobile ? "text-[13px]" : "text-xs"}>
                 <p className="line-clamp-2 text-muted-foreground">{s.content.slice(0, 200)}…</p>
                 {s.url && (
                   <a
                     href={s.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-1 inline-flex items-center gap-1 text-primary hover:underline"
+                    className={`mt-1 inline-flex items-center gap-1 text-primary hover:underline ${mobile ? "py-1" : ""}`}
                   >
                     <ExternalLink className="h-3 w-3" />
                     View source
@@ -193,17 +198,19 @@ export function AssistantReply({
   );
 }
 
-function SourceCard({ source }: { source: Source }) {
+function SourceCard({ source, mobile = false }: { source: Source; mobile?: boolean }) {
   const { type, content, id } = source;
+  const btnClass = mobile ? "h-9 text-[13px]" : "h-7 text-xs";
+  const iconClass = mobile ? "mr-1.5 h-3.5 w-3.5" : "mr-1 h-3 w-3";
 
   if (type === "Contact" && id) {
     const { name, title, company, importance } = parseContactContent(content);
     return (
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30">
+      <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-medium text-foreground">{name}</p>
-            <p className="text-xs text-muted-foreground-subtle">
+            <p className={`font-medium text-foreground ${mobile ? "text-[15px]" : ""}`}>{name}</p>
+            <p className={`text-muted-foreground-subtle ${mobile ? "text-[13px]" : "text-xs"}`}>
               {title && company ? `${title} at ${company}` : company || title || content.slice(0, 60)}
             </p>
           </div>
@@ -213,16 +220,16 @@ function SourceCard({ source }: { source: Source }) {
             </Badge>
           )}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" className={btnClass} asChild>
             <Link href={`/contacts/${id}`}>
-              <User className="mr-1 h-3 w-3" />
+              <User className={iconClass} />
               View profile
             </Link>
           </Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+          <Button variant="outline" size="sm" className={btnClass} asChild>
             <Link href={`/contacts/${id}`}>
-              <Mail className="mr-1 h-3 w-3" />
+              <Mail className={iconClass} />
               Draft email
             </Link>
           </Button>
@@ -236,23 +243,23 @@ function SourceCard({ source }: { source: Source }) {
     const reason = content.includes(": ") ? content.split(": ").slice(1).join(": ") : content;
     const contactId = (source as Source & { contactId?: string }).contactId;
     return (
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30">
+      <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30">
         <div className="min-w-0">
-          <p className="font-medium text-foreground">{name}</p>
-          <p className="text-xs text-muted-foreground-subtle">{company}</p>
-          <p className="mt-1 line-clamp-2 text-xs text-foreground">{reason}</p>
+          <p className={`font-medium text-foreground ${mobile ? "text-[15px]" : ""}`}>{name}</p>
+          <p className={`text-muted-foreground-subtle ${mobile ? "text-[13px]" : "text-xs"}`}>{company}</p>
+          <p className={`mt-1 line-clamp-2 text-foreground ${mobile ? "text-[13px]" : "text-xs"}`}>{reason}</p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" className={btnClass} asChild>
             <Link href="/nudges">
-              <FileText className="mr-1 h-3 w-3" />
+              <FileText className={iconClass} />
               View nudge
             </Link>
           </Button>
           {contactId && (
-            <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+            <Button variant="outline" size="sm" className={btnClass} asChild>
               <Link href={`/contacts/${contactId}`}>
-                <Mail className="mr-1 h-3 w-3" />
+                <Mail className={iconClass} />
                 Draft email
               </Link>
             </Button>
@@ -265,19 +272,19 @@ function SourceCard({ source }: { source: Source }) {
   if (type === "Firm Relationship" && id) {
     const { name, company, otherPartners } = parseFirmRelationshipContent(content);
     return (
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30">
+      <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30">
         <div className="min-w-0">
-          <p className="font-medium text-foreground">{name}</p>
-          <p className="text-xs text-muted-foreground-subtle">{company}</p>
+          <p className={`font-medium text-foreground ${mobile ? "text-[15px]" : ""}`}>{name}</p>
+          <p className={`text-muted-foreground-subtle ${mobile ? "text-[13px]" : "text-xs"}`}>{company}</p>
           {otherPartners && otherPartners !== "None" && (
-            <p className="mt-1 text-xs text-foreground">
+            <p className={`mt-1 text-foreground ${mobile ? "text-[13px]" : "text-xs"}`}>
               Other partners: {otherPartners}
             </p>
           )}
         </div>
-        <Button variant="outline" size="sm" className="h-7 w-fit text-xs" asChild>
+        <Button variant="outline" size="sm" className={`w-fit ${btnClass}`} asChild>
           <Link href={`/contacts/${id}`}>
-            <User className="mr-1 h-3 w-3" />
+            <User className={iconClass} />
             View profile
           </Link>
         </Button>
@@ -285,11 +292,10 @@ function SourceCard({ source }: { source: Source }) {
     );
   }
 
-  // Generic CRM source (Interaction, Meeting, etc.)
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-xs font-medium text-muted-foreground-subtle">{type}</p>
-      <p className="mt-1 line-clamp-2 text-sm text-foreground">{content.slice(0, 120)}</p>
+      <p className={`font-medium text-muted-foreground-subtle ${mobile ? "text-[11px]" : "text-xs"}`}>{type}</p>
+      <p className={`mt-1 line-clamp-2 text-foreground ${mobile ? "text-[15px]" : "text-sm"}`}>{content.slice(0, 120)}</p>
     </div>
   );
 }

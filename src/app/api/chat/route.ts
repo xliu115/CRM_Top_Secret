@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
-import { contactRepo, partnerRepo, interactionRepo, signalRepo, meetingRepo } from "@/lib/repositories";
+import { contactRepo, partnerRepo, interactionRepo, signalRepo, meetingRepo, nudgeRepo, type NudgeWithRelations } from "@/lib/repositories";
 import { prisma } from "@/lib/db/prisma";
 import { retrieveContext, searchWeb } from "@/lib/services/rag-service";
-import { generateChatAnswer, generateEmail } from "@/lib/services/llm-service";
+import { generateChatAnswer, generateEmail, generateMeetingBrief } from "@/lib/services/llm-service";
 import {
   generateQuick360,
   generateContact360,
@@ -21,8 +21,16 @@ const DRAFT_EMAIL_INTENT =
   /\b(draft (?:an? )?email|write (?:an? )?email|email draft|compose (?:an? )?email)\b/i;
 const SHARE_DOSSIER_INTENT =
   /\b(share (?:the )?dossier|share (?:the )?360|send (?:the )?dossier)\b/i;
+const MEETING_PREP_INTENT =
+  /\b(prep(?:are)?\s+(?:me\s+)?for\s+(?:the\s+)?|meeting (?:brief|prep)\s+(?:for\s+)?)/i;
+const MEETINGS_TODAY_INTENT =
+  /\b((?:show|list|what are)\s+(?:my\s+)?meetings?\s+(?:today|this week|upcoming)|my meetings?\s+today|today'?s?\s+meetings?|upcoming meetings?)\b/i;
+const DAILY_PRIORITIES_INTENT =
+  /\b(what should I\s+(?:do|focus on|prioritize)|my priorities|today'?s?\s+(?:priorities|plan|agenda)|plan (?:my|for) (?:today|the day))\b/i;
+const NEEDS_ATTENTION_INTENT =
+  /\b((?:who|which)\s+(?:contacts?|clients?|people)\s+need\s+(?:attention|outreach|follow.?up)|need(?:s|ing)?\s+attention|at.?risk\s+(?:contacts?|clients?|relationships?))\b/i;
 
-const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT];
+const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT];
 
 function extractNameFromQuery(query: string): string {
   let cleaned = query;
@@ -69,6 +77,270 @@ export async function POST(request: NextRequest) {
     const isCompany360 = COMPANY_360_INTENT.test(message);
     const isDraftEmail = DRAFT_EMAIL_INTENT.test(message);
     const isShareDossier = SHARE_DOSSIER_INTENT.test(message);
+    const isMeetingPrep = MEETING_PREP_INTENT.test(message);
+    const isMeetingsToday = MEETINGS_TODAY_INTENT.test(message);
+    const isDailyPriorities = DAILY_PRIORITIES_INTENT.test(message);
+    const isNeedsAttention = NEEDS_ATTENTION_INTENT.test(message);
+
+    // ── Meeting Prep ─────────────────────────────────────────────────
+    if (isMeetingPrep) {
+      try {
+        const meetingTitle = message
+          .replace(MEETING_PREP_INTENT, "")
+          .replace(/\bmeeting\b/i, "")
+          .replace(/[?.,!]/g, "")
+          .trim();
+
+        const meetings = await meetingRepo.findUpcomingByPartnerId(partnerId);
+        const match = meetings.find((m) =>
+          m.title.toLowerCase().includes(meetingTitle.toLowerCase())
+        ) ?? meetings[0];
+
+        if (match) {
+          const attendeeIds = match.attendees.map((a) => a.contactId);
+          const [interactionsByContact, signalsByContact] = await Promise.all([
+            interactionRepo.findByContactIds(attendeeIds).catch(() => []),
+            signalRepo.findByContactIds(attendeeIds).catch(() => []),
+          ]);
+
+          const attendees = match.attendees.map((a) => {
+            const c = a.contact;
+            return {
+              name: c.name,
+              title: c.title ?? "",
+              company: c.company?.name ?? "",
+              recentInteractions: interactionsByContact
+                .filter((i) => i.contactId === c.id)
+                .slice(0, 3)
+                .map((i) => `${i.type} (${i.date.toISOString().split("T")[0]}): ${i.summary}`),
+              signals: signalsByContact
+                .filter((s) => s.contactId === c.id)
+                .slice(0, 3)
+                .map((s) => `${s.type}: ${s.content}`),
+            };
+          });
+
+          const brief = await generateMeetingBrief({
+            meetingTitle: match.title,
+            meetingPurpose: match.purpose ?? "",
+            attendees,
+          });
+
+          const md = [
+            `## Meeting Prep: ${match.title}`,
+            `*${new Date(match.startTime).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}*`,
+            "",
+            brief,
+            "",
+            `---`,
+            ...match.attendees.map((a) =>
+              `<!--QUICK_ACTIONS:${JSON.stringify([
+                { label: `Quick 360: ${a.contact.name}`, query: `Quick 360 for ${a.contact.name}` },
+                { label: `Draft Email to ${a.contact.name}`, query: `Draft email to ${a.contact.name}` },
+              ])}-->`
+            ).slice(0, 1),
+          ].filter(Boolean).join("\n\n");
+          return NextResponse.json({ answer: md, sources: [] });
+        }
+
+        return NextResponse.json({
+          answer: "I couldn't find an upcoming meeting matching that title. Try \"Show my meetings today\" to see what's scheduled.",
+          sources: [],
+        });
+      } catch (err) {
+        console.error("[chat] meeting prep intent failed:", err);
+      }
+    }
+
+    // ── Meetings Today / Upcoming ────────────────────────────────────
+    if (isMeetingsToday) {
+      try {
+        const meetings = await meetingRepo.findUpcomingByPartnerId(partnerId);
+        if (meetings.length === 0) {
+          return NextResponse.json({
+            answer: "You don't have any upcoming meetings on your calendar. Looks like a good day to do proactive outreach!",
+            sources: [],
+          });
+        }
+
+        const lines = meetings.slice(0, 10).map((m) => {
+          const time = new Date(m.startTime).toLocaleString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          const attendeeNames = m.attendees.map((a) => a.contact.name).join(", ");
+          return `### ${m.title}\n**When:** ${time}\n**Attendees:** ${attendeeNames}${m.purpose ? `\n**Purpose:** ${m.purpose}` : ""}`;
+        });
+
+        const quickActions = meetings.slice(0, 3).map((m) => ({
+          label: `Prep for ${m.title.length > 20 ? m.title.slice(0, 20) + "..." : m.title}`,
+          query: `Prepare me for the ${m.title} meeting`,
+        }));
+
+        const md = [
+          `## Your Upcoming Meetings (${meetings.length})`,
+          "",
+          ...lines,
+          "",
+          `<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`,
+        ].join("\n\n");
+        return NextResponse.json({ answer: md, sources: [] });
+      } catch (err) {
+        console.error("[chat] meetings today intent failed:", err);
+      }
+    }
+
+    // ── Daily Priorities ─────────────────────────────────────────────
+    if (isDailyPriorities) {
+      try {
+        const [openNudges, meetings, staleContacts] = await Promise.all([
+          nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" }).catch(() => []),
+          meetingRepo.findUpcomingByPartnerId(partnerId).catch(() => []),
+          prisma.contact.findMany({
+            where: {
+              partnerId,
+              importance: { in: ["CRITICAL", "HIGH"] },
+              interactions: {
+                every: { date: { lt: new Date(Date.now() - 30 * 86400000) } },
+              },
+            },
+            include: { company: true, interactions: { orderBy: { date: "desc" }, take: 1 } },
+            take: 5,
+          }).catch(() => []),
+        ]);
+
+        const criticalNudges = openNudges.filter((n) => n.priority === "CRITICAL" || n.priority === "HIGH");
+        const todayMeetings = meetings.filter((m) => {
+          const mDate = new Date(m.startTime);
+          const now = new Date();
+          return mDate.toDateString() === now.toDateString();
+        });
+
+        const sections: string[] = [`## Your Day at a Glance`, ""];
+
+        if (todayMeetings.length > 0) {
+          sections.push(`### Meetings Today (${todayMeetings.length})`);
+          todayMeetings.forEach((m) => {
+            const time = new Date(m.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+            const names = m.attendees.map((a) => a.contact.name).join(", ");
+            sections.push(`- **${time}** — ${m.title} *(${names})*`);
+          });
+          sections.push("");
+        }
+
+        if (criticalNudges.length > 0) {
+          sections.push(`### Priority Actions (${criticalNudges.length})`);
+          criticalNudges.slice(0, 5).forEach((n) => {
+            sections.push(`- **${n.contact.name}** (${n.contact.company?.name ?? ""}): ${n.reason}`);
+          });
+          sections.push("");
+        }
+
+        if (staleContacts.length > 0) {
+          sections.push(`### Relationships Going Cold`);
+          staleContacts.forEach((c) => {
+            const lastDate = c.interactions[0]?.date;
+            const days = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : "30+";
+            sections.push(`- **${c.name}** (${c.company?.name ?? ""}): No contact in ${days} days`);
+          });
+          sections.push("");
+        }
+
+        if (todayMeetings.length === 0 && criticalNudges.length === 0 && staleContacts.length === 0) {
+          sections.push("Your slate looks clear today. A great time for proactive outreach or strategic planning!");
+        }
+
+        const quickActions: { label: string; query: string }[] = [];
+        if (todayMeetings.length > 0) {
+          quickActions.push({ label: "Prep for next meeting", query: `Prepare me for the ${todayMeetings[0].title} meeting` });
+        }
+        if (criticalNudges.length > 0) {
+          const topContact = criticalNudges[0].contact.name;
+          quickActions.push({ label: `Quick 360: ${topContact}`, query: `Quick 360 for ${topContact}` });
+        }
+        quickActions.push({ label: "Who needs attention?", query: "Which contacts need attention?" });
+
+        if (quickActions.length > 0) {
+          sections.push(`<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`);
+        }
+
+        return NextResponse.json({ answer: sections.join("\n"), sources: [] });
+      } catch (err) {
+        console.error("[chat] daily priorities intent failed:", err);
+      }
+    }
+
+    // ── Contacts Needing Attention ───────────────────────────────────
+    if (isNeedsAttention) {
+      try {
+        const [openNudges, staleContacts] = await Promise.all([
+          nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" }).catch(() => []),
+          prisma.contact.findMany({
+            where: {
+              partnerId,
+              importance: { in: ["CRITICAL", "HIGH"] },
+              interactions: {
+                every: { date: { lt: new Date(Date.now() - 14 * 86400000) } },
+              },
+            },
+            include: { company: true, interactions: { orderBy: { date: "desc" }, take: 1 }, signals: { orderBy: { date: "desc" }, take: 1 } },
+            take: 10,
+          }).catch(() => []),
+        ]);
+
+        const sections: string[] = [`## Contacts Needing Attention`, ""];
+
+        const byPriority: Record<string, NudgeWithRelations[]> = {};
+        for (const n of openNudges) {
+          const p = n.priority ?? "MEDIUM";
+          if (!byPriority[p]) byPriority[p] = [];
+          byPriority[p].push(n);
+        }
+
+        for (const priority of ["CRITICAL", "HIGH", "MEDIUM"]) {
+          const group = byPriority[priority];
+          if (!group?.length) continue;
+          sections.push(`### ${priority} Priority`);
+          group.slice(0, 5).forEach((n) => {
+            sections.push(`- **${n.contact.name}** (${n.contact.company?.name ?? ""}): ${n.reason}`);
+          });
+          sections.push("");
+        }
+
+        const nudgeContactIds = new Set(openNudges.map((n) => n.contactId));
+        const additionalStale = staleContacts.filter((c) => !nudgeContactIds.has(c.id));
+        if (additionalStale.length > 0) {
+          sections.push(`### Going Cold (No Recent Interaction)`);
+          additionalStale.forEach((c) => {
+            const lastDate = c.interactions[0]?.date;
+            const days = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : "14+";
+            const signal = c.signals[0]?.content?.slice(0, 60);
+            sections.push(`- **${c.name}** (${c.company?.name ?? ""}): ${days} days since last contact${signal ? ` — Recent signal: ${signal}` : ""}`);
+          });
+          sections.push("");
+        }
+
+        if (openNudges.length === 0 && additionalStale.length === 0) {
+          sections.push("All your key contacts look well-maintained. Nice work keeping up with your relationships!");
+        }
+
+        const topContacts = [...openNudges.slice(0, 2).map((n) => n.contact.name), ...additionalStale.slice(0, 1).map((c) => c.name)];
+        const quickActions = topContacts.map((name) => ({
+          label: `Quick 360: ${name}`,
+          query: `Quick 360 for ${name}`,
+        }));
+        if (quickActions.length > 0) {
+          sections.push(`<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`);
+        }
+
+        return NextResponse.json({ answer: sections.join("\n"), sources: [] });
+      } catch (err) {
+        console.error("[chat] needs attention intent failed:", err);
+      }
+    }
 
     const hasStructuredIntent = isFullContact360 || isQuick360 || isCompany360 || isDraftEmail || isShareDossier;
 
