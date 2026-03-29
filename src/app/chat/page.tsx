@@ -228,6 +228,7 @@ function ChatPageContent() {
                           <AssistantReply
                             content={msg.content}
                             sources={msg.sources ?? []}
+                            onSendMessage={handleSend}
                           />
                         ) : (
                           msg.content

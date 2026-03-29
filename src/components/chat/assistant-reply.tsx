@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 
-type QuickAction = { label: string; href: string };
+type QuickAction = { label: string; query?: string; href?: string };
 
 type Source = { type: string; content: string; date?: string; id?: string; url?: string; contactId?: string };
 
@@ -88,9 +88,11 @@ function extractQuickActions(text: string): { cleanContent: string; actions: Qui
 export function AssistantReply({
   content,
   sources = [],
+  onSendMessage,
 }: {
   content: string;
   sources?: Source[];
+  onSendMessage?: (message: string) => void;
 }) {
   const crmSources = sources.filter((s) => isCrmSource(s.type));
   const webSources = sources.filter(
@@ -137,16 +139,27 @@ export function AssistantReply({
       {/* Quick Actions — styled pill buttons */}
       {quickActions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
-          {quickActions.map((action) => (
-            <Link
-              key={action.href}
-              href={action.href}
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              <ChevronRight className="h-3 w-3" />
-              {action.label}
-            </Link>
-          ))}
+          {quickActions.map((action, i) =>
+            action.query && onSendMessage ? (
+              <button
+                key={`qa-${i}`}
+                onClick={() => onSendMessage(action.query!)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                <ChevronRight className="h-3 w-3" />
+                {action.label}
+              </button>
+            ) : action.href ? (
+              <Link
+                key={`qa-${i}`}
+                href={action.href}
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                <ChevronRight className="h-3 w-3" />
+                {action.label}
+              </Link>
+            ) : null
+          )}
         </div>
       )}
 
