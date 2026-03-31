@@ -65,7 +65,7 @@ export default function LoginPage() {
               key={p.email}
               onClick={() => handleLogin(p.email)}
               disabled={loading !== null}
-              className="flex w-full items-center gap-4 rounded-xl border border-border bg-card px-4 py-3.5 text-left transition-all hover:border-primary/30 hover:shadow-md disabled:opacity-50"
+              className="flex w-full items-center gap-4 rounded-xl border border-border bg-card px-4 py-3.5 text-left transition-all hover:border-primary/30 hover:shadow-md active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
                 {p.name
