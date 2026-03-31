@@ -844,7 +844,7 @@ export default function DashboardPage() {
           </h1>
           <p className="text-2xl font-semibold tracking-tight text-foreground/80">
             What&apos;s on{" "}
-            <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent font-bold">
+            <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-transparent font-bold">
               your mind
             </span>
             ?
