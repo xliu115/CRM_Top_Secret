@@ -583,6 +583,7 @@ export default function NudgesPage() {
   const [priorityFilter, setPriorityFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [followUpsOnly, setFollowUpsOnly] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [nudges, setNudges] = useState<Nudge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -696,18 +697,12 @@ export default function NudgesPage() {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Nudges</h1>
             <p className="mt-1 text-muted-foreground">Action items and reminders for your contacts</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline">
-              <Link href="/nudges/settings">
-                <Settings className="h-4 w-4" />
-                Nudge Preferences
-              </Link>
-            </Button>
-            <Button onClick={handleRefreshNudges} disabled={refreshing} variant="secondary">
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              Refresh Nudges
-            </Button>
-          </div>
+          <Button asChild variant="outline">
+            <Link href="/nudges/settings">
+              <Settings className="h-4 w-4" />
+              Nudge Preferences
+            </Link>
+          </Button>
         </div>
 
         {error && (
@@ -716,56 +711,119 @@ export default function NudgesPage() {
 
         {/* Filter bar */}
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground-subtle">Status:</span>
               {STATUS_OPTIONS.map((opt) => (
                 <Button key={opt.value} variant={statusFilter === opt.value ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(opt.value)}>
                   {opt.label}
                 </Button>
               ))}
-              {followUpCount > 0 && (
-                <Button
-                  variant={followUpsOnly ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFollowUpsOnly(!followUpsOnly)}
-                  className={followUpsOnly ? "bg-violet-600 hover:bg-violet-700 text-white" : ""}
-                >
-                  <Filter className="h-3.5 w-3.5" />
-                  Follow-ups ({followUpCount})
-                </Button>
+            </div>
+            <div className="flex-1" />
+            <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
+              <Filter className="h-3.5 w-3.5" />
+              Filters
+              {(priorityFilter || typeFilter || followUpsOnly) && (
+                <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
+                  {(priorityFilter ? 1 : 0) + (typeFilter ? 1 : 0) + (followUpsOnly ? 1 : 0)}
+                </span>
               )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground-subtle">Priority:</span>
-              {PRIORITY_OPTIONS.map((opt) => (
-                <Button key={opt.value} variant={priorityFilter === opt.value ? "default" : "outline"} size="sm" onClick={() => setPriorityFilter(opt.value)}>
-                  {opt.label}
-                </Button>
-              ))}
-            </div>
+            </Button>
           </div>
 
-          {/* Type filter chips */}
-          {Object.keys(typeCounts).length > 1 && (
+          {showFilters && (
+            <div className="rounded-lg border border-border bg-card p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+              {/* Priority */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-muted-foreground-subtle w-20 shrink-0">Priority:</span>
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <Button key={opt.value} variant={priorityFilter === opt.value ? "default" : "outline"} size="sm" onClick={() => setPriorityFilter(opt.value)}>
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+
+              {/* Type */}
+              {Object.keys(typeCounts).length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground-subtle w-20 shrink-0">Type:</span>
+                  <Button variant={typeFilter === "" ? "default" : "outline"} size="sm" onClick={() => setTypeFilter("")}>
+                    All ({nudges.length})
+                  </Button>
+                  {Object.entries(typeCounts)
+                    .filter(([type]) => type !== "FOLLOW_UP" && type !== "REPLY_NEEDED")
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([type, count]) => {
+                      const cfg = getTypeConfig(type);
+                      const Icon = cfg.icon;
+                      return (
+                        <Button key={type} variant={typeFilter === type ? "default" : "outline"} size="sm" onClick={() => setTypeFilter(type)}>
+                          <Icon className="h-3.5 w-3.5" />
+                          {cfg.label} ({count})
+                        </Button>
+                      );
+                    })}
+                </div>
+              )}
+
+              {/* Follow-ups */}
+              {followUpCount > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground-subtle w-20 shrink-0">Outreach:</span>
+                  <Button
+                    variant={followUpsOnly ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFollowUpsOnly(!followUpsOnly)}
+                    className={followUpsOnly ? "bg-violet-600 hover:bg-violet-700 text-white" : ""}
+                  >
+                    <Forward className="h-3.5 w-3.5" />
+                    Follow-ups Only ({followUpCount})
+                  </Button>
+                </div>
+              )}
+
+              <div className="border-t border-border pt-3">
+                <Button variant="ghost" size="sm" onClick={handleRefreshNudges} disabled={refreshing} className="text-muted-foreground-subtle">
+                  <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                  {refreshing ? "Refreshing..." : "Refresh nudges now"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Active filter chips */}
+          {(priorityFilter || typeFilter || followUpsOnly) && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground-subtle">Type:</span>
-              <Button variant={typeFilter === "" ? "default" : "outline"} size="sm" onClick={() => setTypeFilter("")}>
-                All ({nudges.length})
-              </Button>
-              {Object.entries(typeCounts)
-                .filter(([type]) => type !== "FOLLOW_UP" && type !== "REPLY_NEEDED")
-                .sort(([, a], [, b]) => b - a)
-                .map(([type, count]) => {
-                  const cfg = getTypeConfig(type);
-                  const Icon = cfg.icon;
-                  return (
-                    <Button key={type} variant={typeFilter === type ? "default" : "outline"} size="sm" onClick={() => setTypeFilter(type)}>
-                      <Icon className="h-3.5 w-3.5" />
-                      {cfg.label} ({count})
-                    </Button>
-                  );
-                })}
+              {priorityFilter && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  Priority: {PRIORITY_OPTIONS.find((o) => o.value === priorityFilter)?.label}
+                  <button onClick={() => setPriorityFilter("")} className="ml-0.5 rounded-full p-0.5 hover:bg-primary/10">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {typeFilter && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  Type: {getTypeConfig(typeFilter).label}
+                  <button onClick={() => setTypeFilter("")} className="ml-0.5 rounded-full p-0.5 hover:bg-primary/10">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {followUpsOnly && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  Follow-ups Only
+                  <button onClick={() => setFollowUpsOnly(false)} className="ml-0.5 rounded-full p-0.5 hover:bg-primary/10">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              <button
+                onClick={() => { setPriorityFilter(""); setTypeFilter(""); setFollowUpsOnly(false); }}
+                className="text-xs text-muted-foreground-subtle hover:text-foreground underline"
+              >
+                Clear all
+              </button>
             </div>
           )}
         </div>
