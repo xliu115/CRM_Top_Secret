@@ -36,7 +36,9 @@ function ChatPageContent() {
     handleClearChat,
     handleKeyDown,
     isListening,
+    isTranscribing,
     voiceSupported,
+    voiceDuration,
     startListening,
     stopListening,
   } = useChatSession();
@@ -195,29 +197,38 @@ function ChatPageContent() {
                 }}
               />
               {voiceSupported && (
-                <Button
-                  type="button"
-                  variant={isListening ? "destructive" : "ghost"}
-                  size="icon"
-                  disabled={loading}
-                  onClick={isListening ? stopListening : startListening}
-                  className={`h-11 w-11 shrink-0 relative ${
-                    isListening ? "animate-pulse" : "text-muted-foreground-subtle hover:text-foreground"
-                  }`}
-                  title={isListening ? "Stop listening" : "Voice input"}
-                >
-                  {loading ? (
-                    <MicOff className="h-4 w-4" />
-                  ) : (
-                    <Mic className="h-4 w-4" />
+                <div className="flex items-center gap-1.5">
+                  {isListening && voiceDuration > 0 && (
+                    <span className="text-xs font-mono text-destructive tabular-nums">
+                      {Math.floor(voiceDuration / 60)}:{String(voiceDuration % 60).padStart(2, "0")}
+                    </span>
                   )}
-                  {isListening && (
-                    <span className="absolute inset-0 rounded-md border-2 border-destructive animate-ping opacity-30" />
-                  )}
-                  <span className="sr-only">
-                    {isListening ? "Stop listening" : "Voice input"}
-                  </span>
-                </Button>
+                  <Button
+                    type="button"
+                    variant={isListening ? "destructive" : isTranscribing ? "secondary" : "ghost"}
+                    size="icon"
+                    disabled={loading || isTranscribing}
+                    onClick={isListening ? stopListening : startListening}
+                    className={`h-11 w-11 shrink-0 relative ${
+                      isListening ? "animate-pulse" : isTranscribing ? "" : "text-muted-foreground-subtle hover:text-foreground"
+                    }`}
+                    title={isTranscribing ? "Transcribing..." : isListening ? "Stop recording" : "Voice input"}
+                  >
+                    {isTranscribing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : loading ? (
+                      <MicOff className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                    {isListening && (
+                      <span className="absolute inset-0 rounded-md border-2 border-destructive animate-ping opacity-30" />
+                    )}
+                    <span className="sr-only">
+                      {isTranscribing ? "Transcribing" : isListening ? "Stop recording" : "Voice input"}
+                    </span>
+                  </Button>
+                </div>
               )}
               <Button
                 type="submit"
@@ -234,19 +245,21 @@ function ChatPageContent() {
               </Button>
             </form>
             <p className="mt-2 text-center text-xs text-muted-foreground-subtle">
-              {isListening && (
+              {isTranscribing ? (
+                <span className="mr-1 inline-flex items-center gap-1 text-primary font-medium">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Transcribing...
+                </span>
+              ) : isListening ? (
                 <span className="mr-1 inline-flex items-center gap-1 text-destructive font-medium">
                   <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
-                  Listening...
+                  Recording — tap mic to stop
                 </span>
-              )}
-              Activate searches your CRM data and the live web to answer
-              questions.
-              {!process.env.NEXT_PUBLIC_HAS_OPENAI && (
-                <span>
-                  {" "}
-                  Set OPENAI_API_KEY for AI-powered answers.
-                </span>
+              ) : (
+                <>
+                  Activate searches your CRM data and the live web to answer
+                  questions.
+                </>
               )}
             </p>
           </div>

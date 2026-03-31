@@ -55,3 +55,33 @@ export async function callLLMWithHistory(
     return null;
   }
 }
+
+export async function callLLMJson<T = Record<string, unknown>>(
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<T | null> {
+  if (!openai) return null;
+  try {
+    const res = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.2,
+      max_tokens: 500,
+      response_format: { type: "json_object" },
+    });
+    const text = res.choices[0]?.message?.content;
+    if (!text) return null;
+    return JSON.parse(text) as T;
+  } catch (err) {
+    console.error(
+      "[llm-service] OpenAI JSON call failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
+}
+
+export { openai };

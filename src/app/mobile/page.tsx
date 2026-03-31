@@ -105,7 +105,9 @@ export default function MobilePage() {
     handleKeyDown,
     prependMessage,
     isListening,
+    isTranscribing,
     voiceSupported,
+    voiceDuration,
     startListening,
     stopListening,
   } = useChatSession();
@@ -323,28 +325,35 @@ export default function MobilePage() {
                 }}
               />
               {voiceSupported && (
-                <Button
-                  type="button"
-                  variant={isListening ? "destructive" : "ghost"}
-                  size="icon"
-                  disabled={loading}
-                  onClick={isListening ? stopListening : startListening}
-                  className={`h-11 w-11 shrink-0 relative ${
-                    isListening
-                      ? "animate-pulse"
-                      : "text-muted-foreground-subtle hover:text-foreground"
-                  }`}
-                  title={isListening ? "Stop listening" : "Voice input"}
-                >
-                  {loading ? (
-                    <MicOff className="h-5 w-5" />
-                  ) : (
-                    <Mic className="h-5 w-5" />
+                <div className="flex items-center gap-1.5">
+                  {isListening && voiceDuration > 0 && (
+                    <span className="text-xs font-mono text-destructive tabular-nums">
+                      {Math.floor(voiceDuration / 60)}:{String(voiceDuration % 60).padStart(2, "0")}
+                    </span>
                   )}
-                  {isListening && (
-                    <span className="absolute inset-0 rounded-lg border-2 border-destructive animate-ping opacity-30" />
-                  )}
-                </Button>
+                  <Button
+                    type="button"
+                    variant={isListening ? "destructive" : isTranscribing ? "secondary" : "ghost"}
+                    size="icon"
+                    disabled={loading || isTranscribing}
+                    onClick={isListening ? stopListening : startListening}
+                    className={`h-11 w-11 shrink-0 relative ${
+                      isListening ? "animate-pulse" : isTranscribing ? "" : "text-muted-foreground-subtle hover:text-foreground"
+                    }`}
+                    title={isTranscribing ? "Transcribing..." : isListening ? "Stop recording" : "Voice input"}
+                  >
+                    {isTranscribing ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : loading ? (
+                      <MicOff className="h-5 w-5" />
+                    ) : (
+                      <Mic className="h-5 w-5" />
+                    )}
+                    {isListening && (
+                      <span className="absolute inset-0 rounded-lg border-2 border-destructive animate-ping opacity-30" />
+                    )}
+                  </Button>
+                </div>
               )}
               <Button
                 type="submit"

@@ -4,12 +4,14 @@ import { contactRepo, partnerRepo, interactionRepo, signalRepo, meetingRepo, nud
 import { prisma } from "@/lib/db/prisma";
 import { retrieveContext, searchWeb } from "@/lib/services/rag-service";
 import { generateChatAnswer, generateEmail, generateMeetingBrief } from "@/lib/services/llm-service";
+import { generateNote } from "@/lib/services/llm-email";
 import {
   generateQuick360,
   generateContact360,
   type Contact360Context,
 } from "@/lib/services/llm-contact360";
 import { generateCompany360, type Company360Context } from "@/lib/services/llm-company360";
+import { classifyIntent, type IntentType } from "@/lib/services/llm-intent";
 
 const FULL_CONTACT_360_INTENT =
   /\b(full\s+contact\s*360)\b/i;
@@ -71,21 +73,50 @@ export async function POST(request: NextRequest) {
     const partner = await partnerRepo.findById(partnerId);
     const partnerName = partner?.name ?? "User";
 
-    // ── Intent detection ──────────────────────────────────────────────
-    const isFullContact360 = FULL_CONTACT_360_INTENT.test(message);
-    const isQuick360 = !isFullContact360 && QUICK_360_INTENT.test(message);
-    const isCompany360 = COMPANY_360_INTENT.test(message);
-    const isDraftEmail = DRAFT_EMAIL_INTENT.test(message);
-    const isShareDossier = SHARE_DOSSIER_INTENT.test(message);
-    const isMeetingPrep = MEETING_PREP_INTENT.test(message);
-    const isMeetingsToday = MEETINGS_TODAY_INTENT.test(message);
-    const isDailyPriorities = DAILY_PRIORITIES_INTENT.test(message);
-    const isNeedsAttention = NEEDS_ATTENTION_INTENT.test(message);
+    // ── Intent detection (LLM classifier with regex fallback) ────────
+    let detectedIntent: IntentType = "general_question";
+    let detectedEntity: string | null = null;
+
+    const classified = await classifyIntent(message, body.history).catch((err) => {
+      console.error("[chat] LLM intent classification failed, using regex fallback:", err);
+      return null;
+    });
+
+    if (classified && classified.confidence >= 0.5) {
+      detectedIntent = classified.intent;
+      detectedEntity = classified.entity;
+    } else {
+      // Regex fallback
+      if (FULL_CONTACT_360_INTENT.test(message)) detectedIntent = "full_360";
+      else if (QUICK_360_INTENT.test(message)) detectedIntent = "quick_360";
+      else if (COMPANY_360_INTENT.test(message)) detectedIntent = "company_360";
+      else if (DRAFT_EMAIL_INTENT.test(message)) detectedIntent = "draft_email";
+      else if (SHARE_DOSSIER_INTENT.test(message)) detectedIntent = "share_dossier";
+      else if (MEETING_PREP_INTENT.test(message)) detectedIntent = "meeting_prep";
+      else if (MEETINGS_TODAY_INTENT.test(message)) detectedIntent = "meetings_today";
+      else if (DAILY_PRIORITIES_INTENT.test(message)) detectedIntent = "daily_priorities";
+      else if (NEEDS_ATTENTION_INTENT.test(message)) detectedIntent = "needs_attention";
+
+      if (detectedIntent !== "general_question") {
+        detectedEntity = extractNameFromQuery(message);
+      }
+    }
+
+    const isMeetingPrep = detectedIntent === "meeting_prep";
+    const isMeetingsToday = detectedIntent === "meetings_today";
+    const isDailyPriorities = detectedIntent === "daily_priorities";
+    const isNeedsAttention = detectedIntent === "needs_attention";
+    const isFullContact360 = detectedIntent === "full_360";
+    const isQuick360 = detectedIntent === "quick_360";
+    const isCompany360 = detectedIntent === "company_360";
+    const isDraftEmail = detectedIntent === "draft_email";
+    const isDraftNote = detectedIntent === "draft_note";
+    const isShareDossier = detectedIntent === "share_dossier";
 
     // ── Meeting Prep ─────────────────────────────────────────────────
     if (isMeetingPrep) {
       try {
-        const meetingTitle = message
+        const meetingTitle = detectedEntity || message
           .replace(MEETING_PREP_INTENT, "")
           .replace(/\bmeeting\b/i, "")
           .replace(/[?.,!]/g, "")
@@ -342,17 +373,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const hasStructuredIntent = isFullContact360 || isQuick360 || isCompany360 || isDraftEmail || isShareDossier;
+    const hasStructuredIntent = isFullContact360 || isQuick360 || isCompany360 || isDraftEmail || isDraftNote || isShareDossier;
 
     if (hasStructuredIntent) {
       const currentAction: ActionKey = isFullContact360 ? "full360"
         : isCompany360 ? "company360"
-        : isDraftEmail ? "email"
+        : (isDraftEmail || isDraftNote) ? "email"
         : isShareDossier ? "share"
         : "quick360";
       const usedActions = getUsedActions(body.history ?? [], currentAction);
 
-      const nameQuery = extractNameFromQuery(message);
+      const nameQuery = detectedEntity || extractNameFromQuery(message);
+      if (!nameQuery && (isDraftEmail || isDraftNote)) {
+        return NextResponse.json({
+          answer: `Who would you like me to draft a ${isDraftNote ? "note" : "email"} for? You can say something like "Draft a ${isDraftNote ? "note" : "email"} to [contact name]."`,
+          sources: [],
+        });
+      }
       if (nameQuery) {
         try {
           // ── Company 360 ──
@@ -461,6 +498,28 @@ export async function POST(request: NextRequest) {
                 "",
                 `---`,
                 `*You can copy and edit this draft before sending.*`,
+                buildQuickActionsMarker(contact.name, usedActions),
+              ].filter(Boolean).join("\n\n");
+              return NextResponse.json({ answer: md, sources: [] });
+            }
+
+            // ── Draft Note ──
+            if (isDraftNote) {
+              const noteResult = await generateNote({
+                partnerName,
+                contactName: contact.name,
+                contactTitle: contact.title ?? "",
+                companyName: company?.name ?? "",
+                recentInteractions: ctx.interactions.slice(0, 5).map((i) => `${i.type} on ${i.date}: ${i.summary}`),
+                signals: ctx.signals.slice(0, 3).map((s) => `${s.type}: ${s.content.slice(0, 100)}`),
+              });
+              const md = [
+                `## Note to ${contact.name}`,
+                "",
+                noteResult.body,
+                "",
+                `---`,
+                `*You can copy and edit this note before sending.*`,
                 buildQuickActionsMarker(contact.name, usedActions),
               ].filter(Boolean).join("\n\n");
               return NextResponse.json({ answer: md, sources: [] });

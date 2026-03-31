@@ -85,6 +85,14 @@ function extractQuickActions(text: string): { cleanContent: string; actions: Qui
   }
 }
 
+function isProseAnswer(text: string): boolean {
+  if (text.startsWith("Here's what I found:")) return false;
+  if (text.includes("**From your CRM:**")) return false;
+  if (text.includes("## ") || text.includes("### ")) return true;
+  if (text.length > 200) return true;
+  return false;
+}
+
 export function AssistantReply({
   content,
   sources = [],
@@ -112,13 +120,32 @@ export function AssistantReply({
     intro = cleanContent.slice(0, introEnd).trim();
   }
 
+  const proseFirst = isProseAnswer(cleanContent) && hasSources;
+
   const textClass = mobile
     ? "text-[15px] leading-relaxed text-foreground"
     : "text-sm text-foreground";
 
   return (
     <div className="space-y-4">
-      {hasSources ? (
+      {proseFirst ? (
+        <>
+          <MarkdownContent content={cleanContent} className={textClass} />
+
+          {crmSources.length > 0 && (
+            <details className="group">
+              <summary className={`cursor-pointer font-medium uppercase tracking-wider text-muted-foreground-subtle hover:text-foreground ${mobile ? "text-[11px] py-1" : "text-xs"}`}>
+                {crmSources.length} CRM source{crmSources.length !== 1 ? "s" : ""}
+              </summary>
+              <div className={`mt-2 grid gap-3 ${mobile ? "grid-cols-1" : "sm:grid-cols-2"}`}>
+                {crmSources.map((s, j) => (
+                  <SourceCard key={j} source={s} mobile={mobile} />
+                ))}
+              </div>
+            </details>
+          )}
+        </>
+      ) : hasSources ? (
         <>
           {intro && (
             <MarkdownContent content={intro} className={textClass} />
@@ -141,8 +168,6 @@ export function AssistantReply({
         <MarkdownContent content={cleanContent} className={textClass} />
       )}
 
-      {/* Quick Actions: on mobile the bottom pill bar is the single source of truth,
-          so hide inline actions. On desktop, show them here. */}
       {!mobile && quickActions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
           {quickActions.map((action, i) =>

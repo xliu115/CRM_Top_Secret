@@ -79,14 +79,21 @@ function generateChatTemplate(ctx: ChatContext): string {
   const parts: string[] = [];
 
   if (crmDocs.length > 0) {
-    const crmLines = crmDocs
-      .slice(0, 5)
-      .map(
-        (d, i) =>
-          `- **[Source ${i + 1}]** (${d.type}${d.date ? `, ${d.date}` : ""}): ${d.content.slice(0, 200)}${d.content.length > 200 ? "..." : ""}`
-      )
-      .join("\n");
-    parts.push(`**From your CRM:**\n${crmLines}`);
+    const byType = new Map<string, typeof crmDocs>();
+    for (const d of crmDocs.slice(0, 8)) {
+      const group = byType.get(d.type) ?? [];
+      group.push(d);
+      byType.set(d.type, group);
+    }
+
+    parts.push("### From your CRM");
+    for (const [type, docs] of byType) {
+      parts.push(`**${type}${docs.length > 1 ? "s" : ""}:**`);
+      for (const d of docs) {
+        const snippet = d.content.slice(0, 200) + (d.content.length > 200 ? "..." : "");
+        parts.push(`- ${snippet}${d.date ? ` *(${d.date})*` : ""}`);
+      }
+    }
   }
 
   if (webDocs.length > 0) {
@@ -98,8 +105,8 @@ function generateChatTemplate(ctx: ChatContext): string {
         return url ? `- ${snippet} ([source](${url}))` : `- ${snippet}`;
       })
       .join("\n");
-    parts.push(`**From the web:**\n${webLines}`);
+    parts.push(`### From the web\n${webLines}`);
   }
 
-  return `Here's what I found:\n\n${parts.join("\n\n")}\n\n*Note: Add credits to your OpenAI account for full AI-powered answers.*`;
+  return `I found some relevant information but couldn't generate a full analysis:\n\n${parts.join("\n\n")}`;
 }

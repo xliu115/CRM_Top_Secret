@@ -33,15 +33,13 @@ export function useChatSession() {
 
   const {
     isListening,
+    isTranscribing,
     transcript: liveTranscript,
     isSupported: voiceSupported,
+    duration: voiceDuration,
     startListening,
     stopListening,
   } = useSpeechRecognition({ onResult: handleVoiceResult });
-
-  function buildHistory(): { role: "user" | "assistant"; content: string }[] {
-    return messages.map((m) => ({ role: m.role, content: m.content }));
-  }
 
   const handleSend = useCallback(
     async (message?: string) => {
@@ -99,18 +97,12 @@ export function useChatSession() {
   );
 
   useEffect(() => {
-    if (pendingVoiceRef.current && !isListening) {
+    if (pendingVoiceRef.current && !isListening && !isTranscribing) {
       const text = pendingVoiceRef.current;
       pendingVoiceRef.current = null;
       handleSend(text);
     }
-  }, [isListening, handleSend]);
-
-  useEffect(() => {
-    if (isListening && liveTranscript) {
-      setInput(liveTranscript);
-    }
-  }, [isListening, liveTranscript]);
+  }, [isListening, isTranscribing, handleSend]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -148,8 +140,10 @@ export function useChatSession() {
     handleKeyDown,
     prependMessage,
     isListening,
+    isTranscribing,
     liveTranscript,
     voiceSupported,
+    voiceDuration,
     startListening,
     stopListening,
   };

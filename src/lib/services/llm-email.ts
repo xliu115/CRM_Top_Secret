@@ -90,6 +90,58 @@ ${partnerFirst}`;
   return { subject, body };
 }
 
+// ── Note / Short Message Drafting ───────────────────────────────────
+
+export interface NoteContext {
+  partnerName: string;
+  contactName: string;
+  contactTitle: string;
+  companyName: string;
+  recentInteractions: string[];
+  signals: string[];
+}
+
+export async function generateNote(ctx: NoteContext): Promise<{
+  body: string;
+}> {
+  const interactionContext = ctx.recentInteractions.length
+    ? `Recent interactions:\n${ctx.recentInteractions.map((i) => `- ${i}`).join("\n")}`
+    : "No recent interactions.";
+
+  const signalContext = ctx.signals.length
+    ? `Relevant signals:\n${ctx.signals.map((s) => `- ${s}`).join("\n")}`
+    : "";
+
+  const result = await callLLM(
+    `You are an expert relationship manager drafting short, informal notes. Write warm, conversational messages — not formal emails. Keep it under 80 words. Return JSON with a "body" key only.`,
+    `Draft a quick note from ${ctx.partnerName} to ${ctx.contactName} (${ctx.contactTitle} at ${ctx.companyName}).
+
+${interactionContext}
+
+${signalContext}
+
+Write a brief, personalized note that feels natural and warm. No subject line needed. Return valid JSON: {"body": "..."}`
+  );
+  if (result) {
+    try {
+      const cleaned = result.replace(/```json\n?|\n?```/g, "").trim();
+      return JSON.parse(cleaned);
+    } catch {
+      return generateNoteTemplate(ctx);
+    }
+  }
+
+  return generateNoteTemplate(ctx);
+}
+
+function generateNoteTemplate(ctx: NoteContext): { body: string } {
+  const firstName = ctx.contactName.split(" ")[0];
+  const partnerFirst = ctx.partnerName.split(" ")[0];
+  return {
+    body: `Hey ${firstName},\n\nJust wanted to reach out and see how things are going at ${ctx.companyName}. Would love to catch up when you have a moment.\n\nBest,\n${partnerFirst}`,
+  };
+}
+
 // ── Follow-Up Email for Cadence Engine ─────────────────────────────
 
 export interface FollowUpEmailContext {

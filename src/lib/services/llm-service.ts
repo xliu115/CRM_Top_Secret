@@ -3,7 +3,7 @@
  * domain prompts live in `./llm-email`, `./llm-meeting`, etc.
  */
 export type { ChatMessage } from "./llm-core";
-export { callLLM, callLLMWithHistory } from "./llm-core";
+export { callLLM, callLLMWithHistory, callLLMJson } from "./llm-core";
 
 export * from "./llm-email";
 export * from "./llm-briefing";
