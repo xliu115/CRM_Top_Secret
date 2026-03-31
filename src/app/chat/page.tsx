@@ -83,8 +83,8 @@ function ChatPageContent() {
           <div className="flex-1 overflow-y-auto p-4">
             {isEmpty && !loading ? (
               <div className="flex h-full flex-col items-center justify-center gap-6">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-3xl">
-                  🐦
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                  <Sparkles className="h-7 w-7 text-primary" />
                 </div>
                 <div className="text-center">
                   <h2 className="text-lg font-semibold text-foreground">
@@ -116,8 +116,8 @@ function ChatPageContent() {
                 {messages.map((msg) => (
                   <div key={msg.id} className="flex gap-3">
                     {msg.role === "assistant" ? (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-base">
-                        🐦
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                        <Sparkles className="h-4 w-4 text-primary" />
                       </div>
                     ) : (
                       <Avatar
@@ -153,8 +153,8 @@ function ChatPageContent() {
                 ))}
                 {loading && (
                   <div className="flex gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-base">
-                      🐦
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <Sparkles className="h-4 w-4 text-primary" />
                     </div>
                     <div className="flex items-center gap-2 pt-2">
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
