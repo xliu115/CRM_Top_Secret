@@ -1268,9 +1268,9 @@ export default function DashboardPage() {
                       {newsGroups.map(({ clientName, topImportance, items }) => (
                         <div key={clientName}>
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-foreground">
                               {clientName}
-                            </h3>
+                            </p>
                             {topImportance && (
                               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${getPriorityClassName(topImportance)}`}>
                                 {topImportance}
