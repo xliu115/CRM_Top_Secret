@@ -98,7 +98,7 @@ export function Sidebar({
               aria-label={collapsed ? item.label : undefined}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center rounded-lg text-sm font-medium transition-colors",
+                "flex items-center rounded-lg text-sm font-medium transition-colors min-h-[44px]",
                 collapsed
                   ? "justify-center px-2 py-2.5"
                   : "justify-between gap-3 px-3 py-2.5",
@@ -144,7 +144,7 @@ export function Sidebar({
           type="button"
           onClick={onToggle}
           className={cn(
-            "flex items-center rounded-lg text-sm font-medium text-sidebar-fg/50 hover:text-white hover:bg-sidebar-accent/50 transition-colors w-full",
+            "flex items-center rounded-lg text-sm font-medium text-sidebar-fg/50 hover:text-white hover:bg-sidebar-accent/50 transition-colors w-full min-h-[44px]",
             collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2"
           )}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}

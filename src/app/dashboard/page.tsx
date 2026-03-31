@@ -566,10 +566,10 @@ function StructuredBriefingView({
       {actions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-2">
           {actions.map((action, i) => (
-            <Link
+              <Link
               key={`${action.deeplink}-${i}`}
               href={action.deeplink}
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3.5 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 min-h-[36px]"
             >
               <ChevronRight className="h-3 w-3" />
               {action.actionLabel} — {action.contactName}
@@ -579,7 +579,7 @@ function StructuredBriefingView({
             <button
               key={`q360-struct-${name}`}
               onClick={() => onQuick360(name)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3.5 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 min-h-[36px]"
             >
               <ChevronRight className="h-3 w-3" />
               Quick 360 — {name}
@@ -882,7 +882,7 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => setBriefingView("conversational")}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[36px] ${
                           briefingView === "conversational"
                             ? "bg-background text-foreground shadow-sm"
                             : "text-muted-foreground-subtle hover:text-foreground"
@@ -895,7 +895,7 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => setBriefingView("structured")}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[36px] ${
                           briefingView === "structured"
                             ? "bg-background text-foreground shadow-sm"
                             : "text-muted-foreground-subtle hover:text-foreground"
@@ -925,7 +925,7 @@ export default function DashboardPage() {
                               <Link
                                 key={`${action.deeplink}-${i}`}
                                 href={action.deeplink}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3.5 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 min-h-[36px]"
                               >
                                 <ChevronRight className="h-3 w-3" />
                                 {action.actionLabel} — {action.contactName}
@@ -936,7 +936,7 @@ export default function DashboardPage() {
                               <button
                                 key={`q360-${name}`}
                                 onClick={() => handleQuick360(name)}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3.5 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 min-h-[36px]"
                               >
                                 <ChevronRight className="h-3 w-3" />
                                 Quick 360 — {name}
@@ -1009,7 +1009,7 @@ export default function DashboardPage() {
                       key={q}
                       type="button"
                       onClick={() => handleSuggestedQuestion(q)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[36px]"
                     >
                       <Sparkles className="h-3 w-3 text-primary" />
                       {q}
