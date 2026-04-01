@@ -8,6 +8,7 @@ import { PrismaMeetingRepository } from "./prisma/meeting-repository";
 import { PrismaEngagementRepository } from "./prisma/engagement-repository";
 import { PrismaNudgeRuleConfigRepository } from "./prisma/nudge-rule-config-repository";
 import { PrismaSequenceRepository } from "./prisma/sequence-repository";
+import { PrismaCampaignRepository } from "./prisma/campaign-repository";
 
 export const partnerRepo = new PrismaPartnerRepository();
 export const contactRepo = new PrismaContactRepository();
@@ -19,6 +20,7 @@ export const meetingRepo = new PrismaMeetingRepository();
 export const engagementRepo = new PrismaEngagementRepository();
 export const nudgeRuleConfigRepo = new PrismaNudgeRuleConfigRepository();
 export const sequenceRepo = new PrismaSequenceRepository();
+export const campaignRepo = new PrismaCampaignRepository();
 
 export type {
   IPartnerRepository,
@@ -40,4 +42,7 @@ export type {
   ISequenceRepository,
   SequenceWithRelations,
   StepWithSequence,
+  ICampaignRepository,
+  CampaignWithStats,
+  CampaignDetail,
 } from "./interfaces";

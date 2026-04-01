@@ -27,3 +27,8 @@ export type {
   SequenceWithRelations,
   StepWithSequence,
 } from "./sequence-repository";
+export type {
+  ICampaignRepository,
+  CampaignWithStats,
+  CampaignDetail,
+} from "./campaign-repository";
