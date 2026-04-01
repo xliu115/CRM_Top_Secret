@@ -14,7 +14,7 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 | Decision | Choice | Reasoning |
 |----------|--------|-----------|
 | Sending model | Hybrid — send from Activate + import external campaigns via API | Partners need both: Activate-sent for new campaigns, imported for historical/external data |
-| Content library | System-seeded + API-ingested, read-only for Partners | Pre-populated from existing article/event data; Partners browse and share, not manage |
+| Content library | System-managed, read-only for Partners | Articles fetched from mckinsey.com via Tavily web search (v1); events from seed data. Future: API integration with firm's content/event platforms |
 | Tracking | Automatic open/click for Activate-sent; imported data for external | Tracking pixel + link wrapping for Activate campaigns; external campaigns bring their own engagement data |
 | Contact selection | Manual pick + smart segments, reviewable before send | Full flexibility — pick individuals or define criteria, always review the final list |
 | Email personalization | Base template with AI-personalized opening per recipient | Consistent core message with a personal touch using relationship context |
@@ -35,16 +35,31 @@ All models follow existing Prisma conventions: `@map("snake_case")` for fields, 
 | type | String | `ARTICLE` or `EVENT` |
 | title | string | Display name |
 | description | string? | Short summary |
-| url | string? | Link to content (mckinsey.com article, event registration page) |
+| url | string? | Link to content (mckinsey.com article URL, event landing page) |
+| imageUrl | string? | Thumbnail/hero image URL for display in cards |
 | practice | string? | Practice area (AI, TMT, GEM, etc.) |
-| eventDate | DateTime? | Events only |
+| publishedAt | DateTime? | Article publication date or event date |
+| eventDate | DateTime? | Events only — when the event takes place |
 | eventLocation | string? | Events only |
 | eventType | string? | In-person / Virtual / Hybrid |
+| sourceId | string? | External ID from the originating system (for deduplication on re-fetch) |
 | createdAt | DateTime | |
 | updatedAt | DateTime | For sync/ingestion freshness |
 
-Indexes: `@@index([type])`, `@@index([practice])`
+Indexes: `@@index([type])`, `@@index([practice])`, `@@index([sourceId])`
 Table: `@@map("content_items")`
+
+#### Content ingestion (v1 — articles)
+
+Articles are fetched from mckinsey.com using the existing Tavily web search integration (`@tavily/core`, already in `package.json` and used by `news-ingestion-service.ts`). A new service `content-ingestion-service.ts` runs a Tavily search for recent McKinsey Insights articles, extracts title, URL, description, practice area, and publication date, and upserts into `ContentItem`. Deduplication via `sourceId` (derived from URL). This can run as a cron job (e.g., daily) or be triggered manually from an admin action.
+
+#### Content ingestion (v1 — events)
+
+Events are seeded from the existing `eventNames`, `practices`, `locations`, and `eventTypes` data in `prisma/seed-data/engagements.ts`. Future: API integration with the firm's event management platform.
+
+#### Content ingestion (future)
+
+Both articles and events will migrate to API integration with the firm's content and event platforms, replacing the Tavily fetch and seed data respectively.
 
 ### Campaign — First-class campaign entity
 
@@ -94,13 +109,18 @@ Note: Plain email campaigns (no content items) simply have zero `CampaignContent
 | contactId | string? | FK to Contact (nullable for unmatched imported recipients) |
 | unmatchedEmail | string? | Email address when contact can't be matched (imports only) |
 | personalizedBody | text? | AI-personalized email body for this recipient |
+| rsvpToken | string? | Unique opaque token for personalized RSVP link (event campaigns only) |
+| rsvpStatus | String? | `PENDING`, `ACCEPTED`, `DECLINED` (event campaigns only) |
+| rsvpRespondedAt | DateTime? | When the recipient responded to the RSVP |
 | status | String | `PENDING`, `SENT`, `FAILED` |
 | failureReason | String? | Error detail on send failure |
 | sentAt | DateTime? | |
 
-Indexes: `@@index([campaignId])`, `@@index([contactId])`, `@@index([campaignId, status])`
+Indexes: `@@index([campaignId])`, `@@index([contactId])`, `@@index([campaignId, status])`, `@@index([rsvpToken])`
 Constraint: `@@unique([campaignId, contactId])` (when `contactId` is non-null — prevents same contact twice in one campaign)
 Table: `@@map("campaign_recipients")`
+
+When a campaign includes an event content item, each recipient gets a unique `rsvpToken` generated at send time. The event card in the email includes a personalized RSVP link: `/api/track/rsvp/[rsvpToken]`. This gives Activate native registration tracking for event invites.
 
 ### CampaignEngagement — Tracking events per recipient
 
@@ -116,7 +136,7 @@ Table: `@@map("campaign_recipients")`
 Indexes: `@@index([recipientId])`, `@@index([recipientId, type])`, `@@index([contentItemId])`
 Table: `@@map("campaign_engagements")`
 
-Tracking-producible events: `OPENED` (tracking pixel), `CLICKED` (link redirect), `ARTICLE_READ` (alias for clicked article link). `EVENT_REGISTERED` and `EVENT_ATTENDED` are import-only — these come from the external marketing platform API or manual update, not from Activate's tracking infrastructure.
+Tracking-producible events: `OPENED` (tracking pixel), `CLICKED` (link redirect), `ARTICLE_READ` (alias for clicked article link), `EVENT_REGISTERED` (RSVP link accepted). `EVENT_ATTENDED` is import-only — attendance confirmation comes from the external event platform or manual update post-event.
 
 ### Migration: Existing CampaignOutreach
 
@@ -157,6 +177,7 @@ Tracking-producible events: `OPENED` (tracking pixel), `CLICKED` (link redirect)
 | `GET` | `/api/track/open/[recipientId]` | Tracking pixel endpoint. Returns 1x1 transparent GIF. Records OPENED event. |
 | `GET` | `/api/track/click/[recipientId]` | Link redirect for plain email links (no content item). Records CLICKED event, 302-redirects to target URL (passed as `?url=` query param). |
 | `GET` | `/api/track/click/[recipientId]/[contentItemId]` | Link redirect for content-item links. Records CLICKED/ARTICLE_READ event, 302-redirects to content URL. |
+| `GET` | `/api/track/rsvp/[rsvpToken]` | Personalized RSVP endpoint. Looks up recipient by `rsvpToken`, records EVENT_REGISTERED engagement, sets `rsvpStatus: ACCEPTED`, renders a confirmation page (or redirects to event landing page). Supports `?response=decline` to decline. |
 
 ### Import (`/api/campaigns/import`)
 
@@ -212,8 +233,8 @@ The Campaigns page has three sub-tabs:
 
 - **Grid/list of events:** Title, practice, date, location, type (In-person/Virtual/Hybrid)
 - **Filters:** Practice, date range, event type, search
-- **Per-event "Share" button:** Opens campaign builder pre-populated with that event
-- **Per-event stats:** Aggregate engagement across all campaigns sharing this event
+- **Per-event "Invite" button:** Opens campaign builder pre-populated with that event. Sharing an event sends an invite email with a personalized RSVP link per recipient.
+- **Per-event stats:** Aggregate engagement across all campaigns sharing this event (invites sent, opens, RSVPs accepted/declined)
 
 ### 3d. Campaign Builder (`/campaigns/new`)
 
@@ -234,7 +255,7 @@ Single scrollable page with progressive sections. Two entry points:
 ### 3e. Campaign Detail (`/campaigns/[id]`)
 
 **Overview tab:**
-- Summary cards: Total recipients, Open rate, Click rate, Article reads, Event registrations
+- Summary cards: Total recipients, Open rate, Click rate, Article reads, RSVPs (accepted/declined/pending)
 - Per-content engagement stats
 - Engagement timeline (bar chart or sparkline)
 
@@ -281,7 +302,7 @@ Generates engagement-aware follow-up draft:
 
 New exports added to the existing email service (not a separate file):
 
-- **`buildCampaignEmailHtml(recipient, campaign, contentItems)`** — Constructs the full HTML email: personalized opening, content item cards (article: title + description + CTA; event: name + date + location + register button), tracking pixel `<img>`, all URLs wrapped through `/api/track/click/` redirect.
+- **`buildCampaignEmailHtml(recipient, campaign, contentItems)`** — Constructs the full HTML email: personalized opening, content item cards (article: title + description + "Read Article" CTA; event: name + date + location + personalized "RSVP" button pointing to `/api/track/rsvp/[rsvpToken]`), tracking pixel `<img>`, article URLs wrapped through `/api/track/click/` redirect.
 - **`sendCampaignEmail(recipient, html)`** — Sends via Resend. Uses `llm-core.ts` `callLLM` for personalization (consistent with other LLM service modules). `from` address is the Partner's configured email or the default Activate sender. `reply-to` is always the Partner's email.
 
 ## 5. Error Handling & Edge Cases
@@ -334,17 +355,19 @@ src/app/api/
 └── track/
     ├── open/[recipientId]/route.ts    # GET (tracking pixel)
     ├── click/[recipientId]/route.ts   # GET (plain link redirect)
-    └── click/[recipientId]/[contentItemId]/route.ts  # GET (content click redirect)
+    ├── click/[recipientId]/[contentItemId]/route.ts  # GET (content click redirect)
+    └── rsvp/[rsvpToken]/route.ts      # GET (RSVP accept/decline + confirmation page)
 
 src/lib/
 ├── repositories/
 │   ├── interfaces/campaign-repository.ts
 │   └── prisma/campaign-repository.ts
 ├── services/
-│   └── llm-campaign.ts         # Campaign email generation + personalization
+│   ├── llm-campaign.ts                # Campaign email generation + personalization
+│   └── content-ingestion-service.ts   # Tavily-based article fetching from mckinsey.com
 
 prisma/
 ├── schema.prisma               # New models added
 └── seed-data/
-    └── content-library.ts      # Seed ContentItem from existing article/event data
+    └── content-library.ts      # Seed ContentItem for events from existing seed data
 ```
