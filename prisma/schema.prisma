@@ -19,6 +19,7 @@ model Partner {
   meetings           Meeting[]
   nudgeRuleConfig    NudgeRuleConfig?
   outreachSequences  OutreachSequence[]
+  campaigns          Campaign[]
 
   @@map("partners")
 }
@@ -61,6 +62,7 @@ model Contact {
   events             EventRegistration[]
   articles           ArticleEngagement[]
   campaigns          CampaignOutreach[]
+  campaignRecipients CampaignRecipient[]
   outreachSequences  OutreachSequence[]
 
   @@index([partnerId])
@@ -265,6 +267,114 @@ model CampaignOutreach {
 
   @@index([contactId])
   @@map("campaign_outreaches")
+}
+
+model ContentItem {
+  id            String    @id @default(uuid())
+  type          String
+  title         String
+  description   String?
+  url           String?
+  imageUrl      String?   @map("image_url")
+  practice      String?
+  publishedAt   DateTime? @map("published_at")
+  eventDate     DateTime? @map("event_date")
+  eventLocation String?   @map("event_location")
+  eventType     String?   @map("event_type")
+  sourceId      String?   @map("source_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  campaignContents CampaignContent[]
+  engagements      CampaignEngagement[]
+
+  @@index([type])
+  @@index([practice])
+  @@index([sourceId])
+  @@map("content_items")
+}
+
+model Campaign {
+  id              String    @id @default(uuid())
+  partnerId       String    @map("partner_id")
+  name            String
+  subject         String?
+  bodyTemplate    String?   @map("body_template")
+  source          String    @default("ACTIVATE")
+  status          String    @default("DRAFT")
+  segmentCriteria String?   @map("segment_criteria")
+  sentAt          DateTime? @map("sent_at")
+  sendStartedAt   DateTime? @map("send_started_at")
+  lastError       String?   @map("last_error")
+  importedFrom    String?   @map("imported_from")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  partner    Partner             @relation(fields: [partnerId], references: [id])
+  contents   CampaignContent[]
+  recipients CampaignRecipient[]
+
+  @@index([partnerId])
+  @@index([partnerId, status])
+  @@index([status])
+  @@map("campaigns")
+}
+
+model CampaignContent {
+  id            String @id @default(uuid())
+  campaignId    String @map("campaign_id")
+  contentItemId String @map("content_item_id")
+  position      Int    @default(0)
+
+  campaign    Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contentItem ContentItem @relation(fields: [contentItemId], references: [id])
+
+  @@unique([campaignId, contentItemId])
+  @@index([campaignId])
+  @@index([contentItemId])
+  @@map("campaign_contents")
+}
+
+model CampaignRecipient {
+  id              String    @id @default(uuid())
+  campaignId      String    @map("campaign_id")
+  contactId       String?   @map("contact_id")
+  unmatchedEmail  String?   @map("unmatched_email")
+  personalizedBody String?  @map("personalized_body")
+  rsvpToken       String?   @map("rsvp_token")
+  rsvpStatus      String?   @map("rsvp_status")
+  rsvpRespondedAt DateTime? @map("rsvp_responded_at")
+  status          String    @default("PENDING")
+  failureReason   String?   @map("failure_reason")
+  sentAt          DateTime? @map("sent_at")
+
+  campaign    Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact     Contact?             @relation(fields: [contactId], references: [id])
+  engagements CampaignEngagement[]
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId])
+  @@index([contactId])
+  @@index([campaignId, status])
+  @@index([rsvpToken])
+  @@map("campaign_recipients")
+}
+
+model CampaignEngagement {
+  id            String    @id @default(uuid())
+  recipientId   String    @map("recipient_id")
+  type          String
+  contentItemId String?   @map("content_item_id")
+  timestamp     DateTime  @default(now())
+  metadata      String?
+
+  recipient   CampaignRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  contentItem ContentItem?      @relation(fields: [contentItemId], references: [id])
+
+  @@index([recipientId])
+  @@index([recipientId, type])
+  @@index([contentItemId])
+  @@map("campaign_engagements")
 }
 
 model NudgeRuleConfig {
