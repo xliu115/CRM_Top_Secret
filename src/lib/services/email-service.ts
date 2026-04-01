@@ -625,3 +625,162 @@ export function buildMini360Html(
       </tr>
     </table>`;
 }
+
+export function buildCampaignEmailHtml(params: {
+  personalizedOpening: string;
+  bodyTemplate: string;
+  contentItems: {
+    contentItemId: string;
+    title: string;
+    description?: string;
+    url?: string;
+    type: string;
+    eventDate?: Date;
+    eventLocation?: string;
+  }[];
+  recipientId: string;
+  rsvpToken?: string;
+  appUrl: string;
+}): string {
+  const base = params.appUrl.replace(/\/+$/, "");
+  const openPixel = `${base}/api/track/open/${encodeURIComponent(params.recipientId)}`;
+
+  const cardRows = params.contentItems
+    .map((item, i) => {
+      const isEvent = item.type.toUpperCase() === "EVENT";
+      const borderBottom =
+        i < params.contentItems.length - 1
+          ? `border-bottom: 1px solid ${MDS.border};`
+          : "";
+      const clickUrl = `${base}/api/track/click/${encodeURIComponent(params.recipientId)}/${encodeURIComponent(item.contentItemId)}`;
+      const rsvpUrl = params.rsvpToken
+        ? `${base}/api/track/rsvp/${encodeURIComponent(params.rsvpToken)}`
+        : clickUrl;
+
+      const dateStr =
+        item.eventDate instanceof Date && !Number.isNaN(item.eventDate.getTime())
+          ? item.eventDate.toLocaleDateString("en-US", {
+              weekday: "short",
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })
+          : null;
+
+      const metaLines: string[] = [];
+      if (isEvent && dateStr) {
+        metaLines.push(
+          `<div style="font-size: 12px; color: ${MDS.textLight}; margin-top: 4px;">${escHtml(dateStr)}</div>`
+        );
+      }
+      if (isEvent && item.eventLocation) {
+        metaLines.push(
+          `<div style="font-size: 12px; color: ${MDS.textLight}; margin-top: 2px;">${escHtml(item.eventLocation)}</div>`
+        );
+      }
+      if (!isEvent && item.description) {
+        metaLines.push(
+          `<div style="font-size: 13px; color: ${MDS.text}; line-height: 1.55; margin-top: 8px;">${escHtml(item.description)}</div>`
+        );
+      }
+
+      const ctaHref = isEvent ? rsvpUrl : clickUrl;
+      const ctaLabel = isEvent ? "RSVP &rarr;" : "Read Article &rarr;";
+
+      return `
+    <tr>
+      <td style="padding: 20px 28px; ${borderBottom}">
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: ${MDS.bgLight}; border-radius: 4px; border: 1px solid ${MDS.border};">
+          <tr>
+            <td style="padding: 14px 16px;">
+              <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${MDS.electricBlue}; margin-bottom: 6px;">${escHtml(item.type)}</div>
+              <div style="font-weight: 600; font-size: 15px; color: ${MDS.deepBlue}; line-height: 1.35;">${escHtml(item.title)}</div>
+              ${metaLines.join("")}
+              <a href="${ctaHref}" style="display: inline-block; margin-top: 12px; padding: 7px 18px; background: ${MDS.electricBlue}; color: ${MDS.white}; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 3px;">${ctaLabel}</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campaign</title>
+</head>
+<body style="margin: 0; padding: 0; background: ${MDS.bgLight}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: ${MDS.bgLight};">
+    <tr>
+      <td align="center" style="padding: 40px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 600px; width: 100%; background: ${MDS.white}; border: 1px solid ${MDS.border}; border-radius: 4px;">
+          <tr>
+            <td style="padding: 28px 28px 16px 28px;">
+              <p style="margin: 0; font-size: 15px; color: ${MDS.text}; line-height: 1.65;">${escHtml(params.personalizedOpening).replace(/\n/g, "<br />")}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 28px 24px 28px;">
+              <div style="white-space: pre-line; font-size: 14px; color: ${MDS.text}; line-height: 1.7;">${escHtml(params.bodyTemplate)}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                ${cardRows}
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 16px 28px 32px 28px;">
+              <img src="${openPixel}" width="1" height="1" alt="" style="display: block; border: 0; outline: none;" />
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendCampaignEmail(params: {
+  fromName: string;
+  fromEmail: string;
+  toEmail: string;
+  toName: string;
+  subject: string;
+  html: string;
+}): Promise<{ sent: boolean; error?: string; messageId?: string }> {
+  if (!resend) {
+    console.warn("[email-service] Resend not configured, skipping campaign send");
+    return { sent: false, error: "Resend not configured" };
+  }
+
+  const sender = FROM_ADDRESS.replace(/.*<|>.*/g, "").trim();
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: `${escHtml(params.fromName)} <${sender}>`,
+      replyTo: params.fromEmail,
+      to: params.toEmail,
+      subject: params.subject,
+      html: params.html,
+    });
+
+    if (error) {
+      console.error("[email-service] Campaign send error:", error);
+      return { sent: false, error: error.message };
+    }
+
+    console.log(`[email-service] Campaign email sent to ${params.toEmail}`);
+    return { sent: true, messageId: data?.id };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error("[email-service] Campaign send failed:", msg);
+    return { sent: false, error: msg };
+  }
+}
