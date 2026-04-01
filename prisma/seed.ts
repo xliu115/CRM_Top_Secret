@@ -13,6 +13,8 @@ import {
   generateCampaignOutreaches,
 } from "./seed-data/engagements";
 import { generateSequenceData } from "./seed-data/sequences";
+import { generateContentLibrary } from "./seed-data/content-library";
+import { generateMockCampaigns } from "./seed-data/campaigns";
 
 const adapter = new PrismaBetterSqlite3({
   url: process.env.DATABASE_URL ?? "file:./dev.db",
@@ -23,6 +25,11 @@ async function main() {
   console.log("🌱 Seeding database...\n");
 
   // Clear existing data (order matters for FK constraints)
+  await prisma.campaignEngagement.deleteMany();
+  await prisma.campaignRecipient.deleteMany();
+  await prisma.campaignContent.deleteMany();
+  await prisma.campaign.deleteMany();
+  await prisma.contentItem.deleteMany();
   await prisma.cadenceStep.deleteMany();
   await prisma.outreachSequence.deleteMany();
   await prisma.campaignOutreach.deleteMany();
@@ -143,6 +150,35 @@ async function main() {
     await prisma.campaignOutreach.createMany({ data: batch });
   }
 
+  // Content Library
+  const { articles: contentArticles, events: contentEvents } =
+    generateContentLibrary();
+  const allContentItems = [...contentArticles, ...contentEvents];
+  console.log(`Creating ${allContentItems.length} content library items...`);
+  for (const batch of chunk(allContentItems, 50)) {
+    await prisma.contentItem.createMany({ data: batch });
+  }
+
+  // Mock Campaigns (all partners)
+  const mockCampaignData = generateMockCampaigns(contactRefs);
+  console.log(`Creating ${mockCampaignData.campaigns.length} mock campaigns...`);
+  for (const c of mockCampaignData.campaigns) {
+    await prisma.campaign.create({ data: c });
+  }
+  if (mockCampaignData.campaignContents.length > 0) {
+    for (const batch of chunk(mockCampaignData.campaignContents, 50)) {
+      await prisma.campaignContent.createMany({ data: batch });
+    }
+  }
+  console.log(`Creating ${mockCampaignData.recipients.length} campaign recipients...`);
+  for (const batch of chunk(mockCampaignData.recipients, 50)) {
+    await prisma.campaignRecipient.createMany({ data: batch });
+  }
+  console.log(`Creating ${mockCampaignData.engagements.length} campaign engagements...`);
+  for (const batch of chunk(mockCampaignData.engagements, 50)) {
+    await prisma.campaignEngagement.createMany({ data: batch });
+  }
+
   // Cadence engine demo data: sequences, steps, follow-up nudges
   const seqData = generateSequenceData(contactRefs);
 
@@ -191,7 +227,9 @@ async function main() {
   console.log(`   Meetings:     ${meetings.length}`);
   console.log(`   Events:       ${eventRegs.length}`);
   console.log(`   Articles:     ${articleEngs.length}`);
-  console.log(`   Campaigns:    ${campaignOuts.length}`);
+  console.log(`   Camp. outr.:  ${campaignOuts.length}`);
+  console.log(`   Content lib:  ${allContentItems.length}`);
+  console.log(`   Campaigns:    ${mockCampaignData.campaigns.length}`);
   console.log(`   Sequences:    ${seqData.sequences.length}`);
   console.log(`   Steps:        ${seqData.cadenceSteps.length}`);
   console.log(`   Seq Nudges:   ${seqData.sequenceNudges.length}`);
