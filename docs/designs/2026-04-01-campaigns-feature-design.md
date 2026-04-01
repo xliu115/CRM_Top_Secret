@@ -25,12 +25,14 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 
 ## 1. Data Model
 
+All models follow existing Prisma conventions: `@map("snake_case")` for fields, `@@map("table_name")` for tables, `@@index` on foreign keys and hot query paths. Enums stored as `String` (consistent with existing codebase pattern for flexibility).
+
 ### ContentItem — Shared content library
 
 | Field | Type | Notes |
 |-------|------|-------|
 | id | uuid | PK |
-| type | enum: `ARTICLE`, `EVENT` | Content kind |
+| type | String | `ARTICLE` or `EVENT` |
 | title | string | Display name |
 | description | string? | Short summary |
 | url | string? | Link to content (mckinsey.com article, event registration page) |
@@ -39,6 +41,10 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 | eventLocation | string? | Events only |
 | eventType | string? | In-person / Virtual / Hybrid |
 | createdAt | DateTime | |
+| updatedAt | DateTime | For sync/ingestion freshness |
+
+Indexes: `@@index([type])`, `@@index([practice])`
+Table: `@@map("content_items")`
 
 ### Campaign — First-class campaign entity
 
@@ -49,12 +55,20 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 | name | string | Partner-chosen campaign name |
 | subject | string? | Email subject line |
 | bodyTemplate | text? | Base email template (before personalization) |
-| source | enum: `ACTIVATE`, `IMPORTED` | How this campaign was created |
-| status | enum: `DRAFT`, `SENDING`, `SENT`, `FAILED` | Campaign lifecycle |
+| source | String | `ACTIVATE` or `IMPORTED` |
+| status | String | `DRAFT`, `SENDING`, `SENT`, `FAILED` |
+| segmentCriteria | String? | JSON — stored segment rules used to build recipient list, for reference only |
 | sentAt | DateTime? | When the campaign was sent |
+| sendStartedAt | DateTime? | When the send job started (for stuck-job detection) |
+| lastError | String? | Error message on failure (partial or total) |
 | importedFrom | string? | Source system name for imported campaigns |
 | createdAt | DateTime | |
 | updatedAt | DateTime | |
+
+Indexes: `@@index([partnerId])`, `@@index([partnerId, status])`, `@@index([status])`
+Table: `@@map("campaigns")`
+
+Status transitions: `DRAFT → SENDING → SENT` (happy path), `DRAFT → SENDING → FAILED` (total failure), `SENDING → SENT` with some recipients `FAILED` (partial). If `SENDING` persists for >10 minutes (based on `sendStartedAt`), the job is considered stuck and can be retried.
 
 ### CampaignContent — Join table: campaigns ↔ content items
 
@@ -62,8 +76,14 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 |-------|------|-------|
 | id | uuid | PK |
 | campaignId | string | FK to Campaign |
-| contentItemId | string? | FK to ContentItem (null for plain email campaigns) |
+| contentItemId | string | FK to ContentItem |
 | position | int | Display order in the email |
+
+Indexes: `@@index([campaignId])`, `@@index([contentItemId])`
+Constraint: `@@unique([campaignId, contentItemId])`
+Table: `@@map("campaign_contents")`
+
+Note: Plain email campaigns (no content items) simply have zero `CampaignContent` rows. The join table is not used to model "no content."
 
 ### CampaignRecipient — Each contact in a campaign
 
@@ -71,10 +91,16 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 |-------|------|-------|
 | id | uuid | PK |
 | campaignId | string | FK to Campaign |
-| contactId | string | FK to Contact |
+| contactId | string? | FK to Contact (nullable for unmatched imported recipients) |
+| unmatchedEmail | string? | Email address when contact can't be matched (imports only) |
 | personalizedBody | text? | AI-personalized email body for this recipient |
-| status | enum: `PENDING`, `SENT`, `FAILED` | Send status |
+| status | String | `PENDING`, `SENT`, `FAILED` |
+| failureReason | String? | Error detail on send failure |
 | sentAt | DateTime? | |
+
+Indexes: `@@index([campaignId])`, `@@index([contactId])`, `@@index([campaignId, status])`
+Constraint: `@@unique([campaignId, contactId])` (when `contactId` is non-null — prevents same contact twice in one campaign)
+Table: `@@map("campaign_recipients")`
 
 ### CampaignEngagement — Tracking events per recipient
 
@@ -82,16 +108,22 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 |-------|------|-------|
 | id | uuid | PK |
 | recipientId | string | FK to CampaignRecipient |
-| type | enum: `OPENED`, `CLICKED`, `ARTICLE_READ`, `EVENT_REGISTERED`, `EVENT_ATTENDED` | What happened |
-| contentItemId | string? | FK to ContentItem (which article/event was engaged with) |
+| type | String | `OPENED`, `CLICKED`, `ARTICLE_READ`, `EVENT_REGISTERED`, `EVENT_ATTENDED` |
+| contentItemId | string? | FK to ContentItem (which article/event was engaged with; null for OPENED events and plain-email clicks) |
 | timestamp | DateTime | When the event occurred |
 | metadata | string? | JSON — user agent, source, etc. |
 
+Indexes: `@@index([recipientId])`, `@@index([recipientId, type])`, `@@index([contentItemId])`
+Table: `@@map("campaign_engagements")`
+
+Tracking-producible events: `OPENED` (tracking pixel), `CLICKED` (link redirect), `ARTICLE_READ` (alias for clicked article link). `EVENT_REGISTERED` and `EVENT_ATTENDED` are import-only — these come from the external marketing platform API or manual update, not from Activate's tracking infrastructure.
+
 ### Migration: Existing CampaignOutreach
 
-- Each unique outreach `name` becomes a `Campaign` with `source: IMPORTED`
+- Grouping key: `(partnerId derived from contact.partnerId, normalized outreach name)` — each unique `(partnerId, name)` pair becomes one `Campaign` with `source: IMPORTED`
 - Each `CampaignOutreach` row becomes a `CampaignRecipient` + `CampaignEngagement` event based on its `status` (Sent → SENT recipient; Opened → OPENED engagement; Clicked → CLICKED engagement)
 - Original `CampaignOutreach` table retained temporarily for backward compatibility, then dropped
+- Update `GET /api/contacts/[id]/engagements` and `GET /api/contacts/[id]/full` to read from new tables instead of `CampaignOutreach`
 
 ## 2. API Routes
 
@@ -123,7 +155,8 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 | Method | Route | Purpose |
 |--------|-------|---------|
 | `GET` | `/api/track/open/[recipientId]` | Tracking pixel endpoint. Returns 1x1 transparent GIF. Records OPENED event. |
-| `GET` | `/api/track/click/[recipientId]/[contentItemId]` | Link redirect. Records CLICKED/ARTICLE_READ event, 302-redirects to content URL. |
+| `GET` | `/api/track/click/[recipientId]` | Link redirect for plain email links (no content item). Records CLICKED event, 302-redirects to target URL (passed as `?url=` query param). |
+| `GET` | `/api/track/click/[recipientId]/[contentItemId]` | Link redirect for content-item links. Records CLICKED/ARTICLE_READ event, 302-redirects to content URL. |
 
 ### Import (`/api/campaigns/import`)
 
@@ -131,12 +164,25 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 |--------|-------|---------|
 | `POST` | `/api/campaigns/import` | API ingestion from external marketing platform. Creates Campaign with `source: IMPORTED`, hydrates recipients and engagement. Matches contacts by email. |
 
+### Campaign Follow-Up (`/api/campaigns/[id]/follow-up`)
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| `POST` | `/api/campaigns/[id]/follow-up` | Generate AI follow-up email drafts for selected recipients. Body: `{ recipientIds: string[] }`. Returns draft emails per recipient based on their engagement data. Drafts are reviewed in the campaign detail UI and sent as new interactions via the existing email send flow. |
+
+### Content Library Stats (`/api/content-library/[id]/stats`)
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| `GET` | `/api/content-library/[id]/stats` | Aggregate engagement stats for a content item across all campaigns: times shared, total unique opens, total clicks. Used by Articles/Events sub-tab cards. |
+
 ### Design Notes
 
 - `/preview` is separate from `/send` — Partners review personalized emails before committing
-- Tracking endpoints are unauthenticated (embedded in external-facing emails) but use opaque UUIDs
+- Tracking endpoints are unauthenticated (embedded in external-facing emails) but use opaque UUIDs. Return 204 (no content) for invalid/unknown recipient IDs. Rate-limited to 10 requests/second per recipient ID to mitigate bot noise.
 - Import endpoint is authenticated and validates against Partner's contact list
-- Smart segments resolved server-side at creation time, producing concrete recipient rows
+- Smart segments resolved server-side at creation time, producing concrete recipient rows. Segment criteria stored as JSON on `Campaign.segmentCriteria` for reference.
+- Retry: `POST /api/campaigns/[id]/send` is idempotent — if campaign is in `FAILED` or `SENDING` (stuck), re-invoking retries only `PENDING` or `FAILED` recipients. Already-`SENT` recipients are skipped.
 
 ## 3. UI Design
 
@@ -200,7 +246,7 @@ Single scrollable page with progressive sections. Two entry points:
   - Didn't open → suggest new subject line, shorter message
   - Event registered → acknowledge, offer to connect at the event
 - **Bulk "Draft Follow-Ups"** — select multiple recipients, generate follow-ups for all
-- Follow-up drafts use existing email draft review flow
+- Follow-up drafts generated via `POST /api/campaigns/[id]/follow-up`. Drafts are returned to the UI for review and sent through the existing `sendOutreachEmail` flow (creating an `Interaction` record on the contact).
 
 ### Integration Points
 
@@ -233,13 +279,17 @@ Generates engagement-aware follow-up draft:
 
 ### Email Construction (via `email-service.ts`)
 
-Campaign emails are HTML emails built by extending the existing email service. Content items render as styled cards (article: title + description + CTA button; event: name + date + location + register button). Tracking pixel appended as invisible `<img>`. All content URLs wrapped through `/api/track/click/` redirect.
+New exports added to the existing email service (not a separate file):
+
+- **`buildCampaignEmailHtml(recipient, campaign, contentItems)`** — Constructs the full HTML email: personalized opening, content item cards (article: title + description + CTA; event: name + date + location + register button), tracking pixel `<img>`, all URLs wrapped through `/api/track/click/` redirect.
+- **`sendCampaignEmail(recipient, html)`** — Sends via Resend. Uses `llm-core.ts` `callLLM` for personalization (consistent with other LLM service modules). `from` address is the Partner's configured email or the default Activate sender. `reply-to` is always the Partner's email.
 
 ## 5. Error Handling & Edge Cases
 
 ### Sending failures
-- Partial failure: failed recipients marked `FAILED`, campaign status `SENT` if any succeeded. Campaign detail shows failed recipients with "Retry" action.
-- Total failure: campaign status `FAILED` with error message. Partner can retry entire campaign.
+- Partial failure: failed recipients marked `FAILED` with `failureReason`, campaign status `SENT` if any succeeded. Campaign detail shows failed recipients with "Retry" action. `Campaign.lastError` summarizes the failure count.
+- Total failure: campaign status `FAILED`, `Campaign.lastError` contains the error message. Partner can retry via `POST /send` (idempotent — retries only failed/pending recipients).
+- Stuck sends: if `sendStartedAt` is set but status remains `SENDING` for >10 minutes, the send is considered stuck. The `/send` endpoint can be re-invoked to resume.
 
 ### LLM failures
 - Personalization failure → fall back to base template with "Hi [name]" greeting. Email still sends.
@@ -283,7 +333,8 @@ src/app/api/
 │   └── route.ts                # GET (list content items)
 └── track/
     ├── open/[recipientId]/route.ts    # GET (tracking pixel)
-    └── click/[recipientId]/[contentItemId]/route.ts  # GET (click redirect)
+    ├── click/[recipientId]/route.ts   # GET (plain link redirect)
+    └── click/[recipientId]/[contentItemId]/route.ts  # GET (content click redirect)
 
 src/lib/
 ├── repositories/
