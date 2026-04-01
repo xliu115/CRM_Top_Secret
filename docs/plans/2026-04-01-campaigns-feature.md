@@ -268,7 +268,11 @@ export function generateContentLibrary() {
 
 - [ ] **Step 2: Create campaigns.ts with mock sent campaigns**
 
-Create `prisma/seed-data/campaigns.ts`. Generate 6-8 mock campaigns for Ava Patel (`p-ava-patel`) — a mix of article shares, event invites, and one plain email. Each campaign should have 4-8 recipients drawn from Ava's contacts, with realistic engagement data (opens, clicks, RSVPs). Include 1-2 draft campaigns and 1 imported campaign.
+Create `prisma/seed-data/campaigns.ts`. Generate mock campaigns for ALL 5 partners — a mix of article shares, event invites, and plain emails. Each partner gets 3-6 campaigns with 4-8 recipients drawn from their own contacts, with realistic engagement data (opens, clicks, RSVPs). Include drafts and imported campaigns across partners.
+
+Partners: Ava Patel (`p-ava-patel`), Jordan Kim (`p-jordan-kim`), Sam Rivera (`p-sam-rivera`), Morgan Chen (`p-morgan-chen`), Taylor Brooks (`p-taylor-brooks`).
+
+Distribution: Ava Patel gets 6 campaigns (showcased in detail below). Jordan Kim gets 4 campaigns (2 article, 1 event invite, 1 draft). Sam Rivera gets 3 campaigns (1 article, 1 event, 1 imported). Morgan Chen gets 4 campaigns (2 article, 1 plain email, 1 event invite). Taylor Brooks gets 3 campaigns (1 article, 1 event, 1 draft).
 
 ```typescript
 import { v4 as uuidv4 } from "uuid";
@@ -1161,7 +1165,7 @@ git commit -m "feat(migration): add CampaignOutreach to Campaign migration scrip
 npx prisma db seed
 ```
 
-Expected: All content items (12 articles, 8 events), 6 mock campaigns, recipients, and engagements created without errors.
+Expected: All content items (12 articles, 8 events), ~20 mock campaigns across all 5 partners, recipients, and engagements created without errors.
 
 - [ ] **Step 2: Start the dev server and manually verify**
 
@@ -1172,7 +1176,8 @@ npm run dev
 Log in as Ava Patel. Verify each surface:
 
 **Campaigns tab — My Campaigns:**
-- Should see 6 campaigns (4 sent, 1 draft, 1 imported) with engagement stats
+- As Ava Patel: should see 6 campaigns (4 sent, 1 draft, 1 imported) with engagement stats
+- Switch to other partners (Jordan Kim, Sam Rivera, etc.) and verify they each see their own campaigns (3-4 each)
 - "AI Strategy Insights — Q1 2026": 6 recipients, ~67% open rate, 50% click rate
 - "GenAI Executive Briefing — Invite": 5 recipients, RSVP data (3 accepted, 1 declined, 1 pending)
 - "Q2 Check-in Outreach": plain email, no content items
