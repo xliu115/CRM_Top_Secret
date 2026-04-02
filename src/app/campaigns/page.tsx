@@ -579,6 +579,11 @@ function ContentLibraryTab({
                     <h2 className="text-base font-semibold text-foreground line-clamp-2 flex-1 min-w-0">
                       {item.title}
                     </h2>
+                    {item.practice && (
+                      <Badge variant="outline" className={cn("shrink-0 text-[10px]", practiceBadgeClass())}>
+                        {item.practice}
+                      </Badge>
+                    )}
                     {item.eventType && (
                       <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
                         {item.eventType}
@@ -604,11 +609,6 @@ function ContentLibraryTab({
                       </li>
                     )}
                   </ul>
-                  {item.practice && (
-                    <Badge variant="outline" className={cn("w-fit mb-3 text-[10px]", practiceBadgeClass())}>
-                      {item.practice}
-                    </Badge>
-                  )}
                   <div className="mt-auto flex justify-end pt-2 border-t border-border/50">
                     <Button
                       asChild
