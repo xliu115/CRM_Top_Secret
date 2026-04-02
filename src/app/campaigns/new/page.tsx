@@ -232,7 +232,7 @@ function NewCampaignPageInner() {
   const [previewRecipients, setPreviewRecipients] = useState<
     PreviewRecipient[] | null
   >(null);
-  const [previewOpenId, setPreviewOpenId] = useState<string | null>(null);
+  const [previewOpenIds, setPreviewOpenIds] = useState<Set<string>>(new Set());
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -573,7 +573,7 @@ function NewCampaignPageInner() {
       }
       setEditedMessages(initialEdits);
       if (data.recipients.length > 0) {
-        setPreviewOpenId(data.recipients[0].id);
+        setPreviewOpenIds(new Set([data.recipients[0].id]));
       }
     } finally {
       setGenerateLoading(false);
@@ -597,6 +597,23 @@ function NewCampaignPageInner() {
           ) ?? null
         );
         setEditingRecipientId(null);
+
+        if (campaignId) {
+          fetch(`/api/campaigns/${campaignId}/preview`, { method: "POST" })
+            .then(async (previewRes) => {
+              if (!previewRes.ok) return;
+              const data = (await previewRes.json()) as { recipients: PreviewRecipient[] };
+              const updated = data.recipients.find((r) => r.id === recipientId);
+              if (updated) {
+                setPreviewRecipients((prev) =>
+                  prev?.map((r) =>
+                    r.id === recipientId ? { ...r, htmlPreview: updated.htmlPreview } : r
+                  ) ?? null
+                );
+              }
+            })
+            .catch(() => { /* preview refresh is best-effort */ });
+        }
       }
     } finally {
       setSavingRecipientId(null);
@@ -1027,6 +1044,10 @@ function NewCampaignPageInner() {
                   placeholder="Write the body template for your campaign…"
                   className="min-h-[160px]"
                 />
+                <p className="text-xs text-muted-foreground-subtle tabular-nums">
+                  {bodyTemplate.trim().split(/\s+/).filter(Boolean).length} words
+                  <span className="text-muted-foreground/40 ml-1.5">· 50-150 recommended</span>
+                </p>
               </div>
 
               <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
@@ -1037,59 +1058,77 @@ function NewCampaignPageInner() {
                   </h3>
                 </div>
                 <p className="text-xs text-muted-foreground-subtle">
-                  Add your sign-off and contact details. This appears at the bottom of every email.
+                  Your name, title, and contact details. Appears at the bottom of every email.
                 </p>
                 <Textarea
                   value={signatureBlock}
                   onChange={(e) => setSignatureBlock(e.target.value)}
-                  placeholder={"Best regards,\nYour Name\nTitle | McKinsey & Company\nyour.email@mckinsey.com | +1 (555) 000-0000"}
+                  placeholder="Your sign-off and contact info…"
                   className="min-h-[100px] bg-background"
                 />
+                <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                  Example: Best regards, Jane Smith · Partner, McKinsey &amp; Company · jane@mckinsey.com
+                </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  onClick={handleGenerateAi}
-                  disabled={generateLoading}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  {generateLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Generating…
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generate with AI
-                    </>
-                  )}
-                </Button>
+              <div className="rounded-lg border border-dashed border-primary/30 bg-primary/[0.03] p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">
+                      Ready to personalize?
+                    </p>
+                    <p className="text-xs text-muted-foreground-subtle">
+                      AI will generate a tailored opening for each of your {selectedContacts.length} recipient{selectedContacts.length !== 1 ? "s" : ""}.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleGenerateAi}
+                    disabled={generateLoading}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    {generateLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Generating…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate with AI
+                      </>
+                    )}
+                  </Button>
+                </div>
                 {campaignId && (
-                  <Badge variant="outline" className="text-xs font-normal">
+                  <p className="text-[11px] text-muted-foreground/50">
                     Draft saved · ref {campaignId.slice(0, 8)}…
-                  </Badge>
+                  </p>
                 )}
               </div>
+
               {generateError && (
                 <p className="text-sm text-destructive" role="alert">
                   {generateError}
                 </p>
               )}
+
               {previewRecipients && previewRecipients.length > 0 && (
-                <div className="space-y-3">
+                <div className="space-y-3 border-t border-border pt-6">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-foreground">
                       Personalized messages
+                      <span className="ml-2 text-xs font-normal text-muted-foreground-subtle">
+                        {previewRecipients.length} recipient{previewRecipients.length !== 1 ? "s" : ""}
+                      </span>
                     </h3>
                     <span className="text-xs text-muted-foreground-subtle">
-                      Click the edit icon to customize any recipient&apos;s message
+                      Click to expand · edit icon to customize
                     </span>
                   </div>
                   <div className="space-y-2">
                     {previewRecipients.map((r) => {
-                      const open = previewOpenId === r.id;
+                      const open = previewOpenIds.has(r.id);
                       const isEditing = editingRecipientId === r.id;
                       const isSaving = savingRecipientId === r.id;
                       return (
@@ -1101,7 +1140,12 @@ function NewCampaignPageInner() {
                             type="button"
                             className="flex w-full items-center justify-between gap-2 bg-muted/30 px-3 py-2 text-left text-sm font-medium hover:bg-muted/50"
                             onClick={() =>
-                              setPreviewOpenId(open ? null : r.id)
+                              setPreviewOpenIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(r.id)) next.delete(r.id);
+                                else next.add(r.id);
+                                return next;
+                              })
                             }
                             aria-expanded={open}
                           >
@@ -1206,9 +1250,17 @@ function NewCampaignPageInner() {
                               <div className="border-t border-border">
                                 <iframe
                                   title={`Email preview for ${r.contactName}`}
-                                  className="w-full min-h-[240px] border-0 bg-white"
+                                  className="w-full border-0 bg-white"
+                                  style={{ minHeight: "240px" }}
                                   srcDoc={r.htmlPreview}
                                   sandbox="allow-same-origin allow-popups"
+                                  onLoad={(e) => {
+                                    const frame = e.currentTarget;
+                                    try {
+                                      const h = frame.contentDocument?.body?.scrollHeight;
+                                      if (h && h > 100) frame.style.height = `${h + 16}px`;
+                                    } catch { /* cross-origin guard */ }
+                                  }}
                                 />
                               </div>
                             </div>
