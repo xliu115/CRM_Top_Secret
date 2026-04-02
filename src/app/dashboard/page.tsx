@@ -38,6 +38,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
+import { FragmentText } from "@/components/ui/fragment-text";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import {
@@ -729,7 +730,7 @@ export default function DashboardPage() {
   }
 
   function handleQuick360(contactName: string) {
-    navigateToChat(`Contact 360 for ${contactName}`);
+    navigateToChat(`Quick 360 for ${contactName}`);
   }
 
   const handleVoiceResult = useCallback((transcript: string) => {
@@ -1148,15 +1149,9 @@ export default function DashboardPage() {
                                   <Sparkles className="h-4 w-4 text-primary" />
                                   <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
                                 </div>
-                                <p className="text-sm text-foreground/70 leading-relaxed">
-                                  {fragments.map((f, i) =>
-                                    f.bold ? (
-                                      <strong key={i} className="font-semibold text-foreground/90">{f.text}</strong>
-                                    ) : (
-                                      <span key={i}>{f.text}</span>
-                                    )
-                                  )}
-                                </p>
+                                <div className="text-sm text-foreground/70 leading-relaxed">
+                                  <FragmentText fragments={fragments} />
+                                </div>
                               </div>
 
                               <div>

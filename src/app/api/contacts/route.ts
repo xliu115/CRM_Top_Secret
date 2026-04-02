@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
     const importance = searchParams.get("importance");
     const companyFilter = searchParams.get("company");
     const titleFilter = searchParams.get("title");
+    const countryFilter = searchParams.get("country");
+    const cityFilter = searchParams.get("city");
 
     const searchQuery = q?.trim();
     let contacts = searchQuery
@@ -34,6 +36,20 @@ export async function GET(request: NextRequest) {
       const lower = titleFilter.toLowerCase();
       contacts = contacts.filter(
         (c) => c.title?.toLowerCase().includes(lower)
+      );
+    }
+
+    if (countryFilter) {
+      const lower = countryFilter.toLowerCase();
+      contacts = contacts.filter(
+        (c) => c.country?.toLowerCase() === lower
+      );
+    }
+
+    if (cityFilter) {
+      const lower = cityFilter.toLowerCase();
+      contacts = contacts.filter(
+        (c) => c.city?.toLowerCase() === lower
       );
     }
 

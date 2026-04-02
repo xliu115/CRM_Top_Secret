@@ -32,7 +32,7 @@ export type NudgeForSummary = {
   };
 };
 
-export type SentenceFragment = { text: string; bold?: boolean };
+export type SentenceFragment = { text: string; bold?: boolean; lineBreak?: boolean };
 
 const TYPE_LABELS: Record<string, string> = {
   STALE_CONTACT: "reconnect",
@@ -116,61 +116,68 @@ export function buildSummaryFragments(
   );
 
   if (followUp) {
-    const sentences: string[] = [];
+    const topicLines: string[][] = [];
     const bolds = new Set<string>();
     const days = followUp.waitingDays;
     const dayLabel = days ? `${days} day${days !== 1 ? "s" : ""}` : "a few days";
 
+    const outreachLine: string[] = [];
     if (followUp.lastEmailSubject) {
       const boldSubject = followUp.lastEmailSubject;
       bolds.add(boldSubject);
-      sentences.push(`You sent ${firstName} an email about ${boldSubject}${days ? ` ${dayLabel} ago` : ""} and haven\u2019t heard back.`);
+      outreachLine.push(`You sent ${firstName} an email about ${boldSubject}${days ? ` ${dayLabel} ago` : ""} and haven\u2019t heard back.`);
     } else {
-      sentences.push(`You reached out to ${firstName} ${dayLabel} ago and haven\u2019t heard back yet.`);
+      outreachLine.push(`You reached out to ${firstName} ${dayLabel} ago and haven\u2019t heard back yet.`);
     }
-
     if (followUp.lastEmailSnippet) {
-      sentences.push(`Your message discussed ${followUp.lastEmailSnippet.slice(0, 120)}${followUp.lastEmailSnippet.length > 120 ? "..." : ""}.`);
+      outreachLine.push(`Your message discussed ${followUp.lastEmailSnippet.slice(0, 160)}${followUp.lastEmailSnippet.length > 160 ? "..." : ""}.`);
     }
+    topicLines.push(outreachLine);
 
     if (followUp.lastInteraction) {
       const li = followUp.lastInteraction;
       const interactionLabel = li.type === "CALL" ? "call" : li.type === "MEETING" ? "meeting" : "conversation";
-      const summaryText = naturalizeInteractionSummary(li.summary).slice(0, 100);
-      sentences.push(`Your last ${interactionLabel} covered ${summaryText}${li.summary.length > 100 ? "..." : ""}.`);
+      const summaryText = naturalizeInteractionSummary(li.summary).slice(0, 160);
+      topicLines.push([`Your last ${interactionLabel} covered ${summaryText}${li.summary.length > 160 ? "..." : ""}.`]);
     }
 
-    appendSignalContext(sentences, bolds, otherInsights, firstName, nudge.contact.company.name);
+    const signalLine: string[] = [];
+    appendSignalContext(signalLine, bolds, otherInsights, firstName, nudge.contact.company.name);
+    signalLine.push(`A gentle follow-up could keep the conversation moving.`);
+    topicLines.push(signalLine);
 
-    sentences.push(`A gentle follow-up could keep the conversation moving.`);
-    return buildFragmentsFromSentences(sentences.join(" "), bolds);
+    return buildFragmentsFromTopicLines(topicLines, bolds);
   }
 
   if (replyNeeded) {
-    const sentences: string[] = [];
+    const topicLines: string[][] = [];
     const bolds = new Set<string>();
     const days = replyNeeded.waitingDays;
     const dayLabel = days ? `${days} day${days !== 1 ? "s" : ""}` : "recently";
 
+    const inboundLine: string[] = [];
     if (replyNeeded.inboundSummary) {
-      const boldSummary = replyNeeded.inboundSummary.slice(0, 120);
+      const boldSummary = replyNeeded.inboundSummary.slice(0, 160);
       bolds.add(boldSummary);
-      sentences.push(`${firstName} emailed you ${dayLabel} ago: ${boldSummary}${replyNeeded.inboundSummary.length > 120 ? "..." : ""}.`);
+      inboundLine.push(`${firstName} emailed you ${dayLabel} ago: ${boldSummary}${replyNeeded.inboundSummary.length > 160 ? "..." : ""}.`);
     } else {
-      sentences.push(`${firstName} sent you an email ${dayLabel} ago that\u2019s waiting for a reply.`);
+      inboundLine.push(`${firstName} sent you an email ${dayLabel} ago that\u2019s waiting for a reply.`);
     }
+    topicLines.push(inboundLine);
 
     if (replyNeeded.lastInteraction) {
       const li = replyNeeded.lastInteraction;
       const interactionLabel = li.type === "CALL" ? "call" : li.type === "MEETING" ? "meeting" : "conversation";
-      const summaryText = naturalizeInteractionSummary(li.summary).slice(0, 100);
-      sentences.push(`Your last ${interactionLabel} covered ${summaryText}${li.summary.length > 100 ? "..." : ""}.`);
+      const summaryText = naturalizeInteractionSummary(li.summary).slice(0, 160);
+      topicLines.push([`Your last ${interactionLabel} covered ${summaryText}${li.summary.length > 160 ? "..." : ""}.`]);
     }
 
-    appendSignalContext(sentences, bolds, otherInsights, firstName, nudge.contact.company.name);
+    const signalLine: string[] = [];
+    appendSignalContext(signalLine, bolds, otherInsights, firstName, nudge.contact.company.name);
+    signalLine.push(`Responding promptly helps maintain the relationship momentum.`);
+    topicLines.push(signalLine);
 
-    sentences.push(`Responding promptly helps maintain the relationship momentum.`);
-    return buildFragmentsFromSentences(sentences.join(" "), bolds);
+    return buildFragmentsFromTopicLines(topicLines, bolds);
   }
 
   const stale = insights.find((i) => i.type === "STALE_CONTACT");
@@ -182,68 +189,72 @@ export function buildSummaryFragments(
   const linkedin = insights.find((i) => i.type === "LINKEDIN_ACTIVITY");
   const article = insights.find((i) => i.type === "ARTICLE_READ");
 
-  const sentences: string[] = [];
+  const topicLines: string[][] = [];
   const bolds = new Set<string>();
 
+  const primaryLine: string[] = [];
   if (article) {
     const snippet = extractInsightSnippet(article);
     const boldText = snippet ?? "your content";
     bolds.add(boldText);
-    sentences.push(`${firstName} recently engaged with ${boldText}.`);
+    primaryLine.push(`${firstName} recently engaged with ${boldText}.`);
   } else if (linkedin) {
     const snippet = extractInsightSnippet(linkedin);
     const boldText = snippet ?? "recent topics";
     bolds.add(boldText);
-    sentences.push(`${firstName} has been active on LinkedIn discussing ${boldText}.`);
+    primaryLine.push(`${firstName} has been active on LinkedIn discussing ${boldText}.`);
   } else if (jobChange) {
     const snippet = extractInsightSnippet(jobChange);
     const boldText = snippet ?? "a role change";
     bolds.add(boldText);
-    sentences.push(`There\u2019s been a key executive move \u2014 ${boldText}.`);
+    primaryLine.push(`There\u2019s been a key executive move \u2014 ${boldText}.`);
   } else if (news) {
     const snippet = extractInsightSnippet(news);
     const boldText = snippet ?? "recent news";
     bolds.add(boldText);
-    sentences.push(`${nudge.contact.company.name} is in the news: ${boldText}.`);
+    primaryLine.push(`${nudge.contact.company.name} is in the news: ${boldText}.`);
   }
 
   if (stale) {
     const snippet = extractInsightSnippet(stale);
     if (snippet) {
       bolds.add(snippet);
-      sentences.push(`It\u2019s been ${snippet} since your last conversation.`);
+      primaryLine.push(`It\u2019s been ${snippet} since your last conversation.`);
     }
   }
+  if (primaryLine.length > 0) topicLines.push(primaryLine);
 
-  if (event && sentences.length < 3) {
+  const totalSentences = topicLines.reduce((n, l) => n + l.length, 0);
+  if (event && totalSentences < 3) {
     const snippet = extractInsightSnippet(event);
     const boldText = snippet ?? "an upcoming event";
     bolds.add(boldText);
-    sentences.push(`There\u2019s an upcoming event \u2014 ${boldText} \u2014 that could be a natural touchpoint.`);
-  } else if (attended && sentences.length < 3) {
+    topicLines.push([`There\u2019s an upcoming event \u2014 ${boldText} \u2014 that could be a natural touchpoint.`]);
+  } else if (attended && totalSentences < 3) {
     const snippet = extractInsightSnippet(attended);
     const boldText = snippet ?? "a recent event";
     bolds.add(boldText);
-    sentences.push(`${firstName} recently attended ${boldText} \u2014 a great follow-up opening.`);
-  } else if (meeting && sentences.length < 3) {
+    topicLines.push([`${firstName} recently attended ${boldText} \u2014 a great follow-up opening.`]);
+  } else if (meeting && totalSentences < 3) {
     const snippet = extractInsightSnippet(meeting);
     const boldText = snippet ?? "an upcoming meeting";
     bolds.add(boldText);
-    sentences.push(`You have ${boldText} coming up soon.`);
+    topicLines.push([`You have ${boldText} coming up soon.`]);
   }
 
-  if (sentences.length < 2 && jobChange && sentences.every((s) => !s.includes("executive"))) {
+  const allSentences = topicLines.flat();
+  if (allSentences.length < 2 && jobChange && allSentences.every((s) => !s.includes("executive"))) {
     const snippet = extractInsightSnippet(jobChange);
     if (snippet) {
       bolds.add(snippet);
-      sentences.push(`Meanwhile, there\u2019s been an executive move: ${snippet}.`);
+      topicLines.push([`Meanwhile, there\u2019s been an executive move: ${snippet}.`]);
     }
   }
 
   const label = getLabel(nudge.ruleType);
-  sentences.push(`This is a good moment to reach out with a ${label} note.`);
+  topicLines.push([`This is a good moment to reach out with a ${label} note.`]);
 
-  return buildFragmentsFromSentences(sentences.join(" "), bolds);
+  return buildFragmentsFromTopicLines(topicLines, bolds);
 }
 
 function appendSignalContext(
@@ -295,26 +306,34 @@ function appendSignalContext(
   }
 }
 
-function buildFragmentsFromSentences(
-  joined: string,
+function buildFragmentsFromTopicLines(
+  topicLines: string[][],
   bolds: Set<string>
 ): SentenceFragment[] {
   const fragments: SentenceFragment[] = [];
-  let cursor = 0;
-  const sortedBolds = [...bolds].sort((a, b) => joined.indexOf(a) - joined.indexOf(b));
+  const nonEmpty = topicLines.filter((l) => l.length > 0);
 
-  for (const bold of sortedBolds) {
-    const idx = joined.indexOf(bold, cursor);
-    if (idx === -1) continue;
-    if (idx > cursor) {
-      fragments.push({ text: joined.slice(cursor, idx) });
+  for (let t = 0; t < nonEmpty.length; t++) {
+    if (t > 0) {
+      fragments.push({ text: "", lineBreak: true });
     }
-    fragments.push({ text: bold, bold: true });
-    cursor = idx + bold.length;
-  }
-  if (cursor < joined.length) {
-    fragments.push({ text: joined.slice(cursor) });
+    const lineText = nonEmpty[t].join(" ");
+    const sortedBolds = [...bolds].sort((a, b) => lineText.indexOf(a) - lineText.indexOf(b));
+    let cursor = 0;
+    for (const bold of sortedBolds) {
+      const idx = lineText.indexOf(bold, cursor);
+      if (idx === -1) continue;
+      if (idx > cursor) {
+        fragments.push({ text: lineText.slice(cursor, idx) });
+      }
+      fragments.push({ text: bold, bold: true });
+      cursor = idx + bold.length;
+    }
+    if (cursor < lineText.length) {
+      fragments.push({ text: lineText.slice(cursor) });
+    }
   }
 
   return fragments;
 }
+

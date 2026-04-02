@@ -46,6 +46,8 @@ model Contact {
   email         String
   title         String
   phone         String?
+  country       String?
+  city          String?
   importance         String   @default("MEDIUM")
   notes              String?
   lastContacted      DateTime? @map("last_contacted")

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
+import { FragmentText } from "@/components/ui/fragment-text";
 import { Button } from "@/components/ui/button";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -125,17 +126,7 @@ function getTypeConfig(ruleType: string): NudgeTypeConfig {
 
 function NudgeSummary({ nudge, insights }: { nudge: Nudge; insights: InsightData[] }) {
   const fragments = buildSummaryFragments(nudge, insights);
-  return (
-    <>
-      {fragments.map((f, i) =>
-        f.bold ? (
-          <strong key={i} className="font-semibold text-foreground/90">{f.text}</strong>
-        ) : (
-          <span key={i}>{f.text}</span>
-        )
-      )}
-    </>
-  );
+  return <FragmentText fragments={fragments} />;
 }
 
 function DraftEmailPanel({
@@ -494,9 +485,9 @@ function NudgeCard({
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
           </div>
-          <p className="text-sm text-foreground/70 leading-relaxed">
+          <div className="text-sm text-foreground/70 leading-relaxed">
             <NudgeSummary nudge={nudge} insights={insights} />
-          </p>
+          </div>
         </div>
 
         {insights.length > 0 && (() => {

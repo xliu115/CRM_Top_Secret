@@ -8,6 +8,7 @@ import {
   meetingRepo,
   engagementRepo,
   sequenceRepo,
+  partnerRepo,
 } from "@/lib/repositories";
 import { prisma } from "@/lib/db/prisma";
 import { searchWeb } from "@/lib/services/rag-service";
@@ -24,7 +25,10 @@ export async function GET(
     const partnerId = await requirePartnerId();
     const { id } = await params;
 
-    const contact = await contactRepo.findById(id, partnerId);
+    const [contact, partner] = await Promise.all([
+      contactRepo.findById(id, partnerId),
+      partnerRepo.findById(partnerId),
+    ]);
     if (!contact) {
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
@@ -120,6 +124,7 @@ export async function GET(
     });
 
     const ctx: Contact360Context = {
+      partnerName: partner?.name ?? undefined,
       contact: {
         name: contact.name,
         title: contact.title ?? "",

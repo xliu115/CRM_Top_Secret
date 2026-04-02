@@ -477,6 +477,7 @@ export async function POST(request: NextRequest) {
 
             // Build shared contact context
             const ctx = await buildContactContext(contact, company, partnerId);
+            ctx.partnerName = partnerName;
 
             // ── Full Contact 360 ──
             if (isFullContact360) {
@@ -571,6 +572,9 @@ export async function POST(request: NextRequest) {
               "",
               `### Insight Summary`,
               q360.insight,
+              "",
+              `### Firm Coverage`,
+              q360.firmCoverage,
               "",
               `### Talking Points`,
               tpFormatted,

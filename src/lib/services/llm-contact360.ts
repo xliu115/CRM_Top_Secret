@@ -16,6 +16,7 @@ export interface Contact360Result {
 }
 
 export interface Contact360Context {
+  partnerName?: string;
   contact: {
     name: string;
     title: string;
@@ -111,16 +112,19 @@ Output format:
   {"id":"signals","title":"Key Signals","content":"..."}
 ]`;
 
-const QUICK360_SYSTEM_PROMPT = `You are a senior intelligence analyst briefing a consulting Partner before a meeting. Write a concise, strategic insight summary followed by actionable talking points. Tone: like a trusted chief of staff — crisp, specific, strategic. NO bullet points in the insight summary.
+const QUICK360_SYSTEM_PROMPT = `You are a senior intelligence analyst briefing a consulting Partner before a meeting. Write a concise, strategic insight summary, a firm coverage snapshot, and actionable talking points. Tone: like a trusted chief of staff — crisp, specific, strategic. NO bullet points in the insight summary or firm coverage.
 
 Rules:
 - Insight Summary: 3-5 sentences synthesizing who this person is, the state of the relationship, key signals/news, and what matters right now. Use **bold** for names, companies, dates, key numbers.
+- Firm Coverage: 1-3 sentences on who else at the firm knows this contact or their company, overlap opportunities, and coordination notes. If only the current partner has a relationship, say so and suggest whether to loop in others. Use **bold** for partner names. Always refer to the current partner by their actual name (from the "Briefing for Partner" line) — never say "me", "I", or "you".
 - Talking Points: Exactly 3 specific, natural conversation starters that combine news + shared context + relationship history. Each should be 1-2 sentences the Partner could literally say in a meeting.
 - Be honest about gaps — "No recent interactions" is better than fabricating.
 
 Output format:
 ---INSIGHT---
 <insight paragraph>
+---FIRM_COVERAGE---
+<firm coverage paragraph>
 ---TALKING_POINTS---
 1. <talking point>
 2. <talking point>
@@ -195,6 +199,7 @@ export interface Quick360Result {
   title: string;
   companyName: string;
   insight: string;
+  firmCoverage: string;
   talkingPoints: string[];
 }
 
@@ -218,13 +223,16 @@ export async function generateQuick360(
   return generateQuick360Template(ctx);
 }
 
-function parseQuick360Response(raw: string): { insight: string; talkingPoints: string[] } | null {
+function parseQuick360Response(raw: string): { insight: string; firmCoverage: string; talkingPoints: string[] } | null {
   try {
-    const insightMatch = raw.match(/---INSIGHT---\s*([\s\S]*?)(?=---TALKING_POINTS---|$)/);
+    const insightMatch = raw.match(/---INSIGHT---\s*([\s\S]*?)(?=---FIRM_COVERAGE---|---TALKING_POINTS---|$)/);
+    const firmMatch = raw.match(/---FIRM_COVERAGE---\s*([\s\S]*?)(?=---TALKING_POINTS---|$)/);
     const tpMatch = raw.match(/---TALKING_POINTS---\s*([\s\S]*)/);
 
     const insight = insightMatch?.[1]?.trim();
     if (!insight) return null;
+
+    const firmCoverage = firmMatch?.[1]?.trim() ?? "";
 
     const talkingPoints = (tpMatch?.[1] ?? "")
       .split("\n")
@@ -232,7 +240,7 @@ function parseQuick360Response(raw: string): { insight: string; talkingPoints: s
       .filter((line) => line.length > 0)
       .slice(0, 3);
 
-    return { insight, talkingPoints };
+    return { insight, firmCoverage, talkingPoints };
   } catch {
     return null;
   }
@@ -254,17 +262,31 @@ function generateQuick360Template(ctx: Contact360Context): Quick360Result {
     parts.push("No interactions recorded yet — this is a new or untracked relationship.");
   }
 
-  if (ctx.firmRelationships.length > 1) {
-    const others = ctx.firmRelationships.filter((r) => !r.isCurrentUser);
-    parts.push(`${others.length} other partner${others.length !== 1 ? "s" : ""} at the firm also know this contact: ${others.map((r) => `**${r.partnerName}** (${r.intensity})`).join(", ")}.`);
-  }
-
   if (ctx.signals.length > 0 || ctx.webNews.length > 0) {
     const newsItem = ctx.webNews[0] ?? ctx.signals[0];
     if (newsItem) {
       const content = "content" in newsItem ? newsItem.content : "";
       parts.push(`Recent signal: ${content.slice(0, 120)}.`);
     }
+  }
+
+  const pName = ctx.partnerName ?? "You";
+  let firmCoverage: string;
+  if (ctx.firmRelationships.length > 1) {
+    const currentPartner = ctx.firmRelationships.find((r) => r.isCurrentUser);
+    const others = ctx.firmRelationships.filter((r) => !r.isCurrentUser);
+    const details = others.map((r) => {
+      const lastNote = r.lastInteractionDate
+        ? `last touch ${format(new Date(r.lastInteractionDate), "MMM d")}`
+        : "no recent touch";
+      return `**${r.partnerName}** (${r.intensity} intensity, ${r.interactionCount} interactions, ${lastNote})`;
+    });
+    const currentNote = currentPartner
+      ? `The primary firm relationship with **${ctx.contact.name}** is through **${pName}**.`
+      : "";
+    firmCoverage = `${currentNote} ${others.length} other partner${others.length !== 1 ? "s" : ""} also cover ${ctx.contact.name} or **${ctx.company.name}**: ${details.join(", ")}. Consider coordinating before the next outreach.`.trim();
+  } else {
+    firmCoverage = `**${pName}** appears to be the sole firm relationship with **${ctx.contact.name}** at **${ctx.company.name}**. Consider whether to loop in a colleague for broader account coverage.`;
   }
 
   const tp: string[] = [];
@@ -290,6 +312,7 @@ function generateQuick360Template(ctx: Contact360Context): Quick360Result {
     title: ctx.contact.title,
     companyName: ctx.company.name,
     insight: parts.join(" "),
+    firmCoverage,
     talkingPoints: tp.slice(0, 3),
   };
 }
@@ -298,6 +321,11 @@ function generateQuick360Template(ctx: Contact360Context): Quick360Result {
 
 function buildContact360Prompt(ctx: Contact360Context): string {
   const lines: string[] = [];
+
+  if (ctx.partnerName) {
+    lines.push(`## Briefing for Partner: ${ctx.partnerName}`);
+    lines.push(`(Always refer to this partner by name — never say "me", "I", or "you".)\n`);
+  }
 
   lines.push(`## Contact: ${ctx.contact.name}`);
   lines.push(`Title: ${ctx.contact.title} | Email: ${ctx.contact.email}`);
@@ -350,7 +378,7 @@ function buildContact360Prompt(ctx: Contact360Context): string {
   if (ctx.firmRelationships.length > 0) {
     lines.push(`\n## Firm-Wide Relationships (${ctx.firmRelationships.length} partners)`);
     for (const r of ctx.firmRelationships) {
-      const tag = r.isCurrentUser ? " (you)" : "";
+      const tag = r.isCurrentUser ? " (current partner)" : "";
       lines.push(`- ${r.partnerName}${tag}: ${r.interactionCount} interactions, ${r.intensity} intensity, last: ${r.lastInteractionDate ?? "never"}, ${r.contactsAtCompany} contacts at company`);
     }
   }

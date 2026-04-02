@@ -19,8 +19,10 @@ import {
   ChevronUp,
   Edit3,
   FileText,
+  Globe,
   Loader2,
   Mail,
+  MapPin,
   Pen,
   Search,
   Send,
@@ -58,6 +60,8 @@ type ContactRow = {
   name: string;
   title: string;
   email: string;
+  country: string | null;
+  city: string | null;
   company: { name: string };
 };
 
@@ -220,9 +224,13 @@ function NewCampaignPageInner() {
   const [contactSearch, setContactSearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
   const [titleFilter, setTitleFilter] = useState("");
+  const [countryFilter, setCountryFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
   const [contactResults, setContactResults] = useState<ContactRow[]>([]);
   const [allCompanies, setAllCompanies] = useState<string[]>([]);
   const [allRoleKeywords, setAllRoleKeywords] = useState<string[]>([]);
+  const [allCountries, setAllCountries] = useState<string[]>([]);
+  const [allCities, setAllCities] = useState<string[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
@@ -396,6 +404,8 @@ function NewCampaignPageInner() {
     if (contactSearch.trim()) params.set("q", contactSearch.trim());
     if (companyFilter) params.set("company", companyFilter);
     if (titleFilter) params.set("title", titleFilter);
+    if (countryFilter) params.set("country", countryFilter);
+    if (cityFilter) params.set("city", cityFilter);
     const qs = params.toString();
     fetch(qs ? `/api/contacts?${qs}` : "/api/contacts")
       .then(async (res) => {
@@ -404,12 +414,18 @@ function NewCampaignPageInner() {
       })
       .then((data) => {
         setContactResults(data);
-        if (!contactSearch && !companyFilter && !titleFilter) {
+        if (!contactSearch && !companyFilter && !titleFilter && !countryFilter && !cityFilter) {
           const companies = [...new Set(data.map((c) => c.company?.name).filter(Boolean))] as string[];
           const rawTitles = data.map((c) => c.title).filter(Boolean);
+          const countries = [...new Set(data.map((c) => c.country).filter(Boolean))] as string[];
+          const cities = [...new Set(data.map((c) => c.city).filter(Boolean))] as string[];
           companies.sort();
+          countries.sort();
+          cities.sort();
           setAllCompanies(companies);
           setAllRoleKeywords(extractRoleKeywords(rawTitles));
+          setAllCountries(countries);
+          setAllCities(cities);
         }
       })
       .catch(() => {
@@ -417,7 +433,7 @@ function NewCampaignPageInner() {
         setContactsError("Could not load contacts.");
       })
       .finally(() => setContactsLoading(false));
-  }, [stepIndex, contactSearch, companyFilter, titleFilter, recipientsStepIndex]);
+  }, [stepIndex, contactSearch, companyFilter, titleFilter, countryFilter, cityFilter, recipientsStepIndex]);
 
   function toggleContent(item: ContentItemRow) {
     setSelectedContents((prev) => {
@@ -899,32 +915,36 @@ function NewCampaignPageInner() {
               </p>
               {selectedContacts.length > 0 && (
                 <ul className="space-y-2 rounded-lg border border-border p-3">
-                  {selectedContacts.map((c) => (
-                    <li
-                      key={c.id}
-                      className="flex items-center justify-between gap-2 text-sm"
-                    >
-                      <span className="min-w-0 truncate">
-                        <span className="font-medium">{c.name}</span>
-                        <span className="text-muted-foreground-subtle">
-                          {" "}
-                          · {c.title} · {c.company?.name ?? "—"}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeContact(c.id)}
-                        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        aria-label={`Remove ${c.name}`}
+                  {selectedContacts.map((c) => {
+                    const loc = [c.city, c.country].filter(Boolean).join(", ");
+                    return (
+                      <li
+                        key={c.id}
+                        className="flex items-center justify-between gap-2 text-sm"
                       >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </li>
-                  ))}
+                        <span className="min-w-0 truncate">
+                          <span className="font-medium">{c.name}</span>
+                          <span className="text-muted-foreground-subtle">
+                            {" "}
+                            · {c.title} · {c.company?.name ?? "—"}
+                            {loc && ` · ${loc}`}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeContact(c.id)}
+                          className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          aria-label={`Remove ${c.name}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-1.5">
                   <label htmlFor="filter-company" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                     <Building2 className="h-3.5 w-3.5" />
@@ -959,12 +979,46 @@ function NewCampaignPageInner() {
                     ))}
                   </select>
                 </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="filter-country" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Globe className="h-3.5 w-3.5" />
+                    Country
+                  </label>
+                  <select
+                    id="filter-country"
+                    value={countryFilter}
+                    onChange={(e) => { setCountryFilter(e.target.value); setCityFilter(""); }}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All countries</option>
+                    {allCountries.map((co) => (
+                      <option key={co} value={co}>{co}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="filter-city" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5" />
+                    City
+                  </label>
+                  <select
+                    id="filter-city"
+                    value={cityFilter}
+                    onChange={(e) => setCityFilter(e.target.value)}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All cities</option>
+                    {allCities.map((ci) => (
+                      <option key={ci} value={ci}>{ci}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              {(companyFilter || titleFilter) && (
+              {(companyFilter || titleFilter || countryFilter || cityFilter) && (
                 <button
                   type="button"
-                  onClick={() => { setCompanyFilter(""); setTitleFilter(""); }}
+                  onClick={() => { setCompanyFilter(""); setTitleFilter(""); setCountryFilter(""); setCityFilter(""); }}
                   className="text-xs text-primary hover:underline"
                 >
                   Clear filters
@@ -1000,6 +1054,7 @@ function NewCampaignPageInner() {
                 >
                   {contactResults.map((c) => {
                     const checked = selectedContactIds.has(c.id);
+                    const loc = [c.city, c.country].filter(Boolean).join(", ");
                     return (
                       <li key={c.id}>
                         <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/40">
@@ -1015,6 +1070,7 @@ function NewCampaignPageInner() {
                             </span>
                             <span className="block text-xs text-muted-foreground-subtle truncate">
                               {c.title} · {c.company?.name ?? "—"}
+                              {loc && ` · ${loc}`}
                             </span>
                           </span>
                         </label>

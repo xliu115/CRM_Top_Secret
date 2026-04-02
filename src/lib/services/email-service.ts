@@ -92,9 +92,11 @@ function buildSummaryHtml(nudge: NudgeWithRelations): string {
   );
   return fragments
     .map((f) =>
-      f.bold
-        ? `<strong style="color: ${MDS.deepBlue};">${escHtml(f.text)}</strong>`
-        : escHtml(f.text)
+      f.lineBreak
+        ? `<br/><br/>`
+        : f.bold
+          ? `<strong style="color: ${MDS.deepBlue};">${escHtml(f.text)}</strong>`
+          : escHtml(f.text)
     )
     .join("");
 }

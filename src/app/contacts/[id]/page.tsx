@@ -56,6 +56,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownPreview } from "@/components/ui/markdown-preview";
 import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
+import { FragmentText } from "@/components/ui/fragment-text";
 import { getTierColors } from "@/lib/utils/tier-colors";
 import { importanceDisplayLabel } from "@/lib/utils/importance-labels";
 import {
@@ -2337,15 +2338,9 @@ function ContactNudgeCard({
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
           </div>
-          <p className="text-sm text-foreground/70 leading-relaxed">
-            {fragments.map((f, i) =>
-              f.bold ? (
-                <strong key={i} className="font-semibold text-foreground/90">{f.text}</strong>
-              ) : (
-                <span key={i}>{f.text}</span>
-              )
-            )}
-          </p>
+          <div className="text-sm text-foreground/70 leading-relaxed">
+            <FragmentText fragments={fragments} />
+          </div>
         </div>
 
         {seen.size > 0 && (
