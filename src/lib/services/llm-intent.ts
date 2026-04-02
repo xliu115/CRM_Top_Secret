@@ -29,7 +29,7 @@ Return JSON with exactly these keys:
 Intents:
 - "quick_360": User wants a brief overview/recap of a contact. Examples: "tell me about Brad Smith", "what do we know about Beth?", "brief me on Andrew Bosworth", "quick 360 for Chris Cox", "recap on Brian"
 - "full_360": User wants a comprehensive deep-dive on a contact. Examples: "full contact 360 for Brad Smith", "give me everything on Beth Galetti", "complete dossier on Andrew"
-- "company_360": User wants intel on a company. Examples: "company 360 for Microsoft", "tell me about Amazon as a company", "company dossier on Meta"
+- "company_360": User wants intel on a company (account-level, not individual). May reference by company name OR by a contact's name at that company. Examples: "company 360 for Microsoft", "tell me about Amazon as a company", "company dossier on Meta", "Company 360 for Marc Benioff" (means the company where Marc works)
 - "draft_email": User wants to draft/write/compose an email. Examples: "draft an email to Brad", "write an email to Beth", "compose a message to Andrew", "email Brad Smith"
 - "draft_note": User wants a shorter, informal note/message (not a full email). Examples: "draft me a note", "write a quick note to Beth", "jot down a message for Brad", "draft a note for Chris"
 - "meeting_prep": User wants to prepare for a specific meeting. Examples: "prep me for the Q4 review", "meeting brief for the Amazon sync", "help me prepare for my next meeting"
@@ -41,7 +41,7 @@ Intents:
 
 Entity extraction rules:
 - For contact intents, extract the person's name (e.g. "Brad Smith", "Beth")
-- For company intents, extract the company name (e.g. "Microsoft", "Amazon")
+- For company intents, extract the company name OR person name as given (e.g. "Microsoft", "Amazon", "Marc Benioff")
 - For meeting prep, extract the meeting title or keyword (e.g. "Q4 review", "Amazon sync")
 - If the user says "him", "her", "them", or "that person", look at the conversation history to resolve the reference
 - If no entity is mentioned and one is needed, set entity to null`;

@@ -394,10 +394,25 @@ export async function POST(request: NextRequest) {
         try {
           // ── Company 360 ──
           if (isCompany360) {
-            const companies = await prisma.company.findMany({
+            // Try direct company name match first
+            let companies = await prisma.company.findMany({
               where: { contacts: { some: { partnerId } }, name: { contains: nameQuery } },
               take: 1,
             });
+
+            // If no company match, resolve via contact name → their company
+            if (companies.length === 0) {
+              const matchedContacts = await contactRepo.search(nameQuery, partnerId);
+              if (matchedContacts.length > 0) {
+                const matchedContact = matchedContacts[0];
+                const contactCompany = (matchedContact as Record<string, unknown>).company as { id: string; name: string } | undefined;
+                if (contactCompany?.id) {
+                  const co = await prisma.company.findUnique({ where: { id: contactCompany.id } });
+                  if (co) companies = [co];
+                }
+              }
+            }
+
             if (companies.length > 0) {
               const co = companies[0];
               const companyContacts = await prisma.contact.findMany({
@@ -473,7 +488,7 @@ export async function POST(request: NextRequest) {
                 `*${result.summary}*`,
                 "",
                 ...result.sections.map((s) => `### ${s.title}\n${s.content}`),
-                buildQuickActionsMarker(contact.name, usedActions),
+                buildQuickActionsMarker(contact.name, usedActions, company?.name),
               ].filter(Boolean).join("\n\n");
               return NextResponse.json({ answer: md, sources: [] });
             }
@@ -498,7 +513,7 @@ export async function POST(request: NextRequest) {
                 "",
                 `---`,
                 `*You can copy and edit this draft before sending.*`,
-                buildQuickActionsMarker(contact.name, usedActions),
+                buildQuickActionsMarker(contact.name, usedActions, company?.name),
               ].filter(Boolean).join("\n\n");
               return NextResponse.json({ answer: md, sources: [] });
             }
@@ -520,7 +535,7 @@ export async function POST(request: NextRequest) {
                 "",
                 `---`,
                 `*You can copy and edit this note before sending.*`,
-                buildQuickActionsMarker(contact.name, usedActions),
+                buildQuickActionsMarker(contact.name, usedActions, company?.name),
               ].filter(Boolean).join("\n\n");
               return NextResponse.json({ answer: md, sources: [] });
             }
@@ -539,7 +554,7 @@ export async function POST(request: NextRequest) {
                 "",
                 `**Talking Points:**`,
                 ...result.talkingPoints.map((tp, i) => `${i + 1}. ${tp}`),
-                buildQuickActionsMarker(contact.name, usedActions),
+                buildQuickActionsMarker(contact.name, usedActions, company?.name),
               ].filter(Boolean).join("\n\n");
               return NextResponse.json({ answer: md, sources: [] });
             }
@@ -559,7 +574,7 @@ export async function POST(request: NextRequest) {
               "",
               `### Talking Points`,
               tpFormatted,
-              buildQuickActionsMarker(contact.name, usedActions),
+              buildQuickActionsMarker(contact.name, usedActions, company?.name),
             ].filter(Boolean).join("\n\n");
             return NextResponse.json({ answer: md, sources: [] });
           }
@@ -709,10 +724,10 @@ function getUsedActions(
   return used;
 }
 
-function buildQuickActionsMarker(contactName: string, used: Set<ActionKey>): string {
+function buildQuickActionsMarker(contactName: string, used: Set<ActionKey>, companyName?: string): string {
   const all: { key: ActionKey; label: string; query: string }[] = [
     { key: "full360", label: "Full Contact 360", query: `Full Contact 360 for ${contactName}` },
-    { key: "company360", label: "Company 360", query: `Company 360 for ${contactName}` },
+    { key: "company360", label: "Company 360", query: `Company 360 for ${companyName || contactName}` },
     { key: "email", label: "Draft Email", query: `Draft email to ${contactName}` },
     { key: "share", label: "Share Dossier", query: `Share dossier for ${contactName}` },
   ];
