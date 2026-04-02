@@ -54,6 +54,14 @@ export async function GET(
       );
     }
 
+    const campaignStats = await prisma.campaignRecipient.groupBy({
+      by: ["campaignId"],
+      where: {
+        contact: { companyId: id },
+      },
+      _count: { _all: true },
+    });
+
     const myContacts = company.contacts.filter(
       (ct) => ct.partnerId === partnerId
     );
@@ -237,6 +245,7 @@ export async function GET(
         employeeCount: company.employeeCount,
         website: company.website,
       },
+      campaignActivity: { totalCampaigns: campaignStats.length },
       contacts: contactSummaries,
       interactions: sortedInteractions,
       signals,

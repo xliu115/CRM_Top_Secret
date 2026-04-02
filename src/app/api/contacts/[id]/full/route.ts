@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import {
-  contactRepo,
   interactionRepo,
   signalRepo,
   nudgeRepo,
@@ -9,6 +8,7 @@ import {
   engagementRepo,
 } from "@/lib/repositories";
 import { prisma } from "@/lib/db/prisma";
+import type { ContactWithCompany } from "@/lib/repositories/interfaces/contact-repository";
 
 export async function GET(
   _request: NextRequest,
@@ -18,10 +18,39 @@ export async function GET(
     const partnerId = await requirePartnerId();
     const { id } = await params;
 
-    const contact = await contactRepo.findById(id, partnerId);
-    if (!contact) {
+    const contactRow = await prisma.contact.findFirst({
+      where: { id, partnerId },
+      include: {
+        company: true,
+        campaignRecipients: {
+          where: { campaign: { partnerId } },
+          include: {
+            campaign: {
+              select: { id: true, name: true, status: true, sentAt: true },
+            },
+            engagements: true,
+          },
+          orderBy: { campaign: { sentAt: "desc" } },
+        },
+      },
+    });
+    if (!contactRow) {
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
+
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ disabled_nudge_types: string | null }>
+    >(
+      `SELECT disabled_nudge_types FROM contacts WHERE id = ? AND partner_id = ? LIMIT 1`,
+      id,
+      partnerId
+    );
+    const contact = JSON.parse(JSON.stringify(contactRow)) as ContactWithCompany & {
+      campaignRecipients: typeof contactRow.campaignRecipients;
+    };
+    contact.disabledNudgeTypes = rows[0]?.disabled_nudge_types ?? null;
+
+    const campaignRecipients = contact.campaignRecipients;
 
     const [
       interactions,
@@ -30,7 +59,6 @@ export async function GET(
       engagements,
       meetings,
       nudges,
-      campaignRecipients,
     ] = await Promise.all([
       interactionRepo.findByContactId(id),
       signalRepo.findByContactId(id),
@@ -42,19 +70,6 @@ export async function GET(
       ]),
       meetingRepo.findByContactId(id),
       nudgeRepo.findByContactId(id),
-      prisma.campaignRecipient.findMany({
-        where: {
-          contactId: id,
-          campaign: { partnerId },
-        },
-        include: {
-          campaign: {
-            select: { id: true, name: true, status: true, sentAt: true },
-          },
-          engagements: true,
-        },
-        orderBy: { campaign: { sentAt: "desc" } },
-      }),
     ]);
 
     const signals = [
