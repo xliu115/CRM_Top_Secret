@@ -506,7 +506,6 @@ function NewCampaignPageInner() {
   }
 
   return (
-    <DashboardShell>
       <div className="mx-auto max-w-4xl space-y-6 pb-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -1031,24 +1030,23 @@ function NewCampaignPageInner() {
           </div>
         </div>
       </div>
-    </DashboardShell>
   );
 }
 
 export default function NewCampaignPage() {
   return (
-    <Suspense
-      fallback={
-        <DashboardShell>
+    <DashboardShell>
+      <Suspense
+        fallback={
           <div className="mx-auto max-w-4xl space-y-6">
             <Skeleton className="h-10 w-64" />
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-96 w-full" />
           </div>
-        </DashboardShell>
-      }
-    >
-      <NewCampaignPageInner />
-    </Suspense>
+        }
+      >
+        <NewCampaignPageInner />
+      </Suspense>
+    </DashboardShell>
   );
 }
