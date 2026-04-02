@@ -301,7 +301,7 @@ function MyCampaignsTab() {
             <Link
               key={c.id}
               href={`/campaigns/${c.id}`}
-              className="group block rounded-xl border border-border bg-white p-4 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-card"
+              className="group block rounded-xl border border-border bg-white p-4 shadow-sm transition-all hover:shadow-md hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-card"
             >
               <div className="flex flex-wrap items-start gap-2 mb-2">
                 <h2 className="text-base font-semibold text-foreground group-hover:text-primary line-clamp-2 min-w-0 flex-1">
