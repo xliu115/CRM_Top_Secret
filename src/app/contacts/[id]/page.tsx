@@ -123,6 +123,36 @@ type CampaignOutreach = {
   statusDate: string;
 };
 
+type CampaignRecipientRow = {
+  id: string;
+  campaign: {
+    id: string;
+    name: string;
+    status: string;
+    sentAt: string | null;
+  };
+  engagements: {
+    id: string;
+    type: string;
+    timestamp: string;
+    metadata: string | null;
+  }[];
+  rsvpStatus: string | null;
+};
+
+function formatCampaignEngagementLabel(type: string): string {
+  switch (type) {
+    case "OPENED":
+      return "Opened";
+    case "CLICKED":
+      return "Clicked";
+    case "ARTICLE_READ":
+      return "Article read";
+    default:
+      return type.replace(/_/g, " ");
+  }
+}
+
 type ContactMeeting = {
   id: string;
   title: string;
@@ -382,6 +412,9 @@ export default function ContactDetailPage() {
   const [events, setEvents] = useState<EventRegistration[]>([]);
   const [articles, setArticles] = useState<ArticleEngagement[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOutreach[]>([]);
+  const [campaignRecipients, setCampaignRecipients] = useState<
+    CampaignRecipientRow[]
+  >([]);
   const [meetings, setMeetings] = useState<ContactMeeting[]>([]);
   const [nudges, setNudges] = useState<ContactNudge[]>([]);
   const [activeSequence, setActiveSequence] =
@@ -450,6 +483,7 @@ export default function ContactDetailPage() {
         setEvents(data.engagements?.events ?? []);
         setArticles(data.engagements?.articles ?? []);
         setCampaigns(data.engagements?.campaigns ?? []);
+        setCampaignRecipients(data.campaignRecipients ?? []);
         setMeetings(data.meetings ?? []);
         setNudges(data.nudges ?? []);
       } catch (err) {
@@ -1682,6 +1716,95 @@ export default function ContactDetailPage() {
           </TabsContent>
 
           <TabsContent value="engagement" className="mt-4 space-y-6">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+                    <Megaphone className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Campaign Activity</CardTitle>
+                    <CardDescription>
+                      Activate campaigns including this contact
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {campaignRecipients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground-subtle">
+                    No campaign activity yet.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {campaignRecipients.map((row) => {
+                      const dateRef =
+                        row.campaign.sentAt ??
+                        row.engagements[0]?.timestamp ??
+                        null;
+                      const sortedEngagements = [...row.engagements].sort(
+                        (a, b) =>
+                          new Date(b.timestamp).getTime() -
+                          new Date(a.timestamp).getTime()
+                      );
+                      return (
+                        <div
+                          key={row.id}
+                          className="rounded-lg border border-border p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 space-y-1">
+                              <Link
+                                href={`/campaigns/${row.campaign.id}`}
+                                className="font-semibold text-foreground hover:underline"
+                              >
+                                {row.campaign.name}
+                              </Link>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground-subtle">
+                                <Badge variant="outline">
+                                  {row.campaign.status}
+                                </Badge>
+                                {dateRef && (
+                                  <span>
+                                    {format(new Date(dateRef), "MMM d, yyyy")}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {row.rsvpStatus && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              RSVP: {row.rsvpStatus}
+                            </p>
+                          )}
+                          {sortedEngagements.length > 0 && (
+                            <ul className="mt-3 space-y-1.5 text-sm text-foreground">
+                              {sortedEngagements.map((e) => (
+                                <li
+                                  key={e.id}
+                                  className="flex flex-wrap items-baseline gap-x-2"
+                                >
+                                  <span className="font-medium">
+                                    {formatCampaignEngagementLabel(e.type)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground-subtle">
+                                    {format(
+                                      new Date(e.timestamp),
+                                      "MMM d, yyyy h:mm a"
+                                    )}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">

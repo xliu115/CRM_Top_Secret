@@ -8,6 +8,7 @@ import {
   meetingRepo,
   engagementRepo,
 } from "@/lib/repositories";
+import { prisma } from "@/lib/db/prisma";
 
 export async function GET(
   _request: NextRequest,
@@ -22,19 +23,39 @@ export async function GET(
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
 
-    const [interactions, contactSignals, companySignals, engagements, meetings, nudges] =
-      await Promise.all([
-        interactionRepo.findByContactId(id),
-        signalRepo.findByContactId(id),
-        signalRepo.findByCompanyId(contact.companyId),
-        Promise.all([
-          engagementRepo.findEventsByContactId(id),
-          engagementRepo.findArticlesByContactId(id),
-          engagementRepo.findCampaignsByContactId(id),
-        ]),
-        meetingRepo.findByContactId(id),
-        nudgeRepo.findByContactId(id),
-      ]);
+    const [
+      interactions,
+      contactSignals,
+      companySignals,
+      engagements,
+      meetings,
+      nudges,
+      campaignRecipients,
+    ] = await Promise.all([
+      interactionRepo.findByContactId(id),
+      signalRepo.findByContactId(id),
+      signalRepo.findByCompanyId(contact.companyId),
+      Promise.all([
+        engagementRepo.findEventsByContactId(id),
+        engagementRepo.findArticlesByContactId(id),
+        engagementRepo.findCampaignsByContactId(id),
+      ]),
+      meetingRepo.findByContactId(id),
+      nudgeRepo.findByContactId(id),
+      prisma.campaignRecipient.findMany({
+        where: {
+          contactId: id,
+          campaign: { partnerId },
+        },
+        include: {
+          campaign: {
+            select: { id: true, name: true, status: true, sentAt: true },
+          },
+          engagements: true,
+        },
+        orderBy: { campaign: { sentAt: "desc" } },
+      }),
+    ]);
 
     const signals = [
       ...new Map(
@@ -55,6 +76,7 @@ export async function GET(
       },
       meetings,
       nudges: openNudges,
+      campaignRecipients,
     });
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {
