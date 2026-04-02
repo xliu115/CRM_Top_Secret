@@ -11,6 +11,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q");
     const importance = searchParams.get("importance");
+    const companyFilter = searchParams.get("company");
+    const titleFilter = searchParams.get("title");
 
     const searchQuery = q?.trim();
     let contacts = searchQuery
@@ -19,6 +21,20 @@ export async function GET(request: NextRequest) {
 
     if (importance) {
       contacts = contacts.filter((c) => c.importance === importance.toUpperCase());
+    }
+
+    if (companyFilter) {
+      const lower = companyFilter.toLowerCase();
+      contacts = contacts.filter(
+        (c) => c.company?.name?.toLowerCase() === lower
+      );
+    }
+
+    if (titleFilter) {
+      const lower = titleFilter.toLowerCase();
+      contacts = contacts.filter(
+        (c) => c.title?.toLowerCase().includes(lower)
+      );
     }
 
     if (contacts.length === 0) return NextResponse.json([]);

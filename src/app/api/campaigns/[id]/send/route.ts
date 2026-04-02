@@ -91,6 +91,7 @@ export async function POST(
         const html = buildCampaignEmailHtml({
           personalizedOpening: opening,
           bodyTemplate: template,
+          signatureBlock: campaign.signatureBlock ?? undefined,
           contentItems,
           recipientId: r.id,
           rsvpToken: r.rsvpToken ?? undefined,

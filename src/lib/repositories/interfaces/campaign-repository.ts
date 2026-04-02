@@ -37,6 +37,7 @@ export interface ICampaignRepository {
     name: string;
     subject?: string;
     bodyTemplate?: string;
+    signatureBlock?: string;
     source?: string;
     segmentCriteria?: string;
   }): Promise<Campaign>;
@@ -49,6 +50,7 @@ export interface ICampaignRepository {
         | "name"
         | "subject"
         | "bodyTemplate"
+        | "signatureBlock"
         | "status"
         | "sentAt"
         | "sendStartedAt"

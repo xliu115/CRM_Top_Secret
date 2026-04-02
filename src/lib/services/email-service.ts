@@ -629,6 +629,7 @@ export function buildMini360Html(
 export function buildCampaignEmailHtml(params: {
   personalizedOpening: string;
   bodyTemplate: string;
+  signatureBlock?: string;
   contentItems: {
     contentItemId: string;
     title: string;
@@ -734,6 +735,11 @@ export function buildCampaignEmailHtml(params: {
               </table>
             </td>
           </tr>
+          ${params.signatureBlock ? `<tr>
+            <td style="padding: 16px 28px 0 28px; border-top: 1px solid ${MDS.border};">
+              <div style="white-space: pre-line; font-size: 13px; color: ${MDS.textLight}; line-height: 1.6;">${escHtml(params.signatureBlock).replace(/\n/g, "<br />")}</div>
+            </td>
+          </tr>` : ""}
           <tr>
             <td style="padding: 16px 28px 32px 28px;">
               <img src="${openPixel}" width="1" height="1" alt="" style="display: block; border: 0; outline: none;" />

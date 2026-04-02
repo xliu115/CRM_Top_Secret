@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       name?: string;
       subject?: string;
       bodyTemplate?: string;
+      signatureBlock?: string;
       contentItemIds?: string[];
       contactIds?: string[];
       segmentCriteria?: unknown;
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
       name,
       subject: body.subject,
       bodyTemplate: body.bodyTemplate,
+      signatureBlock: body.signatureBlock,
       source: "ACTIVATE",
       segmentCriteria,
     });

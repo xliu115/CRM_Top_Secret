@@ -50,6 +50,7 @@ export async function PATCH(
       name?: string;
       subject?: string;
       bodyTemplate?: string;
+      signatureBlock?: string;
       contentItemIds?: string[];
       contactIds?: string[];
     } = {};
@@ -64,6 +65,7 @@ export async function PATCH(
     if (typeof body.name === "string") data.name = body.name;
     if (body.subject !== undefined) data.subject = body.subject;
     if (body.bodyTemplate !== undefined) data.bodyTemplate = body.bodyTemplate;
+    if (body.signatureBlock !== undefined) data.signatureBlock = body.signatureBlock;
 
     if (Object.keys(data).length > 0) {
       await campaignRepo.update(id, partnerId, data);

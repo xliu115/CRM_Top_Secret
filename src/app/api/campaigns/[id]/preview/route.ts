@@ -26,11 +26,13 @@ export async function POST(
     const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const template = campaign.bodyTemplate ?? "";
     const subject = campaign.subject ?? "";
+    const signatureBlock = campaign.signatureBlock ?? undefined;
 
     const recipientsOut: {
       id: string;
       contactName: string;
       subject: string;
+      personalizedBody: string;
       htmlPreview: string;
     }[] = [];
 
@@ -74,6 +76,7 @@ export async function POST(
       const htmlPreview = buildCampaignEmailHtml({
         personalizedOpening: personalizedBody,
         bodyTemplate: template,
+        signatureBlock,
         contentItems,
         recipientId: r.id,
         rsvpToken: r.rsvpToken ?? undefined,
@@ -84,6 +87,7 @@ export async function POST(
         id: r.id,
         contactName,
         subject,
+        personalizedBody,
         htmlPreview,
       });
     }

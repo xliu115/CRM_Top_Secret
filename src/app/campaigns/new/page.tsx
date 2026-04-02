@@ -12,13 +12,16 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  Building2,
   Calendar,
   Check,
   ChevronDown,
   ChevronUp,
+  Edit3,
   FileText,
   Loader2,
   Mail,
+  Pen,
   Search,
   Send,
   Sparkles,
@@ -62,6 +65,7 @@ type PreviewRecipient = {
   id: string;
   contactName: string;
   subject: string;
+  personalizedBody: string;
   htmlPreview: string;
 };
 
@@ -83,6 +87,41 @@ const KIND_OPTIONS: { value: CampaignKind; label: string; description: string }[
       description: "Send a message without linked content.",
     },
   ];
+
+const ROLE_KEYWORDS = [
+  "CEO",
+  "CFO",
+  "CTO",
+  "COO",
+  "CIO",
+  "CMO",
+  "CPO",
+  "President",
+  "Chairman",
+  "SVP",
+  "EVP",
+  "VP",
+  "General Counsel",
+  "Chief Scientist",
+  "Chief Product Officer",
+  "Chief Financial Officer",
+  "Chief Operating Officer",
+  "Chief Commercial Officer",
+  "Chief Marketing Officer",
+] as const;
+
+function extractRoleKeywords(titles: string[]): string[] {
+  const found = new Set<string>();
+  for (const title of titles) {
+    const upper = title.toUpperCase();
+    for (const kw of ROLE_KEYWORDS) {
+      if (upper.includes(kw.toUpperCase())) {
+        found.add(kw);
+      }
+    }
+  }
+  return [...found].sort((a, b) => a.localeCompare(b));
+}
 
 function StepIndicator({
   steps,
@@ -179,7 +218,11 @@ function NewCampaignPageInner() {
 
   const [contactSearchInput, setContactSearchInput] = useState("");
   const [contactSearch, setContactSearch] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [titleFilter, setTitleFilter] = useState("");
   const [contactResults, setContactResults] = useState<ContactRow[]>([]);
+  const [allCompanies, setAllCompanies] = useState<string[]>([]);
+  const [allRoleKeywords, setAllRoleKeywords] = useState<string[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
@@ -192,6 +235,12 @@ function NewCampaignPageInner() {
   const [previewOpenId, setPreviewOpenId] = useState<string | null>(null);
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const [signatureBlock, setSignatureBlock] = useState("");
+
+  const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
+  const [editedMessages, setEditedMessages] = useState<Record<string, string>>({});
+  const [savingRecipientId, setSavingRecipientId] = useState<string | null>(null);
 
   const [saveLoading, setSaveLoading] = useState(false);
   const [sendLoading, setSendLoading] = useState(false);
@@ -280,6 +329,7 @@ function NewCampaignPageInner() {
         setName(data.name ?? "");
         setSubject(data.subject ?? "");
         setBodyTemplate(data.bodyTemplate ?? "");
+        setSignatureBlock(data.signatureBlock ?? "");
 
         const contents = (data.contents ?? []).map(
           (c: { contentItem: { id: string; title: string; type: string } }) => ({
@@ -344,19 +394,30 @@ function NewCampaignPageInner() {
     setContactsError(null);
     const params = new URLSearchParams();
     if (contactSearch.trim()) params.set("q", contactSearch.trim());
+    if (companyFilter) params.set("company", companyFilter);
+    if (titleFilter) params.set("title", titleFilter);
     const qs = params.toString();
     fetch(qs ? `/api/contacts?${qs}` : "/api/contacts")
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed");
         return res.json() as Promise<ContactRow[]>;
       })
-      .then(setContactResults)
+      .then((data) => {
+        setContactResults(data);
+        if (!contactSearch && !companyFilter && !titleFilter) {
+          const companies = [...new Set(data.map((c) => c.company?.name).filter(Boolean))] as string[];
+          const rawTitles = data.map((c) => c.title).filter(Boolean);
+          companies.sort();
+          setAllCompanies(companies);
+          setAllRoleKeywords(extractRoleKeywords(rawTitles));
+        }
+      })
       .catch(() => {
         setContactResults([]);
         setContactsError("Could not load contacts.");
       })
       .finally(() => setContactsLoading(false));
-  }, [stepIndex, contactSearch, recipientsStepIndex]);
+  }, [stepIndex, contactSearch, companyFilter, titleFilter, recipientsStepIndex]);
 
   function toggleContent(item: ContentItemRow) {
     setSelectedContents((prev) => {
@@ -399,6 +460,7 @@ function NewCampaignPageInner() {
       name: name.trim(),
       subject: subject.trim() || undefined,
       bodyTemplate,
+      signatureBlock: signatureBlock.trim() || undefined,
       contentItemIds: emailOnly ? [] : selectedContents.map((c) => c.id),
       contactIds: selectedContacts.map((c) => c.id),
     };
@@ -442,6 +504,7 @@ function NewCampaignPageInner() {
     name,
     subject,
     bodyTemplate,
+    signatureBlock,
     emailOnly,
     selectedContents,
     selectedContacts,
@@ -504,11 +567,39 @@ function NewCampaignPageInner() {
       }
       const data = (await res.json()) as { recipients: PreviewRecipient[] };
       setPreviewRecipients(data.recipients);
+      const initialEdits: Record<string, string> = {};
+      for (const r of data.recipients) {
+        initialEdits[r.id] = r.personalizedBody;
+      }
+      setEditedMessages(initialEdits);
       if (data.recipients.length > 0) {
         setPreviewOpenId(data.recipients[0].id);
       }
     } finally {
       setGenerateLoading(false);
+    }
+  }
+
+  async function handleSaveRecipientMessage(recipientId: string) {
+    const newBody = editedMessages[recipientId];
+    if (newBody === undefined) return;
+    setSavingRecipientId(recipientId);
+    try {
+      const res = await fetch(`/api/campaigns/recipients/${recipientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personalizedBody: newBody }),
+      });
+      if (res.ok) {
+        setPreviewRecipients((prev) =>
+          prev?.map((r) =>
+            r.id === recipientId ? { ...r, personalizedBody: newBody } : r
+          ) ?? null
+        );
+        setEditingRecipientId(null);
+      }
+    } finally {
+      setSavingRecipientId(null);
     }
   }
 
@@ -800,7 +891,7 @@ function NewCampaignPageInner() {
                         <span className="font-medium">{c.name}</span>
                         <span className="text-muted-foreground-subtle">
                           {" "}
-                          · {c.company?.name ?? "—"}
+                          · {c.title} · {c.company?.name ?? "—"}
                         </span>
                       </span>
                       <button
@@ -815,12 +906,60 @@ function NewCampaignPageInner() {
                   ))}
                 </ul>
               )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label htmlFor="filter-company" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Building2 className="h-3.5 w-3.5" />
+                    Company
+                  </label>
+                  <select
+                    id="filter-company"
+                    value={companyFilter}
+                    onChange={(e) => setCompanyFilter(e.target.value)}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All companies</option>
+                    {allCompanies.map((co) => (
+                      <option key={co} value={co}>{co}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="filter-title" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Pen className="h-3.5 w-3.5" />
+                    Job title
+                  </label>
+                  <select
+                    id="filter-title"
+                    value={titleFilter}
+                    onChange={(e) => setTitleFilter(e.target.value)}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All titles</option>
+                    {allRoleKeywords.map((kw) => (
+                      <option key={kw} value={kw}>{kw}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {(companyFilter || titleFilter) && (
+                <button
+                  type="button"
+                  onClick={() => { setCompanyFilter(""); setTitleFilter(""); }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Clear filters
+                </button>
+              )}
+
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground-subtle" />
                 <Input
                   value={contactSearchInput}
                   onChange={(e) => setContactSearchInput(e.target.value)}
-                  placeholder="Search contacts…"
+                  placeholder="Search contacts by name, email, or title…"
                   className="pl-9 h-9"
                   aria-label="Search contacts"
                 />
@@ -874,27 +1013,40 @@ function NewCampaignPageInner() {
           )}
 
           {((emailOnly && stepIndex === 2) || (!emailOnly && stepIndex === 3)) && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-foreground">
-                Message template
-              </h2>
-              <p className="text-sm text-muted-foreground-subtle">
-                Use placeholders like{" "}
-                <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                  {"{{name}}"}
-                </code>{" "}
-                and{" "}
-                <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                  {"{{company}}"}
-                </code>{" "}
-                in your copy where helpful.
-              </p>
-              <Textarea
-                value={bodyTemplate}
-                onChange={(e) => setBodyTemplate(e.target.value)}
-                placeholder="Write the body template for your campaign…"
-                className="min-h-[160px]"
-              />
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Message template
+                </h2>
+                <p className="text-sm text-muted-foreground-subtle">
+                  Write the base message. AI will personalize the opening for each recipient.
+                </p>
+                <Textarea
+                  value={bodyTemplate}
+                  onChange={(e) => setBodyTemplate(e.target.value)}
+                  placeholder="Write the body template for your campaign…"
+                  className="min-h-[160px]"
+                />
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center gap-2">
+                  <Edit3 className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Email signature
+                  </h3>
+                </div>
+                <p className="text-xs text-muted-foreground-subtle">
+                  Add your sign-off and contact details. This appears at the bottom of every email.
+                </p>
+                <Textarea
+                  value={signatureBlock}
+                  onChange={(e) => setSignatureBlock(e.target.value)}
+                  placeholder={"Best regards,\nYour Name\nTitle | McKinsey & Company\nyour.email@mckinsey.com | +1 (555) 000-0000"}
+                  className="min-h-[100px] bg-background"
+                />
+              </div>
+
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
@@ -926,13 +1078,20 @@ function NewCampaignPageInner() {
                 </p>
               )}
               {previewRecipients && previewRecipients.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Personalized previews
-                  </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Personalized messages
+                    </h3>
+                    <span className="text-xs text-muted-foreground-subtle">
+                      Click the edit icon to customize any recipient&apos;s message
+                    </span>
+                  </div>
                   <div className="space-y-2">
                     {previewRecipients.map((r) => {
                       const open = previewOpenId === r.id;
+                      const isEditing = editingRecipientId === r.id;
+                      const isSaving = savingRecipientId === r.id;
                       return (
                         <div
                           key={r.id}
@@ -953,19 +1112,106 @@ function NewCampaignPageInner() {
                                 — {r.subject || "(no subject)"}
                               </span>
                             </span>
-                            {open ? (
-                              <ChevronUp className="h-4 w-4 shrink-0" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 shrink-0" />
-                            )}
+                            <span className="flex items-center gap-1.5">
+                              {editedMessages[r.id] !== r.personalizedBody && (
+                                <Badge variant="outline" className="text-[10px] font-normal py-0 px-1.5 text-amber-600 border-amber-300">
+                                  Edited
+                                </Badge>
+                              )}
+                              {open ? (
+                                <ChevronUp className="h-4 w-4 shrink-0" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 shrink-0" />
+                              )}
+                            </span>
                           </button>
                           {open && (
-                            <iframe
-                              title={`Email preview for ${r.contactName}`}
-                              className="w-full min-h-[240px] border-0 bg-white"
-                              srcDoc={r.htmlPreview}
-                              sandbox="allow-same-origin allow-popups"
-                            />
+                            <div className="border-t border-border">
+                              <div className="flex items-center gap-2 px-3 py-2 bg-muted/10 border-b border-border">
+                                <span className="text-xs font-medium text-muted-foreground flex-1">
+                                  Personalized opening for {r.contactName}
+                                </span>
+                                {!isEditing ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingRecipientId(r.id);
+                                    }}
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5 mr-1" />
+                                    Edit
+                                  </Button>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditedMessages((prev) => ({
+                                          ...prev,
+                                          [r.id]: r.personalizedBody,
+                                        }));
+                                        setEditingRecipientId(null);
+                                      }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                      disabled={isSaving}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSaveRecipientMessage(r.id);
+                                      }}
+                                    >
+                                      {isSaving ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        "Save"
+                                      )}
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                              {isEditing ? (
+                                <div className="p-3">
+                                  <Textarea
+                                    value={editedMessages[r.id] ?? r.personalizedBody}
+                                    onChange={(e) =>
+                                      setEditedMessages((prev) => ({
+                                        ...prev,
+                                        [r.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="min-h-[100px] text-sm"
+                                    placeholder="Edit the personalized opening…"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="p-3">
+                                  <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
+                                    {editedMessages[r.id] ?? r.personalizedBody}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="border-t border-border">
+                                <iframe
+                                  title={`Email preview for ${r.contactName}`}
+                                  className="w-full min-h-[240px] border-0 bg-white"
+                                  srcDoc={r.htmlPreview}
+                                  sandbox="allow-same-origin allow-popups"
+                                />
+                              </div>
+                            </div>
                           )}
                         </div>
                       );

@@ -300,6 +300,7 @@ model Campaign {
   name            String
   subject         String?
   bodyTemplate    String?   @map("body_template")
+  signatureBlock  String?   @map("signature_block")
   source          String    @default("ACTIVATE")
   status          String    @default("DRAFT")
   segmentCriteria String?   @map("segment_criteria")

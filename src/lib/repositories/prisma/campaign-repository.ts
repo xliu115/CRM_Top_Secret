@@ -122,6 +122,7 @@ export class PrismaCampaignRepository implements ICampaignRepository {
     name: string;
     subject?: string;
     bodyTemplate?: string;
+    signatureBlock?: string;
     source?: string;
     segmentCriteria?: string;
   }) {
@@ -131,6 +132,7 @@ export class PrismaCampaignRepository implements ICampaignRepository {
         name: data.name,
         subject: data.subject,
         bodyTemplate: data.bodyTemplate,
+        signatureBlock: data.signatureBlock,
         source: data.source ?? "ACTIVATE",
         segmentCriteria: data.segmentCriteria,
       },
