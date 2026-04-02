@@ -103,6 +103,7 @@ export class PrismaCampaignRepository implements ICampaignRepository {
               select: {
                 id: true,
                 name: true,
+                email: true,
                 title: true,
                 company: { select: { name: true } },
               },

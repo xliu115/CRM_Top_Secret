@@ -15,7 +15,13 @@ export type CampaignWithStats = Campaign & {
 export type CampaignDetail = Campaign & {
   contents: (CampaignContent & { contentItem: ContentItem })[];
   recipients: (CampaignRecipient & {
-    contact: { id: string; name: string; title: string; company: { name: string } } | null;
+    contact: {
+      id: string;
+      name: string;
+      email: string;
+      title: string;
+      company: { name: string };
+    } | null;
     engagements: CampaignEngagement[];
   })[];
 };
