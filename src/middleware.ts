@@ -29,6 +29,9 @@ const protectedPaths = [
   "/api/companies",
   "/api/sequences",
   "/api/outreach",
+  "/campaigns",
+  "/api/campaigns",
+  "/api/content-library",
 ];
 
 const MOBILE_UA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i;
@@ -96,5 +99,8 @@ export const config = {
     "/api/companies/:path*",
     "/api/sequences/:path*",
     "/api/outreach/:path*",
+    "/campaigns/:path*",
+    "/api/campaigns/:path*",
+    "/api/content-library/:path*",
   ],
 };
