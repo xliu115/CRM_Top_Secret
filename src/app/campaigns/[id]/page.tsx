@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils/cn";
 
 const HEADER_CLASS =
-  "text-3xl font-bold tracking-tight text-[#051C2C] dark:text-foreground";
+  "text-3xl font-bold tracking-tight text-foreground";
 
 type EngagementRow = { type: string };
 
@@ -397,7 +397,7 @@ function CampaignDetailBody({ id }: { id: string }) {
           </p>
           <Button
             asChild
-            className="bg-[#009BDE] text-white hover:bg-[#00A9F4]"
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Link href="/campaigns">Back to campaigns</Link>
           </Button>
@@ -413,7 +413,7 @@ function CampaignDetailBody({ id }: { id: string }) {
       <div>
         <Link
           href="/campaigns"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9F4] rounded-sm"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
           ← Back to Campaigns
@@ -449,7 +449,7 @@ function CampaignDetailBody({ id }: { id: string }) {
               <Button
                 asChild
                 variant="outline"
-                className="border-[#009BDE]/40 text-[#051C2C] hover:bg-[#00A9F4]/10"
+                className="border-primary/40 text-foreground hover:bg-primary/10"
               >
                 <Link href={`/campaigns/new?edit=${encodeURIComponent(campaign.id)}`}>
                   Edit
@@ -459,7 +459,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                 type="button"
                 onClick={handleSendCampaign}
                 disabled={sendLoading}
-                className="bg-[#009BDE] text-white hover:bg-[#00A9F4]"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 {sendLoading ? (
                   <>
@@ -506,7 +506,7 @@ function CampaignDetailBody({ id }: { id: string }) {
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-[#051C2C] dark:text-foreground">
+        <h2 className="text-lg font-semibold text-foreground">
           Content
         </h2>
         {campaign.contents.length === 0 ? (
@@ -523,9 +523,9 @@ function CampaignDetailBody({ id }: { id: string }) {
                 >
                   <div className="flex flex-wrap items-start gap-2 mb-2">
                     {isEvent ? (
-                      <Calendar className="h-4 w-4 shrink-0 text-[#00A9F4] mt-0.5" />
+                      <Calendar className="h-4 w-4 shrink-0 text-primary mt-0.5" />
                     ) : (
-                      <FileText className="h-4 w-4 shrink-0 text-[#00A9F4] mt-0.5" />
+                      <FileText className="h-4 w-4 shrink-0 text-primary mt-0.5" />
                     )}
                     <h3 className="text-base font-semibold text-foreground flex-1 min-w-0">
                       {item.title}
@@ -548,7 +548,7 @@ function CampaignDetailBody({ id }: { id: string }) {
 
       <section className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-semibold text-[#051C2C] dark:text-foreground">
+          <h2 className="text-lg font-semibold text-foreground">
             Recipients
           </h2>
           <div className="flex flex-wrap items-center gap-2">
@@ -559,7 +559,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                 followUpLoading ||
                 selectedForFollowUp.length === 0
               }
-              className="bg-[#009BDE] text-white hover:bg-[#00A9F4]"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {followUpLoading ? (
                 <>
@@ -588,7 +588,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                       checked={allSentSelected}
                       ref={headerCheckboxRef}
                       onChange={toggleSelectAllSent}
-                      className="h-4 w-4 rounded border-border text-[#00A9F4] focus:ring-[#00A9F4]"
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
                       aria-label="Select all sent recipients"
                     />
                   ) : null}
@@ -625,7 +625,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleRecipient(r.id)}
-                          className="h-4 w-4 rounded border-border text-[#00A9F4] focus:ring-[#00A9F4]"
+                          className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
                           aria-label={`Select ${name}`}
                         />
                       ) : (
@@ -686,7 +686,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="border-[#009BDE]/40 text-[#009BDE] hover:bg-[#00A9F4]/10"
+                          className="border-primary/40 text-primary hover:bg-primary/10"
                           onClick={() => {
                             setSelectedIds(new Set([r.id]));
                           }}
@@ -707,12 +707,12 @@ function CampaignDetailBody({ id }: { id: string }) {
 
       {(followUpLoading || (drafts && drafts.length > 0)) && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-[#051C2C] dark:text-foreground">
+          <h2 className="text-lg font-semibold text-foreground">
             Follow-up drafts
           </h2>
           {followUpLoading && (
             <div className="flex items-center gap-2 rounded-xl border border-border bg-white p-6 text-sm text-muted-foreground dark:bg-card">
-              <Loader2 className="h-5 w-5 animate-spin text-[#009BDE]" />
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
               Generating follow-up messages…
             </div>
           )}
@@ -775,7 +775,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                             <Button
                               asChild
                               size="sm"
-                              className="bg-[#009BDE] text-white hover:bg-[#00A9F4]"
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
                             >
                               <a href={mailto}>Send</a>
                             </Button>
@@ -784,7 +784,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                               asChild
                               size="sm"
                               variant="outline"
-                              className="border-[#009BDE]/40"
+                              className="border-primary/40"
                             >
                               <Link href={`/contacts/${contactId}`}>
                                 Open contact
@@ -825,7 +825,7 @@ function MetricCard({
       </p>
       <p
         className={cn(
-          "font-bold tabular-nums text-[#051C2C] dark:text-foreground",
+          "font-bold tabular-nums text-foreground",
           large ? "text-3xl" : "text-2xl"
         )}
       >

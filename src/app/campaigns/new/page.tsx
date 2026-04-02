@@ -34,7 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils/cn";
 
 const HEADER_CLASS =
-  "text-3xl font-bold tracking-tight text-[#051C2C] dark:text-foreground";
+  "text-3xl font-bold tracking-tight text-foreground";
 
 type CampaignKind = "article" | "event" | "email";
 
@@ -106,7 +106,7 @@ function StepIndicator({
                 <span
                   className={cn(
                     "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                    active && "bg-[#00A9F4] text-white",
+                    active && "bg-primary text-primary-foreground",
                     done && !active && "bg-green-600 text-white",
                     !done && !active && "bg-gray-200 text-gray-600 dark:bg-muted dark:text-muted-foreground"
                   )}
@@ -117,7 +117,7 @@ function StepIndicator({
                 <span
                   className={cn(
                     "hidden truncate text-xs font-medium sm:inline max-w-[7rem] lg:max-w-none",
-                    active && "text-[#051C2C] dark:text-foreground",
+                    active && "text-foreground",
                     !active && "text-muted-foreground-subtle"
                   )}
                 >
@@ -512,7 +512,7 @@ function NewCampaignPageInner() {
           <div>
             <Link
               href="/campaigns"
-              className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9F4] rounded-sm"
+              className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden />
               Back to campaigns
@@ -543,7 +543,7 @@ function NewCampaignPageInner() {
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm dark:bg-card sm:p-6 space-y-6">
           {stepIndex === 0 && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-[#051C2C] dark:text-foreground">
+              <h2 className="text-lg font-semibold text-foreground">
                 Campaign details
               </h2>
               <div className="space-y-2">
@@ -595,7 +595,7 @@ function NewCampaignPageInner() {
                       className={cn(
                         "rounded-lg border p-3 text-left transition-colors",
                         campaignKind === opt.value
-                          ? "border-[#009BDE] bg-[#00A9F4]/10 ring-1 ring-[#00A9F4]/30"
+                          ? "border-primary bg-primary/10 ring-1 ring-primary/30"
                           : "border-border hover:border-foreground/20"
                       )}
                     >
@@ -614,7 +614,7 @@ function NewCampaignPageInner() {
 
           {!emailOnly && stepIndex === 1 && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-[#051C2C] dark:text-foreground">
+              <h2 className="text-lg font-semibold text-foreground">
                 Content
               </h2>
               <p className="text-sm text-muted-foreground-subtle">
@@ -673,17 +673,17 @@ function NewCampaignPageInner() {
                         type="button"
                         onClick={() => toggleContent(item)}
                         className={cn(
-                          "flex flex-col rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9F4]",
+                          "flex flex-col rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           selected
-                            ? "border-[#009BDE] bg-[#00A9F4]/5"
+                            ? "border-primary bg-primary/5"
                             : "border-border hover:border-foreground/20"
                         )}
                       >
                         <div className="flex items-start gap-2">
                           {item.type === "EVENT" ? (
-                            <Calendar className="h-4 w-4 shrink-0 text-[#00A9F4] mt-0.5" />
+                            <Calendar className="h-4 w-4 shrink-0 text-primary mt-0.5" />
                           ) : (
-                            <FileText className="h-4 w-4 shrink-0 text-[#00A9F4] mt-0.5" />
+                            <FileText className="h-4 w-4 shrink-0 text-primary mt-0.5" />
                           )}
                           <span className="text-sm font-semibold text-foreground line-clamp-2">
                             {item.title}
@@ -707,7 +707,7 @@ function NewCampaignPageInner() {
                             {format(new Date(item.publishedAt), "MMM d, yyyy")}
                           </p>
                         )}
-                        <span className="mt-2 text-xs font-medium text-[#009BDE]">
+                        <span className="mt-2 text-xs font-medium text-primary">
                           {selected ? "Selected" : "Click to select"}
                         </span>
                       </button>
@@ -725,7 +725,7 @@ function NewCampaignPageInner() {
 
           {((emailOnly && stepIndex === 1) || (!emailOnly && stepIndex === 2)) && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-[#051C2C] dark:text-foreground">
+              <h2 className="text-lg font-semibold text-foreground">
                 Recipients
               </h2>
               <p className="text-sm text-muted-foreground">
@@ -796,7 +796,7 @@ function NewCampaignPageInner() {
                             type="checkbox"
                             checked={checked}
                             onChange={() => toggleContact(c)}
-                            className="h-4 w-4 rounded border-border text-[#00A9F4] focus:ring-[#00A9F4]"
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
                           />
                           <span className="min-w-0 flex-1">
                             <span className="block text-sm font-medium truncate">
@@ -820,7 +820,7 @@ function NewCampaignPageInner() {
 
           {((emailOnly && stepIndex === 2) || (!emailOnly && stepIndex === 3)) && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-[#051C2C] dark:text-foreground">
+              <h2 className="text-lg font-semibold text-foreground">
                 Message template
               </h2>
               <p className="text-sm text-muted-foreground-subtle">
@@ -845,7 +845,7 @@ function NewCampaignPageInner() {
                   type="button"
                   onClick={handleGenerateAi}
                   disabled={generateLoading}
-                  className="bg-[#009BDE] text-white hover:bg-[#00A9F4]"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   {generateLoading ? (
                     <>
@@ -923,7 +923,7 @@ function NewCampaignPageInner() {
 
           {((emailOnly && stepIndex === 3) || (!emailOnly && stepIndex === 4)) && (
             <div className="space-y-6">
-              <h2 className="text-lg font-semibold text-[#051C2C] dark:text-foreground">
+              <h2 className="text-lg font-semibold text-foreground">
                 Review & send
               </h2>
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -986,7 +986,7 @@ function NewCampaignPageInner() {
                   type="button"
                   onClick={handleSend}
                   disabled={sendLoading || !name.trim()}
-                  className="bg-[#009BDE] text-white hover:bg-[#00A9F4] sm:min-w-[160px]"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 sm:min-w-[160px]"
                 >
                   {sendLoading ? (
                     <>
@@ -1023,7 +1023,7 @@ function NewCampaignPageInner() {
               <Button
                 type="button"
                 onClick={goNext}
-                className="bg-[#009BDE] text-white hover:bg-[#00A9F4] sm:ml-auto"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 sm:ml-auto"
               >
                 Next
               </Button>

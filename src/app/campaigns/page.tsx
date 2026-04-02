@@ -44,7 +44,7 @@ type ContentItemRow = {
   eventType: string | null;
 };
 
-const HEADER_CLASS = "text-3xl font-bold tracking-tight text-[#051C2C] dark:text-foreground";
+const HEADER_CLASS = "text-3xl font-bold tracking-tight text-foreground";
 
 function pct(n: number) {
   return `${Math.round(n * 100)}%`;
@@ -81,14 +81,14 @@ function statusLabel(status: string) {
 }
 
 function practiceBadgeClass() {
-  return "border-[#009BDE]/25 bg-[#00A9F4]/10 text-[#051C2C] dark:border-primary/30 dark:bg-primary/15 dark:text-primary";
+  return "border-primary/25 bg-primary/10 text-foreground dark:border-primary/30 dark:bg-primary/15 dark:text-primary";
 }
 
 function filterChipClass(active: boolean) {
   return cn(
-    "rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9F4]",
+    "rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     active
-      ? "border-[#009BDE] bg-[#00A9F4]/15 text-[#051C2C] dark:border-primary dark:bg-primary/20 dark:text-foreground"
+      ? "border-primary bg-primary/15 text-foreground dark:border-primary dark:bg-primary/20 dark:text-foreground"
       : "border-border bg-card text-muted-foreground-subtle hover:border-foreground/20"
   );
 }
@@ -96,7 +96,7 @@ function filterChipClass(active: boolean) {
 function selectClassName() {
   return cn(
     "h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground shadow-sm",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9F4]"
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
   );
 }
 
@@ -122,15 +122,15 @@ function CampaignsPageInner() {
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 sm:inline-flex sm:w-auto h-auto sm:h-10 p-1 gap-1">
-          <TabsTrigger value="campaigns" className="gap-2 data-[state=active]:text-[#051C2C]">
+          <TabsTrigger value="campaigns" className="gap-2 data-[state=active]:text-foreground">
             <Megaphone className="h-4 w-4 shrink-0" aria-hidden />
             My Campaigns
           </TabsTrigger>
-          <TabsTrigger value="articles" className="gap-2 data-[state=active]:text-[#051C2C]">
+          <TabsTrigger value="articles" className="gap-2 data-[state=active]:text-foreground">
             <FileText className="h-4 w-4 shrink-0" aria-hidden />
             Articles
           </TabsTrigger>
-          <TabsTrigger value="events" className="gap-2 data-[state=active]:text-[#051C2C]">
+          <TabsTrigger value="events" className="gap-2 data-[state=active]:text-foreground">
             <Calendar className="h-4 w-4 shrink-0" aria-hidden />
             Events
           </TabsTrigger>
@@ -222,7 +222,7 @@ function MyCampaignsTab() {
         </div>
         <Button
           asChild
-          className="bg-[#009BDE] text-white hover:bg-[#00A9F4] shrink-0 w-full sm:w-auto"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 w-full sm:w-auto"
         >
           <Link href="/campaigns/new">New Campaign</Link>
         </Button>
@@ -291,7 +291,7 @@ function MyCampaignsTab() {
               ? "No campaigns match your filters. Try clearing search or filters."
               : "Create a campaign to share articles and events with your contacts."}
           </p>
-          <Button asChild className="bg-[#009BDE] text-white hover:bg-[#00A9F4]">
+          <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
             <Link href="/campaigns/new">Create campaign</Link>
           </Button>
         </div>
@@ -301,10 +301,10 @@ function MyCampaignsTab() {
             <Link
               key={c.id}
               href={`/campaigns/${c.id}`}
-              className="group block rounded-xl border border-border bg-white p-4 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9F4] dark:bg-card"
+              className="group block rounded-xl border border-border bg-white p-4 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-card"
             >
               <div className="flex flex-wrap items-start gap-2 mb-2">
-                <h2 className="text-base font-semibold text-foreground group-hover:text-[#009BDE] line-clamp-2 min-w-0 flex-1">
+                <h2 className="text-base font-semibold text-foreground group-hover:text-primary line-clamp-2 min-w-0 flex-1">
                   {c.name}
                 </h2>
                 <Badge
@@ -562,7 +562,7 @@ function ContentLibraryTab({
                     <Button
                       asChild
                       size="sm"
-                      className="bg-[#009BDE] text-white hover:bg-[#00A9F4]"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
                     >
                       <Link href={`/campaigns/new?contentId=${encodeURIComponent(item.id)}`}>
                         {actionLabel}
@@ -613,7 +613,7 @@ function ContentLibraryTab({
                     <Button
                       asChild
                       size="sm"
-                      className="bg-[#009BDE] text-white hover:bg-[#00A9F4]"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
                     >
                       <Link href={`/campaigns/new?contentId=${encodeURIComponent(item.id)}`}>
                         {actionLabel}
