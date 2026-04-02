@@ -93,6 +93,7 @@ type EventRegistration = {
   type: string;
   eventSize: string | null;
   location: string | null;
+  contactName: string;
 };
 
 type ArticleEngagement = {
@@ -102,6 +103,7 @@ type ArticleEngagement = {
   views: number;
   sentFrom: string | null;
   lastViewDate: string | null;
+  contactName: string;
 };
 
 type CampaignOutreach = {
@@ -109,6 +111,7 @@ type CampaignOutreach = {
   name: string;
   status: string;
   statusDate: string;
+  contactName: string;
 };
 
 type CompanyMeeting = {
@@ -327,6 +330,9 @@ export default function CompanyDetailPage() {
   const [events, setEvents] = useState<EventRegistration[]>([]);
   const [articles, setArticles] = useState<ArticleEngagement[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOutreach[]>([]);
+  const [activateCampaigns, setActivateCampaigns] = useState<
+    { id: string; name: string; status: string; sentAt: string | null; recipientCount: number }[]
+  >([]);
   const [meetings, setMeetings] = useState<CompanyMeeting[]>([]);
   const [firmRelData, setFirmRelData] = useState<FirmRelationshipData | null>(
     null
@@ -366,6 +372,7 @@ export default function CompanyDetailPage() {
         setEvents(data.engagements?.events ?? []);
         setArticles(data.engagements?.articles ?? []);
         setCampaigns(data.engagements?.campaigns ?? []);
+        setActivateCampaigns(data.campaignActivity?.campaigns ?? []);
         setMeetings(data.meetings ?? []);
         setFirmRelData(data.firmRelationships ?? null);
       } catch (err) {
@@ -967,6 +974,9 @@ export default function CompanyDetailPage() {
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
                       </div>
                       <div className="flex-[1.2] min-w-0">
+                        <span className="text-xs font-medium">Contact</span>
+                      </div>
+                      <div className="flex-[1.2] min-w-0">
                         <SortButton label="Status" active={engagementSortKey === "status"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("status")} />
                       </div>
                       <div className="flex-[1.2] min-w-0 hidden md:block">
@@ -978,12 +988,6 @@ export default function CompanyDetailPage() {
                       <div className="flex-[1] min-w-0 hidden xl:block">
                         <SortButton label="Type" active={engagementSortKey === "type"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("type")} />
                       </div>
-                      <div className="flex-[0.9] min-w-0 hidden xl:block">
-                        <SortButton label="Size" active={engagementSortKey === "size"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("size")} />
-                      </div>
-                      <div className="flex-[1.1] min-w-0 hidden xl:block">
-                        <SortButton label="Location" active={engagementSortKey === "location"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("location")} />
-                      </div>
                     </div>
                     <div className="divide-y divide-border/30">
                       {sortedEvents.slice(0, 10).map((ev) => (
@@ -993,14 +997,13 @@ export default function CompanyDetailPage() {
                             <p className="text-sm font-semibold text-foreground truncate leading-tight">{ev.name}</p>
                             <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5 md:hidden">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</p>
                           </div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-foreground truncate">{ev.contactName}</div>
                           <div className="flex-[1.2] min-w-0">
                             <Badge variant={ev.status === "Attended" ? "secondary" : "outline"}>{ev.status}</Badge>
                           </div>
                           <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</div>
                           <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden lg:block truncate">{ev.practice}</div>
                           <div className="flex-[1] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.type}</div>
-                          <div className="flex-[0.9] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.eventSize ?? "—"}</div>
-                          <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.location ?? "—"}</div>
                         </div>
                       ))}
                     </div>
@@ -1038,10 +1041,13 @@ export default function CompanyDetailPage() {
                       <div className="flex-[2] min-w-0">
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
                       </div>
-                      <div className="flex-[1.6] min-w-0">
+                      <div className="flex-[1.2] min-w-0">
+                        <span className="text-xs font-medium">Contact</span>
+                      </div>
+                      <div className="flex-[1.4] min-w-0">
                         <SortButton label="Article Sent" active={engagementSortKey === "status"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("status")} />
                       </div>
-                      <div className="flex-[1.1] min-w-0 hidden md:block">
+                      <div className="flex-[1] min-w-0 hidden md:block">
                         <SortButton label="Views" active={engagementSortKey === "type"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("type")} />
                       </div>
                       <div className="flex-[1.2] min-w-0 hidden lg:block">
@@ -1059,8 +1065,9 @@ export default function CompanyDetailPage() {
                             <p className="text-sm font-semibold text-foreground truncate leading-tight">{art.name}</p>
                             <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5 md:hidden">{art.articleSent}</p>
                           </div>
-                          <div className="flex-[1.6] min-w-0 text-sm text-foreground truncate">{art.articleSent}</div>
-                          <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden md:block tabular-nums">{art.views}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-foreground truncate">{art.contactName}</div>
+                          <div className="flex-[1.4] min-w-0 text-sm text-foreground truncate">{art.articleSent}</div>
+                          <div className="flex-[1] min-w-0 text-sm text-foreground hidden md:block tabular-nums">{art.views}</div>
                           <div className="flex-[1.2] min-w-0 text-sm text-foreground hidden lg:block truncate">{art.sentFrom ?? "—"}</div>
                           <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{art.lastViewDate ? format(new Date(art.lastViewDate), "MM/dd/yyyy") : "—"}</div>
                         </div>
@@ -1071,6 +1078,47 @@ export default function CompanyDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {activateCampaigns.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Megaphone className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">
+                        Campaigns ({activateCampaigns.length})
+                      </CardTitle>
+                      <CardDescription>Campaigns that included contacts at this company</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-border/30">
+                    {activateCampaigns.map((c) => (
+                      <Link
+                        key={c.id}
+                        href={`/campaigns/${c.id}`}
+                        className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/50"
+                      >
+                        <div className="w-1 shrink-0 self-stretch rounded-r bg-primary" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
+                          <p className="text-xs text-muted-foreground-subtle">
+                            {c.recipientCount} recipient{c.recipientCount !== 1 ? "s" : ""}
+                            {c.sentAt ? ` · Sent ${format(new Date(c.sentAt), "MMM d, yyyy")}` : " · Draft"}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 text-[10px]">
+                          {c.status === "SENDING" ? "In Progress" : c.status === "SENT" ? "Sent" : c.status === "DRAFT" ? "Draft" : c.status}
+                        </Badge>
+                      </Link>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader className="pb-3">
@@ -1101,6 +1149,9 @@ export default function CompanyDetailPage() {
                         <SortButton label="Name" active={engagementSortKey === "name"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("name")} />
                       </div>
                       <div className="flex-[1.2] min-w-0">
+                        <span className="text-xs font-medium">Contact</span>
+                      </div>
+                      <div className="flex-[1.2] min-w-0">
                         <SortButton label="Status" active={engagementSortKey === "status"} direction={engagementSortDirection} onClick={() => toggleEngagementSort("status")} />
                       </div>
                       <div className="flex-[1.2] min-w-0 hidden md:block">
@@ -1114,6 +1165,7 @@ export default function CompanyDetailPage() {
                           <div className="flex-[2] min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate leading-tight">{camp.name}</p>
                           </div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-foreground truncate">{camp.contactName}</div>
                           <div className="flex-[1.2] min-w-0">
                             <Badge variant={camp.status === "Clicked" ? "secondary" : "outline"}>{camp.status}</Badge>
                           </div>

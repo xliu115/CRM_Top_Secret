@@ -141,36 +141,20 @@ function StepIndicator({
 async function findContentById(
   contentId: string
 ): Promise<{ item: ContentItemRow; kind: CampaignKind } | null> {
-  for (const type of ["ARTICLE", "EVENT"] as const) {
-    let page = 1;
-    const pageSize = 100;
-    while (page <= 10) {
-      const res = await fetch(
-        `/api/content-library?type=${type}&page=${page}&pageSize=${pageSize}`
-      );
-      if (!res.ok) break;
-      const data = (await res.json()) as {
-        items: ContentItemRow[];
-        total: number;
-      };
-      const hit = data.items.find((i) => i.id === contentId);
-      if (hit) {
-        return {
-          item: hit,
-          kind: type === "EVENT" ? "event" : "article",
-        };
-      }
-      if (data.items.length === 0 || page * pageSize >= data.total) break;
-      page++;
-    }
-  }
-  return null;
+  const res = await fetch(`/api/content-library/${contentId}`);
+  if (!res.ok) return null;
+  const item = (await res.json()) as ContentItemRow;
+  return {
+    item,
+    kind: item.type === "EVENT" ? "event" : "article",
+  };
 }
 
 function NewCampaignPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const contentIdParam = searchParams.get("contentId");
+  const editIdParam = searchParams.get("edit");
 
   const [campaignKind, setCampaignKind] = useState<CampaignKind>("article");
   const [name, setName] = useState("");
@@ -182,7 +166,10 @@ function NewCampaignPageInner() {
   const [bodyTemplate, setBodyTemplate] = useState("");
 
   const [stepIndex, setStepIndex] = useState(0);
+  const [contextLinked, setContextLinked] = useState(false);
   const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editHydrated, setEditHydrated] = useState(false);
 
   const [contentSearchInput, setContentSearchInput] = useState("");
   const [contentSearch, setContentSearch] = useState("");
@@ -212,7 +199,6 @@ function NewCampaignPageInner() {
 
   const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contactDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prefetchedRef = useRef<string | null>(null);
 
   const emailOnly = campaignKind === "email";
   const steps = useMemo(
@@ -249,35 +235,84 @@ function NewCampaignPageInner() {
   }, [contactSearchInput]);
 
   useEffect(() => {
-    if (!contentIdParam || prefetchedRef.current === contentIdParam) return;
-    prefetchedRef.current = contentIdParam;
+    if (!contentIdParam || contextLinked) return;
     let cancelled = false;
-    (async () => {
-      setPrefetchLoading(true);
-      setPrefetchError(null);
-      try {
-        const found = await findContentById(contentIdParam);
-        if (cancelled) return;
-        if (!found) {
-          setPrefetchError("Could not load that content item.");
-          return;
-        }
-        setCampaignKind(found.kind);
-        setSelectedContents([
-          {
-            id: found.item.id,
-            title: found.item.title,
-            type: found.item.type,
-          },
-        ]);
-      } finally {
-        if (!cancelled) setPrefetchLoading(false);
+    setPrefetchLoading(true);
+    setPrefetchError(null);
+    findContentById(contentIdParam).then((found) => {
+      if (cancelled) return;
+      if (!found) {
+        setPrefetchError("Could not load that content item.");
+        setPrefetchLoading(false);
+        return;
       }
-    })();
+      setCampaignKind(found.kind);
+      setSelectedContents([
+        {
+          id: found.item.id,
+          title: found.item.title,
+          type: found.item.type,
+        },
+      ]);
+      const prefix = found.kind === "event" ? "Invite" : "Share";
+      setName(`${prefix}: ${found.item.title}`);
+      setStepIndex(2);
+      setContextLinked(true);
+      setPrefetchLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [contentIdParam]);
+  }, [contentIdParam, contextLinked]);
+
+  useEffect(() => {
+    if (!editIdParam || editHydrated) return;
+    let cancelled = false;
+    setEditLoading(true);
+    fetch(`/api/campaigns/${editIdParam}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to load campaign");
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setCampaignId(data.id);
+        setName(data.name ?? "");
+        setSubject(data.subject ?? "");
+        setBodyTemplate(data.bodyTemplate ?? "");
+
+        const contents = (data.contents ?? []).map(
+          (c: { contentItem: { id: string; title: string; type: string } }) => ({
+            id: c.contentItem.id,
+            title: c.contentItem.title,
+            type: c.contentItem.type,
+          })
+        );
+        setSelectedContents(contents);
+
+        const hasEvent = contents.some((c: { type: string }) => c.type === "EVENT");
+        const hasArticle = contents.some((c: { type: string }) => c.type === "ARTICLE");
+        if (hasEvent) setCampaignKind("event");
+        else if (hasArticle) setCampaignKind("article");
+        else if (contents.length === 0) setCampaignKind("email");
+
+        const contacts: ContactRow[] = (data.recipients ?? [])
+          .filter((r: { contact: unknown }) => r.contact != null)
+          .map((r: { contact: ContactRow }) => r.contact);
+        setSelectedContacts(contacts);
+        setEditHydrated(true);
+        setEditLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrefetchError("Could not load the draft campaign.");
+          setEditLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editIdParam, editHydrated]);
 
   useEffect(() => {
     if (emailOnly || stepIndex !== 1) return;
@@ -421,6 +456,10 @@ function NewCampaignPageInner() {
       if (selectedContents.length === 0) return "Select at least one content item.";
       return null;
     }
+    if (s === recipientsStepIndex) {
+      if (selectedContacts.length === 0) return "Select at least one recipient.";
+      return null;
+    }
     return null;
   }
 
@@ -516,9 +555,13 @@ function NewCampaignPageInner() {
               <ArrowLeft className="h-4 w-4" aria-hidden />
               Back to campaigns
             </Link>
-            <h1 className={HEADER_CLASS}>New campaign</h1>
+            <h1 className={HEADER_CLASS}>{editIdParam ? "Edit campaign" : "New campaign"}</h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Build and send outreach in a few steps.
+              {editIdParam
+                ? "Update your draft and send when ready."
+                : contextLinked
+                  ? "Choose recipients and send — content and type are pre-filled."
+                  : "Build and send outreach in a few steps."}
             </p>
           </div>
         </div>
@@ -527,18 +570,20 @@ function NewCampaignPageInner() {
           <StepIndicator steps={steps} currentIndex={stepIndex} />
         </div>
 
-        {prefetchLoading && (
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Loading linked content…
-          </p>
-        )}
         {prefetchError && (
           <p className="text-sm text-destructive" role="alert">
             {prefetchError}
           </p>
         )}
 
+        {(contentIdParam && !contextLinked && !prefetchError) || (editIdParam && !editHydrated && !prefetchError) ? (
+          <div className="rounded-xl border border-border bg-white p-8 shadow-sm dark:bg-card flex flex-col items-center justify-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden />
+            <p className="text-sm text-muted-foreground">
+              {editIdParam ? "Loading draft…" : "Loading content…"}
+            </p>
+          </div>
+        ) : (
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm dark:bg-card sm:p-6 space-y-6">
           {stepIndex === 0 && (
             <div className="space-y-4">
@@ -572,41 +617,52 @@ function NewCampaignPageInner() {
               </div>
               <div className="space-y-2">
                 <span className="text-sm font-medium">Campaign type</span>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {KIND_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        setCampaignKind(opt.value);
-                        if (opt.value === "email") {
-                          setSelectedContents([]);
-                        } else {
-                          setSelectedContents((prev) =>
-                            prev.filter((c) =>
-                              opt.value === "event"
-                                ? c.type === "EVENT"
-                                : c.type === "ARTICLE"
-                            )
-                          );
-                        }
-                      }}
-                      className={cn(
-                        "rounded-lg border p-3 text-left transition-colors",
-                        campaignKind === opt.value
-                          ? "border-primary bg-primary/10 ring-1 ring-primary/30"
-                          : "border-border hover:border-foreground/20"
-                      )}
-                    >
-                      <span className="block text-sm font-semibold text-foreground">
-                        {opt.label}
-                      </span>
-                      <span className="mt-1 block text-xs text-muted-foreground-subtle">
-                        {opt.description}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {contextLinked ? (
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-lg border border-primary bg-primary/10 px-3 py-2 text-sm font-semibold text-foreground ring-1 ring-primary/30">
+                      {KIND_OPTIONS.find((o) => o.value === campaignKind)?.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground-subtle">
+                      Set from selected content
+                    </span>
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {KIND_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setCampaignKind(opt.value);
+                          if (opt.value === "email") {
+                            setSelectedContents([]);
+                          } else {
+                            setSelectedContents((prev) =>
+                              prev.filter((c) =>
+                                opt.value === "event"
+                                  ? c.type === "EVENT"
+                                  : c.type === "ARTICLE"
+                              )
+                            );
+                          }
+                        }}
+                        className={cn(
+                          "rounded-lg border p-3 text-left transition-colors",
+                          campaignKind === opt.value
+                            ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                            : "border-border hover:border-foreground/20"
+                        )}
+                      >
+                        <span className="block text-sm font-semibold text-foreground">
+                          {opt.label}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground-subtle">
+                          {opt.description}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -984,7 +1040,7 @@ function NewCampaignPageInner() {
                 <Button
                   type="button"
                   onClick={handleSend}
-                  disabled={sendLoading || !name.trim()}
+                  disabled={sendLoading || !name.trim() || selectedContacts.length === 0}
                   className="bg-primary text-primary-foreground hover:bg-primary/90 sm:min-w-[160px]"
                 >
                   {sendLoading ? (
@@ -1029,6 +1085,7 @@ function NewCampaignPageInner() {
             )}
           </div>
         </div>
+        )}
       </div>
   );
 }

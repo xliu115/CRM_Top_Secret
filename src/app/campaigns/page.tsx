@@ -8,6 +8,7 @@ import {
   FileText,
   Calendar,
   Library,
+  MapPin,
 } from "lucide-react";
 import { format } from "date-fns";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
@@ -38,6 +39,7 @@ type ContentItemRow = {
   title: string;
   description: string | null;
   practice: string | null;
+  imageUrl: string | null;
   publishedAt: string | null;
   eventDate: string | null;
   eventLocation: string | null;
@@ -58,8 +60,6 @@ function statusBadgeClass(status: string) {
       return "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300";
     case "SENDING":
       return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300";
-    case "FAILED":
-      return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300";
     default:
       return "bg-gray-100 text-gray-800";
   }
@@ -72,9 +72,7 @@ function statusLabel(status: string) {
     case "SENT":
       return "Sent";
     case "SENDING":
-      return "Sending";
-    case "FAILED":
-      return "Failed";
+      return "In Progress";
     default:
       return status;
   }
@@ -113,11 +111,19 @@ function CampaignsPageInner() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className={HEADER_CLASS}>Campaigns</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Build outreach from your library and track performance.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className={HEADER_CLASS}>Campaigns</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Build outreach from your library and track performance.
+          </p>
+        </div>
+        <Button
+          asChild
+          className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
+        >
+          <Link href="/campaigns/new">New Campaign</Link>
+        </Button>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">
@@ -156,7 +162,6 @@ function MyCampaignsTab() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | "">("");
-  const [sourceFilter, setSourceFilter] = useState<string | "">("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -173,7 +178,6 @@ function MyCampaignsTab() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter) params.set("status", statusFilter);
-      if (sourceFilter) params.set("source", sourceFilter);
       const qs = params.toString();
       const url = qs ? `/api/campaigns?${qs}` : "/api/campaigns";
       const res = await fetch(url);
@@ -184,7 +188,7 @@ function MyCampaignsTab() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, sourceFilter]);
+  }, [search, statusFilter]);
 
   useEffect(() => {
     fetchCampaigns();
@@ -194,20 +198,13 @@ function MyCampaignsTab() {
     { label: "All", value: "" },
     { label: "Draft", value: "DRAFT" },
     { label: "Sent", value: "SENT" },
-    { label: "Sending", value: "SENDING" },
-    { label: "Failed", value: "FAILED" },
-  ];
-
-  const SOURCE_OPTIONS: { label: string; value: string | "" }[] = [
-    { label: "All", value: "" },
-    { label: "Activate", value: "ACTIVATE" },
-    { label: "Imported", value: "IMPORTED" },
+    { label: "In Progress", value: "SENDING" },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative min-w-[200px] max-w-md flex-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative min-w-[180px] max-w-xs">
           <Search
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground-subtle"
             aria-hidden
@@ -220,43 +217,13 @@ function MyCampaignsTab() {
             aria-label="Search campaigns"
           />
         </div>
-        <Button
-          asChild
-          className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 w-full sm:w-auto"
-        >
-          <Link href="/campaigns/new">New Campaign</Link>
-        </Button>
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <span className="text-xs font-medium text-muted-foreground-subtle uppercase tracking-wide">
-          Status
-        </span>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {STATUS_OPTIONS.map((o) => (
             <button
               key={o.label}
               type="button"
               onClick={() => setStatusFilter(o.value)}
               className={filterChipClass(statusFilter === o.value)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <span className="text-xs font-medium text-muted-foreground-subtle uppercase tracking-wide">
-          Source
-        </span>
-        <div className="flex flex-wrap gap-2">
-          {SOURCE_OPTIONS.map((o) => (
-            <button
-              key={o.label}
-              type="button"
-              onClick={() => setSourceFilter(o.value)}
-              className={filterChipClass(sourceFilter === o.value)}
             >
               {o.label}
             </button>
@@ -287,7 +254,7 @@ function MyCampaignsTab() {
             No campaigns yet
           </h3>
           <p className="text-sm text-muted-foreground-subtle max-w-md mx-auto mb-6">
-            {search || statusFilter || sourceFilter
+            {search || statusFilter
               ? "No campaigns match your filters. Try clearing search or filters."
               : "Create a campaign to share articles and events with your contacts."}
           </p>
@@ -458,8 +425,6 @@ function ContentLibraryTab({
   const emptyIcon = type === "ARTICLE" ? Library : Calendar;
   const EmptyIcon = emptyIcon;
 
-  const gridCols = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3";
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -500,15 +465,19 @@ function ContentLibraryTab({
       </div>
 
       {loading ? (
-        <div className={gridCols}>
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="rounded-xl border border-border bg-white p-4 shadow-sm dark:bg-card"
+              className="flex items-start overflow-hidden rounded-xl border border-border bg-white shadow-sm dark:bg-card"
             >
-              <Skeleton className="h-5 w-4/5 mb-2" />
-              <Skeleton className="h-16 w-full mb-3" />
-              <Skeleton className="h-8 w-24" />
+              <Skeleton className="m-4 h-24 w-24 shrink-0 rounded-lg sm:h-28 sm:w-28" />
+              <div className="flex-1 py-4 pr-4">
+                <Skeleton className="h-5 w-3/4 mb-2" />
+                <Skeleton className="h-4 w-full mb-1.5" />
+                <Skeleton className="h-4 w-2/3 mb-3" />
+                <Skeleton className="h-8 w-24" />
+              </div>
             </div>
           ))}
         </div>
@@ -531,85 +500,79 @@ function ContentLibraryTab({
         </div>
       ) : (
         <>
-          <div className={gridCols}>
-            {items.map((item) =>
-              type === "ARTICLE" ? (
-                <article
-                  key={item.id}
-                  className="flex flex-col rounded-xl border border-border bg-white p-4 shadow-sm dark:bg-card"
-                >
-                  <div className="flex flex-wrap items-start gap-2 mb-2">
-                    <h2 className="text-base font-semibold text-foreground line-clamp-2 flex-1 min-w-0">
-                      {item.title}
-                    </h2>
-                    {item.practice && (
-                      <Badge variant="outline" className={cn("shrink-0 text-[10px]", practiceBadgeClass())}>
-                        {item.practice}
-                      </Badge>
-                    )}
-                  </div>
-                  {item.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-3 mb-3 flex-1">
-                      {item.description}
-                    </p>
+          <div className="space-y-3">
+            {items.map((item) => (
+              <article
+                key={item.id}
+                className="group flex items-start overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md hover:border-primary/40 dark:bg-card"
+              >
+                <div className="m-4 h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-28 sm:w-28">
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-700">
+                      {item.type === "EVENT" ? (
+                        <Calendar className="h-8 w-8 text-muted-foreground/30" aria-hidden />
+                      ) : (
+                        <FileText className="h-8 w-8 text-muted-foreground/30" aria-hidden />
+                      )}
+                    </div>
                   )}
-                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/50">
-                    <span className="text-xs text-muted-foreground-subtle">
-                      {item.publishedAt
-                        ? format(new Date(item.publishedAt), "MMM d, yyyy")
-                        : "—"}
-                    </span>
-                    <Button
-                      asChild
-                      size="sm"
-                      className="bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                      <Link href={`/campaigns/new?contentId=${encodeURIComponent(item.id)}`}>
-                        {actionLabel}
-                      </Link>
-                    </Button>
-                  </div>
-                </article>
-              ) : (
-                <article
-                  key={item.id}
-                  className="flex flex-col rounded-xl border border-border bg-white p-4 shadow-sm dark:bg-card"
-                >
-                  <div className="flex flex-wrap items-start gap-2 mb-2">
-                    <h2 className="text-base font-semibold text-foreground line-clamp-2 flex-1 min-w-0">
+                </div>
+
+                <div className="flex flex-1 flex-col py-4 pr-4 min-w-0">
+                  <div className="flex flex-wrap items-start gap-2 mb-1.5">
+                    <h2 className="text-base font-semibold text-foreground leading-snug line-clamp-2 flex-1 min-w-0 group-hover:text-primary transition-colors">
                       {item.title}
                     </h2>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     {item.practice && (
-                      <Badge variant="outline" className={cn("shrink-0 text-[10px]", practiceBadgeClass())}>
+                      <Badge variant="outline" className={cn("text-[10px]", practiceBadgeClass())}>
                         {item.practice}
                       </Badge>
                     )}
-                    {item.eventType && (
-                      <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
+                    {item.type === "EVENT" && item.eventType && (
+                      <Badge variant="secondary" className="text-[10px] capitalize">
                         {item.eventType}
                       </Badge>
                     )}
+                    {item.type === "ARTICLE" && item.publishedAt && (
+                      <span className="text-xs text-muted-foreground-subtle">
+                        {format(new Date(item.publishedAt), "MMM d, yyyy")}
+                      </span>
+                    )}
                   </div>
+
                   {item.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
+                    <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2 mb-2">
                       {item.description}
                     </p>
                   )}
-                  <ul className="text-xs text-muted-foreground space-y-1 mb-3">
-                    {item.eventDate && (
-                      <li>
-                        <span className="text-muted-foreground-subtle">When: </span>
-                        {format(new Date(item.eventDate), "EEE, MMM d, yyyy · h:mm a")}
-                      </li>
-                    )}
-                    {item.eventLocation && (
-                      <li>
-                        <span className="text-muted-foreground-subtle">Where: </span>
-                        {item.eventLocation}
-                      </li>
-                    )}
-                  </ul>
-                  <div className="mt-auto flex justify-end pt-2 border-t border-border/50">
+
+                  {item.type === "EVENT" && (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2">
+                      {item.eventDate && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5 text-muted-foreground-subtle" aria-hidden />
+                          {format(new Date(item.eventDate), "EEE, MMM d, yyyy · h:mm a")}
+                        </span>
+                      )}
+                      {item.eventLocation && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5 text-muted-foreground-subtle" aria-hidden />
+                          {item.eventLocation}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-auto flex justify-end pt-1">
                     <Button
                       asChild
                       size="sm"
@@ -620,9 +583,9 @@ function ContentLibraryTab({
                       </Link>
                     </Button>
                   </div>
-                </article>
-              )
-            )}
+                </div>
+              </article>
+            ))}
           </div>
 
           {totalPages > 1 && (

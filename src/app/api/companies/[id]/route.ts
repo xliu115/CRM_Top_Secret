@@ -62,6 +62,23 @@ export async function GET(
       _count: { _all: true },
     });
 
+    const activateCampaigns = campaignStats.length > 0
+      ? await prisma.campaign.findMany({
+          where: {
+            id: { in: campaignStats.map((s) => s.campaignId) },
+            partnerId,
+          },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            sentAt: true,
+            _count: { select: { recipients: true } },
+          },
+          orderBy: { sentAt: "desc" },
+        })
+      : [];
+
     const myContacts = company.contacts.filter(
       (ct) => ct.partnerId === partnerId
     );
@@ -123,9 +140,16 @@ export async function GET(
         new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
     );
 
-    const allEvents = engagements.flatMap((e) => e.events);
-    const allArticles = engagements.flatMap((e) => e.articles);
-    const allCampaigns = engagements.flatMap((e) => e.campaigns);
+    const contactNameMap = new Map(myContacts.map((ct) => [ct.id, ct.name]));
+    const allEvents = engagements.flatMap((e) =>
+      e.events.map((ev) => ({ ...ev, contactName: contactNameMap.get(e.contactId) ?? "Unknown" }))
+    );
+    const allArticles = engagements.flatMap((e) =>
+      e.articles.map((art) => ({ ...art, contactName: contactNameMap.get(e.contactId) ?? "Unknown" }))
+    );
+    const allCampaigns = engagements.flatMap((e) =>
+      e.campaigns.map((camp) => ({ ...camp, contactName: contactNameMap.get(e.contactId) ?? "Unknown" }))
+    );
 
     const sortedInteractions = [...allInteractions].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -245,7 +269,16 @@ export async function GET(
         employeeCount: company.employeeCount,
         website: company.website,
       },
-      campaignActivity: { totalCampaigns: campaignStats.length },
+      campaignActivity: {
+        totalCampaigns: campaignStats.length,
+        campaigns: activateCampaigns.map((c) => ({
+          id: c.id,
+          name: c.name,
+          status: c.status,
+          sentAt: c.sentAt,
+          recipientCount: c._count.recipients,
+        })),
+      },
       contacts: contactSummaries,
       interactions: sortedInteractions,
       signals,
