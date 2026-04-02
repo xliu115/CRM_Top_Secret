@@ -416,7 +416,7 @@ function CampaignDetailBody({ id }: { id: string }) {
           className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
-          ← Back to Campaigns
+          Back to Campaigns
         </Link>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
