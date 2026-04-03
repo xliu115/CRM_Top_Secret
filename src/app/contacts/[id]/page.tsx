@@ -287,8 +287,6 @@ function TierBadge({ importance }: { importance: string }) {
   );
 }
 
-const TIER_OPTIONS = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
-
 function getSentimentColor(sentiment: string): string {
   switch (sentiment) {
     case "POSITIVE":
@@ -438,6 +436,8 @@ export default function ContactDetailPage() {
   const [nudgeRuleConfig, setNudgeRuleConfig] = useState<PartnerStaleDaysConfig | null>(null);
   const [savingNudgePrefs, setSavingNudgePrefs] = useState(false);
   const [savingTier, setSavingTier] = useState(false);
+  const [tierPickerOpen, setTierPickerOpen] = useState(false);
+  const tierPickerRef = useRef<HTMLDivElement>(null);
   const [nudgePrefsExpanded, setNudgePrefsExpanded] = useState(false);
 
   const [showDraftPanel, setShowDraftPanel] = useState(false);
@@ -542,6 +542,17 @@ export default function ContactDetailPage() {
     const effective = contact.staleThresholdDays ?? tierD;
     setReconnectDaysInput(String(effective));
   }, [contact, nudgeRuleConfig]);
+
+  useEffect(() => {
+    if (!tierPickerOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (tierPickerRef.current && !tierPickerRef.current.contains(e.target as Node)) {
+        setTierPickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [tierPickerOpen]);
 
   async function handleGenerateEmail() {
     setGenerating(true);
@@ -705,7 +716,10 @@ export default function ContactDetailPage() {
   }
 
   async function handleTierChange(nextImportance: string) {
-    if (!contact || nextImportance === contact.importance) return;
+    if (!contact || nextImportance === contact.importance) {
+      setTierPickerOpen(false);
+      return;
+    }
     setSavingTier(true);
     try {
       const res = await fetch(`/api/contacts/${id}`, {
@@ -716,6 +730,7 @@ export default function ContactDetailPage() {
       if (!res.ok) throw new Error("Failed to update tier");
       const updated = await res.json();
       setContact((prev) => (prev ? { ...prev, importance: updated.importance } : prev));
+      setTierPickerOpen(false);
     } catch {
       setError("Failed to update relationship tier");
     } finally {
@@ -1050,7 +1065,40 @@ export default function ContactDetailPage() {
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-2xl">{contact.name}</CardTitle>
-                  <TierBadge importance={contact.importance} />
+                  <div className="relative" ref={tierPickerRef}>
+                    <button
+                      onClick={() => setTierPickerOpen(!tierPickerOpen)}
+                      disabled={savingTier}
+                      className="cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-50"
+                      title="Change relationship tier"
+                    >
+                      <TierBadge importance={contact.importance} />
+                    </button>
+                    {tierPickerOpen && (
+                      <div className="absolute left-0 top-full mt-1 z-20 rounded-lg border border-border bg-card p-1 shadow-lg min-w-[140px]">
+                        {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map((tier) => {
+                          const colors = getTierColors(tier);
+                          const isActive = contact.importance === tier;
+                          return (
+                            <button
+                              key={tier}
+                              onClick={() => handleTierChange(tier)}
+                              disabled={savingTier}
+                              className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                isActive
+                                  ? "bg-muted text-foreground"
+                                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                              }`}
+                            >
+                              <span className={`inline-block h-2 w-2 rounded-full ${colors.dot}`} />
+                              {importanceDisplayLabel(tier)}
+                              {isActive && <Check className="ml-auto h-3 w-3" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <CardDescription>
                   {contact.title} at{" "}

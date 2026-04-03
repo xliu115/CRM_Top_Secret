@@ -346,6 +346,7 @@ export default function CompanyDetailPage() {
 
   // Company 360
   const [co360Loading, setCo360Loading] = useState(false);
+  const [co360Error, setCo360Error] = useState<string | null>(null);
   const [co360Result, setCo360Result] = useState<{
     summary: string;
     sections: { id: string; title: string; content: string }[];
@@ -390,6 +391,7 @@ export default function CompanyDetailPage() {
       return;
     }
     setCo360Loading(true);
+    setCo360Error(null);
     try {
       const res = await fetch(`/api/companies/${id}/company360`);
       if (!res.ok) throw new Error("Failed to generate Company 360");
@@ -397,7 +399,7 @@ export default function CompanyDetailPage() {
       setCo360Result(data.result);
       setCo360Expanded(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate Company 360");
+      setCo360Error(err instanceof Error ? err.message : "Failed to generate Company 360");
     } finally {
       setCo360Loading(false);
     }
@@ -618,6 +620,11 @@ export default function CompanyDetailPage() {
         </Card>
 
         {/* Company 360 Dossier */}
+        {co360Error && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {co360Error}
+          </div>
+        )}
         {co360Loading && !co360Result && (
           <Card>
             <CardContent className="p-6 space-y-4">

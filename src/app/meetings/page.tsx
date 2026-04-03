@@ -110,6 +110,7 @@ export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [nudgeContactIds, setNudgeContactIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
 
   const [smartView, setSmartView] = useState<SmartView>("all");
@@ -123,12 +124,14 @@ export default function MeetingsPage() {
   useEffect(() => {
     async function fetchMeetings() {
       try {
+        setFetchError(null);
         const res = await fetch("/api/meetings");
         if (!res.ok) throw new Error("Failed to fetch meetings");
         const data = await res.json();
         setMeetings(data.meetings);
         setNudgeContactIds(new Set(data.nudgeContactIds ?? []));
-      } catch {
+      } catch (err) {
+        setFetchError(err instanceof Error ? err.message : "Failed to load meetings");
         setMeetings([]);
       } finally {
         setLoading(false);
@@ -365,9 +368,11 @@ export default function MeetingsPage() {
         ) : filtered.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground-subtle">
-              {meetings.length === 0
-                ? "No meetings found."
-                : "No meetings match your filters. Try adjusting or clearing filters."}
+              {fetchError
+                ? fetchError
+                : meetings.length === 0
+                  ? "No meetings found."
+                  : "No meetings match your filters. Try adjusting or clearing filters."}
             </CardContent>
           </Card>
         ) : (

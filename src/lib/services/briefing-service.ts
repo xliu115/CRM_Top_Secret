@@ -49,7 +49,10 @@ export function verifyUnsubscribeToken(token: string): string | null {
   }
 }
 
-export async function sendMorningBriefing(partnerId: string): Promise<{
+export async function sendMorningBriefing(
+  partnerId: string,
+  options?: { skipRefresh?: boolean }
+): Promise<{
   sent: boolean;
   error?: string;
 }> {
@@ -75,11 +78,13 @@ export async function sendMorningBriefing(partnerId: string): Promise<{
   const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
   try {
-    const newsCount = await ingestNewsForPartner(partnerId);
-    console.log(`[briefing-service] Ingested ${newsCount} news signals for ${partner.name}`);
+    if (!options?.skipRefresh) {
+      const newsCount = await ingestNewsForPartner(partnerId);
+      console.log(`[briefing-service] Ingested ${newsCount} news signals for ${partner.name}`);
 
-    const nudgeCount = await refreshNudgesForPartner(partnerId);
-    console.log(`[briefing-service] Refreshed ${nudgeCount} nudges for ${partner.name}`);
+      const nudgeCount = await refreshNudgesForPartner(partnerId);
+      console.log(`[briefing-service] Refreshed ${nudgeCount} nudges for ${partner.name}`);
+    }
 
     const now = new Date();
     const twoDaysFromNow = addDays(now, 2);
@@ -91,7 +96,12 @@ export async function sendMorningBriefing(partnerId: string): Promise<{
       sequenceRepo.findByPartnerId(partnerId, { status: "ACTIVE" }),
     ]);
 
-    const topNudges = openNudges.slice(0, 5).map((n) => {
+    const priorityOrder: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    const sortedNudges = [...openNudges].sort(
+      (a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4)
+    );
+
+    const topNudges = sortedNudges.slice(0, 5).map((n) => {
       const daysSince = n.contact.lastContacted
         ? differenceInDays(now, new Date(n.contact.lastContacted))
         : undefined;

@@ -427,7 +427,7 @@ function NudgeCard({
   onUpdateStatus: (id: string, status: string) => void;
   onRefresh?: () => void;
 }) {
-  const [showDraft, setShowDraft] = useState(false);
+  const [openPanel, setOpenPanel] = useState<"brief" | "email" | null>(null);
   const meta = parseMetadata(nudge.metadata);
   const insights = meta?.insights ?? [];
   const cfg = getTypeConfig(nudge.ruleType);
@@ -617,12 +617,12 @@ function NudgeCard({
 
         <div className="flex flex-wrap items-center gap-2 pt-1">
           {hasMeetingPrep && (
-            <Button size="sm" onClick={() => setShowDraft(!showDraft)}>
+            <Button size="sm" onClick={() => setOpenPanel(openPanel === "brief" ? null : "brief")}>
               <FileText className="h-4 w-4" />
               Generate Brief
             </Button>
           )}
-          <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} onClick={() => setShowDraft(!showDraft)}>
+          <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} onClick={() => setOpenPanel(openPanel === "email" ? null : "email")}>
             <CtaIcon className="h-4 w-4" />
             {hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
           </Button>
@@ -647,11 +647,11 @@ function NudgeCard({
           )}
         </div>
 
-        {showDraft && hasMeetingPrep && (
-          <MeetingBriefPanel nudge={nudge} onClose={() => setShowDraft(false)} />
+        {openPanel === "brief" && (
+          <MeetingBriefPanel nudge={nudge} onClose={() => setOpenPanel(null)} />
         )}
-        {showDraft && !hasMeetingPrep && (
-          <DraftEmailPanel nudge={nudge} onClose={() => setShowDraft(false)} onNudgeSent={onRefresh} />
+        {openPanel === "email" && (
+          <DraftEmailPanel nudge={nudge} onClose={() => setOpenPanel(null)} onNudgeSent={onRefresh} />
         )}
       </CardContent>
     </Card>

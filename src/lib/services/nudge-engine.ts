@@ -501,11 +501,11 @@ export async function refreshNudgesForPartner(partnerId: string) {
       : null;
 
     let priority: string;
-    if (daysUntilDeadline !== null && daysUntilDeadline < 2) {
+    if (daysUntilDeadline !== null && daysUntilDeadline <= 0) {
       priority = "URGENT";
-    } else if (daysUntilDeadline !== null && daysUntilDeadline < 7) {
+    } else if (daysUntilDeadline !== null && daysUntilDeadline <= 2) {
       priority = "HIGH";
-    } else if (daysUntilDeadline !== null) {
+    } else if (daysUntilDeadline !== null && daysUntilDeadline < 7) {
       priority = "MEDIUM";
     } else {
       priority = "LOW";

@@ -210,15 +210,19 @@ function buildFallbackActions(ctx: NarrativeBriefingContext): NarrativeBriefingA
       COMPANY_NEWS: "Draft news email",
       UPCOMING_EVENT: "Draft pre-event email",
       MEETING_PREP: "Review meeting brief",
+      CAMPAIGN_APPROVAL: "Review campaign",
     };
+    const deeplink = n.ruleType === "CAMPAIGN_APPROVAL"
+      ? "/campaigns"
+      : n.contactId
+        ? `/contacts/${n.contactId}${n.nudgeId ? `?nudge=${n.nudgeId}` : ""}`
+        : "/nudges";
     actions.push({
       contactName: n.contactName,
       company: n.company,
       actionLabel: ruleLabels[n.ruleType ?? ""] ?? "Take action",
       detail: n.daysSince ? `${n.daysSince} days since last contact` : n.reason.slice(0, 60),
-      deeplink: n.contactId
-        ? `/contacts/${n.contactId}${n.nudgeId ? `?nudge=${n.nudgeId}` : ""}`
-        : "/nudges",
+      deeplink,
     });
   }
 

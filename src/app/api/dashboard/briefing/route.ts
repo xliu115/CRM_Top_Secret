@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { nudgeRepo, meetingRepo, signalRepo, partnerRepo } from "@/lib/repositories";
 import { generateNarrativeBriefing, type NarrativeBriefingContext } from "@/lib/services/llm-service";
+import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
 import { addDays, isBefore, format, differenceInDays } from "date-fns";
 
 export async function GET(_request: NextRequest) {
   try {
     const partnerId = await requirePartnerId();
+
+    await refreshNudgesForPartner(partnerId);
 
     const [partner, openNudges, allUpcomingMeetings, clientNews] =
       await Promise.all([
@@ -19,7 +22,12 @@ export async function GET(_request: NextRequest) {
     const partnerName = partner?.name ?? "there";
     const now = new Date();
 
-    const topNudges = openNudges.slice(0, 5).map((n) => {
+    const priorityOrder: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    const sortedNudges = [...openNudges].sort(
+      (a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4)
+    );
+
+    const topNudges = sortedNudges.slice(0, 5).map((n) => {
       const daysSince = n.contact.lastContacted
         ? differenceInDays(now, new Date(n.contact.lastContacted))
         : undefined;

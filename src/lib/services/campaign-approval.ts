@@ -19,10 +19,24 @@ export async function checkCampaignApprovalComplete(campaignId: string) {
     },
   });
 
-  if (pendingCount === 0) {
+  if (pendingCount > 0) return;
+
+  const approvedCount = await prisma.campaignRecipient.count({
+    where: {
+      campaignId,
+      approvalStatus: "APPROVED",
+    },
+  });
+
+  if (approvedCount > 0) {
     await prisma.campaign.update({
       where: { id: campaignId },
       data: { status: "IN_PROGRESS", sendStartedAt: new Date() },
+    });
+  } else {
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: "CANCELLED" },
     });
   }
 }

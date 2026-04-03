@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const settled = await Promise.allSettled(
       partners.map(async (partner) => {
-        const result = await sendMorningBriefing(partner.id);
+        const result = await sendMorningBriefing(partner.id, { skipRefresh: true });
         return { name: partner.name, ...result };
       })
     );

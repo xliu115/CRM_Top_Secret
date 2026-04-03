@@ -186,6 +186,7 @@ function CompanyRow({ company }: { company: Company }) {
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
@@ -197,11 +198,13 @@ export default function CompaniesPage() {
   useEffect(() => {
     async function fetchCompanies() {
       setLoading(true);
+      setFetchError(null);
       try {
         const res = await fetch("/api/companies");
         if (!res.ok) throw new Error("Failed to fetch companies");
         setCompanies(await res.json());
-      } catch {
+      } catch (err) {
+        setFetchError(err instanceof Error ? err.message : "Failed to load companies");
         setCompanies([]);
       } finally {
         setLoading(false);
@@ -314,12 +317,16 @@ export default function CompaniesPage() {
                 aria-hidden="true"
               />
               <h3 className="text-lg font-semibold text-foreground mb-1">
-                {search ? "No institutions match your search" : "No institutions yet"}
+                {fetchError
+                  ? "Failed to load institutions"
+                  : search ? "No institutions match your search" : "No institutions yet"}
               </h3>
               <p className="text-sm text-muted-foreground-subtle max-w-sm text-center">
-                {search
-                  ? "Try a different search term."
-                  : "Institutions will appear here once you have contacts associated with them."}
+                {fetchError
+                  ? fetchError
+                  : search
+                    ? "Try a different search term."
+                    : "Institutions will appear here once you have contacts associated with them."}
               </p>
             </div>
           </div>

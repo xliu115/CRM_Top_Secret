@@ -78,6 +78,10 @@ src/app/
 
 **Status flow for central campaigns:** `PENDING_APPROVAL` → (all recipients resolved) → `IN_PROGRESS` → `SENT`
 
+If all recipients are rejected (zero approved), the campaign transitions to `CANCELLED` instead of `IN_PROGRESS`.
+
+**Send ownership:** Central campaigns are managed and sent by the central team — partners only review/approve recipients. The partner-facing detail page intentionally does not expose a "Send" button for central campaigns. Send is triggered server-side when approval completes with at least one approved recipient (`checkCampaignApprovalComplete`). This differs from partner-created (`DRAFT`) campaigns where the partner manually clicks Send.
+
 ---
 
 ## 2. Campaign List API — Partner-Scoped Counts
