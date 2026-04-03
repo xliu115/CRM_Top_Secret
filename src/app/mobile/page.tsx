@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Send, Loader2, Sparkles, Mic, MicOff, Trash2, ChevronRight } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { MobileShell } from "@/components/layout/mobile-shell";
@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { AssistantReply } from "@/components/chat/assistant-reply";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useChatSession, type ChatMessage } from "@/hooks/use-chat-session";
+import { useBriefingAudio } from "@/hooks/use-briefing-audio";
+import { BriefingAudioControls } from "@/components/voice/briefing-audio-controls";
+import { prepareBriefingForTTS } from "@/lib/utils/tts-prepare";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 
 type BriefingData = {
@@ -113,6 +116,17 @@ export default function MobilePage() {
     startListening,
     stopListening,
   } = useChatSession();
+
+  const briefingAudio = useBriefingAudio();
+
+  const handlePlayBriefing = useCallback(() => {
+    if (!briefingData) return;
+    const ttsText = prepareBriefingForTTS(
+      briefingData.briefing,
+      briefingData.topActions,
+    );
+    briefingAudio.play(ttsText);
+  }, [briefingData, briefingAudio]);
 
   useEffect(() => {
     if (briefingLoadedRef.current) return;
@@ -229,10 +243,22 @@ export default function MobilePage() {
                   >
                     {msg.role === "assistant" ? (
                       msg.id.startsWith("briefing-") ? (
-                        <MarkdownContent
-                          content={msg.content}
-                          className="text-[15px] leading-relaxed text-foreground"
-                        />
+                        <div>
+                          <MarkdownContent
+                            content={msg.content}
+                            className="text-[15px] leading-relaxed text-foreground"
+                          />
+                          <BriefingAudioControls
+                            isPlaying={briefingAudio.isPlaying}
+                            isPaused={briefingAudio.isPaused}
+                            isLoading={briefingAudio.isLoading}
+                            elapsed={briefingAudio.elapsed}
+                            onPlay={handlePlayBriefing}
+                            onPause={briefingAudio.pause}
+                            onResume={briefingAudio.resume}
+                            onStop={briefingAudio.stop}
+                          />
+                        </div>
                       ) : (
                         <AssistantReply
                           content={msg.content}
