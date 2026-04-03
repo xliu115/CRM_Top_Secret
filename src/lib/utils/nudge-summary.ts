@@ -108,6 +108,37 @@ function getLabel(ruleType: string): string {
   return TYPE_LABELS[ruleType] ?? "nudge";
 }
 
+const CTA_PRIORITY: Record<string, number> = {
+  MEETING_PREP: 0,
+  JOB_CHANGE: 1,
+  EVENT_ATTENDED: 2,
+  EVENT_REGISTERED: 3,
+  UPCOMING_EVENT: 4,
+  COMPANY_NEWS: 5,
+  LINKEDIN_ACTIVITY: 6,
+  ARTICLE_READ: 7,
+  STALE_CONTACT: 8,
+};
+
+function isOwnJobChange(insight: InsightData, contactName: string): boolean {
+  return insight.personName === contactName || insight.reason.startsWith(contactName);
+}
+
+/**
+ * Pick the CTA type from the insights actually rendered in the summary.
+ * Falls back to the nudge's ruleType only when it was itself rendered,
+ * otherwise picks the highest-priority rendered insight so the CTA is
+ * always grounded in what the partner can read.
+ */
+function pickCtaType(renderedTypes: string[], nudgeRuleType: string): string {
+  if (renderedTypes.length === 0) return nudgeRuleType;
+  if (renderedTypes.includes(nudgeRuleType)) return nudgeRuleType;
+  const sorted = [...renderedTypes].sort(
+    (a, b) => (CTA_PRIORITY[a] ?? 99) - (CTA_PRIORITY[b] ?? 99)
+  );
+  return sorted[0];
+}
+
 export function extractInsightSnippet(insight: InsightData): string | null {
   const r = insight.reason;
   switch (insight.type) {
@@ -218,7 +249,7 @@ export function buildSummaryFragments(
     }
 
     const signalLine: string[] = [];
-    appendSignalContext(signalLine, bolds, otherInsights, firstName, nudge.contact.company.name);
+    appendSignalContext(signalLine, bolds, otherInsights, firstName, nudge.contact.company.name, nudge.contact.name);
     signalLine.push(`A gentle follow-up could keep the conversation moving.`);
     topicLines.push(signalLine);
 
@@ -249,7 +280,7 @@ export function buildSummaryFragments(
     }
 
     const signalLine: string[] = [];
-    appendSignalContext(signalLine, bolds, otherInsights, firstName, nudge.contact.company.name);
+    appendSignalContext(signalLine, bolds, otherInsights, firstName, nudge.contact.company.name, nudge.contact.name);
     signalLine.push(`Responding promptly helps maintain the relationship momentum.`);
     topicLines.push(signalLine);
 
@@ -267,28 +298,75 @@ export function buildSummaryFragments(
 
   const topicLines: string[][] = [];
   const bolds = new Set<string>();
+  const renderedTypes: string[] = [];
+
+  type SignalInsight = { insight: InsightData; type: string; render: () => string };
+  const signalCandidates: SignalInsight[] = [];
+  if (jobChange) {
+    const isOwn = isOwnJobChange(jobChange, nudge.contact.name);
+    signalCandidates.push({
+      insight: jobChange,
+      type: "JOB_CHANGE",
+      render: () => {
+        const snippet = extractInsightSnippet(jobChange);
+        const boldText = snippet ?? "a role change";
+        bolds.add(boldText);
+        if (isOwn) {
+          return `There\u2019s been a key executive move \u2014 ${boldText}.`;
+        }
+        return `There\u2019s been an executive change at ${nudge.contact.company.name} \u2014 ${boldText}.`;
+      },
+    });
+  }
+  if (news) {
+    signalCandidates.push({
+      insight: news,
+      type: "COMPANY_NEWS",
+      render: () => {
+        const snippet = extractInsightSnippet(news);
+        const boldText = snippet ?? "recent news";
+        bolds.add(boldText);
+        return `${nudge.contact.company.name} is in the news: ${boldText}.`;
+      },
+    });
+  }
+  if (linkedin) {
+    signalCandidates.push({
+      insight: linkedin,
+      type: "LINKEDIN_ACTIVITY",
+      render: () => {
+        const snippet = extractInsightSnippet(linkedin);
+        const boldText = snippet ?? "recent topics";
+        bolds.add(boldText);
+        return `${firstName} has been active on LinkedIn discussing ${boldText}.`;
+      },
+    });
+  }
+  if (article) {
+    signalCandidates.push({
+      insight: article,
+      type: "ARTICLE_READ",
+      render: () => {
+        const snippet = extractInsightSnippet(article);
+        const boldText = snippet ?? "your content";
+        bolds.add(boldText);
+        return `${firstName} recently engaged with ${boldText}.`;
+      },
+    });
+  }
+
+  signalCandidates.sort(
+    (a, b) => (CTA_PRIORITY[a.type] ?? 99) - (CTA_PRIORITY[b.type] ?? 99)
+  );
 
   const primaryLine: string[] = [];
-  if (article) {
-    const snippet = extractInsightSnippet(article);
-    const boldText = snippet ?? "your content";
-    bolds.add(boldText);
-    primaryLine.push(`${firstName} recently engaged with ${boldText}.`);
-  } else if (linkedin) {
-    const snippet = extractInsightSnippet(linkedin);
-    const boldText = snippet ?? "recent topics";
-    bolds.add(boldText);
-    primaryLine.push(`${firstName} has been active on LinkedIn discussing ${boldText}.`);
-  } else if (jobChange) {
-    const snippet = extractInsightSnippet(jobChange);
-    const boldText = snippet ?? "a role change";
-    bolds.add(boldText);
-    primaryLine.push(`There\u2019s been a key executive move \u2014 ${boldText}.`);
-  } else if (news) {
-    const snippet = extractInsightSnippet(news);
-    const boldText = snippet ?? "recent news";
-    bolds.add(boldText);
-    primaryLine.push(`${nudge.contact.company.name} is in the news: ${boldText}.`);
+  const maxPrimarySignals = 2;
+  let signalsRendered = 0;
+  for (const sc of signalCandidates) {
+    if (signalsRendered >= maxPrimarySignals) break;
+    primaryLine.push(sc.render());
+    renderedTypes.push(sc.type);
+    signalsRendered++;
   }
 
   if (stale) {
@@ -296,6 +374,7 @@ export function buildSummaryFragments(
     if (snippet) {
       bolds.add(snippet);
       primaryLine.push(`It\u2019s been ${snippet} since your last conversation.`);
+      renderedTypes.push("STALE_CONTACT");
     }
   }
   if (primaryLine.length > 0) topicLines.push(primaryLine);
@@ -306,28 +385,40 @@ export function buildSummaryFragments(
     const boldText = snippet ?? "an upcoming event";
     bolds.add(boldText);
     topicLines.push([`There\u2019s an upcoming event \u2014 ${boldText} \u2014 that could be a natural touchpoint.`]);
+    renderedTypes.push(event.type);
   } else if (attended && totalSentences < 3) {
     const snippet = extractInsightSnippet(attended);
     const boldText = snippet ?? "a recent event";
     bolds.add(boldText);
     topicLines.push([`${firstName} recently attended ${boldText} \u2014 a great follow-up opening.`]);
+    renderedTypes.push("EVENT_ATTENDED");
   } else if (meeting && totalSentences < 3) {
     const snippet = extractInsightSnippet(meeting);
     const boldText = snippet ?? "an upcoming meeting";
     bolds.add(boldText);
     topicLines.push([`You have ${boldText} coming up soon.`]);
+    renderedTypes.push("MEETING_PREP");
   }
 
   const allSentences = topicLines.flat();
-  if (allSentences.length < 2 && jobChange && allSentences.every((s) => !s.includes("executive"))) {
+  if (allSentences.length < 2 && jobChange && !renderedTypes.includes("JOB_CHANGE")) {
     const snippet = extractInsightSnippet(jobChange);
     if (snippet) {
       bolds.add(snippet);
-      topicLines.push([`Meanwhile, there\u2019s been an executive move: ${snippet}.`]);
+      if (isOwnJobChange(jobChange, nudge.contact.name)) {
+        topicLines.push([`Meanwhile, there\u2019s been an executive move: ${snippet}.`]);
+      } else {
+        topicLines.push([`Meanwhile, there\u2019s been an executive change at ${nudge.contact.company.name}: ${snippet}.`]);
+      }
+      renderedTypes.push("JOB_CHANGE");
     }
   }
 
-  const label = getLabel(nudge.ruleType);
+  const ctaType = pickCtaType(renderedTypes, nudge.ruleType);
+  let label = getLabel(ctaType);
+  if (ctaType === "JOB_CHANGE" && jobChange && !isOwnJobChange(jobChange, nudge.contact.name)) {
+    label = "company update";
+  }
   topicLines.push([`This is a good moment to reach out with a ${label} note.`]);
 
   return buildFragmentsFromTopicLines(topicLines, bolds);
@@ -338,7 +429,8 @@ function appendSignalContext(
   bolds: Set<string>,
   signals: InsightData[],
   firstName: string,
-  companyName: string
+  companyName: string,
+  contactFullName?: string
 ): void {
   if (signals.length === 0) return;
 
@@ -354,7 +446,12 @@ function appendSignalContext(
     const snippet = extractInsightSnippet(jobChange);
     const boldText = snippet ?? "a recent role change";
     bolds.add(boldText);
-    sentences.push(`Meanwhile, there\u2019s been an executive move \u2014 ${boldText} \u2014 which could be a good conversation anchor.`);
+    const isOwn = contactFullName ? isOwnJobChange(jobChange, contactFullName) : true;
+    if (isOwn) {
+      sentences.push(`Meanwhile, there\u2019s been an executive move \u2014 ${boldText} \u2014 which could be a good conversation anchor.`);
+    } else {
+      sentences.push(`Meanwhile, there\u2019s been an executive change at ${companyName} \u2014 ${boldText} \u2014 which could be a conversation opener.`);
+    }
   } else if (news) {
     const snippet = extractInsightSnippet(news);
     const boldText = snippet ?? "recent company news";
