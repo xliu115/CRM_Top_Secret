@@ -37,6 +37,7 @@ export function useChatSession() {
     transcript: liveTranscript,
     isSupported: voiceSupported,
     duration: voiceDuration,
+    audioLevel: voiceAudioLevel,
     startListening,
     stopListening,
   } = useStreamingTranscription({ onResult: handleVoiceResult });
@@ -144,6 +145,7 @@ export function useChatSession() {
     liveTranscript,
     voiceSupported,
     voiceDuration,
+    voiceAudioLevel,
     startListening,
     stopListening,
   };

@@ -32,10 +32,14 @@ export async function POST(request: NextRequest) {
       response_format: "mp3",
     });
 
-    return new Response(response.body as ReadableStream, {
+    const stream = response.body as ReadableStream;
+
+    return new Response(stream, {
       headers: {
         "Content-Type": "audio/mpeg",
+        "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (err) {

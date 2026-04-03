@@ -41,6 +41,7 @@ function ChatPageContent() {
     liveTranscript,
     voiceSupported,
     voiceDuration,
+    voiceAudioLevel,
     startListening,
     stopListening,
   } = useChatSession();
@@ -177,6 +178,7 @@ function ChatPageContent() {
             transcript={liveTranscript}
             isListening={isListening}
             duration={voiceDuration}
+            audioLevel={voiceAudioLevel}
           />
 
           <div className="border-t border-border p-4">

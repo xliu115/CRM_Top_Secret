@@ -746,6 +746,7 @@ export default function DashboardPage() {
     liveTranscript,
     isSupported,
     duration: voiceDuration,
+    audioLevel: voiceAudioLevel,
     startListening,
     stopListening,
   } = useStreamingTranscription({ onResult: handleVoiceResult });
@@ -973,6 +974,7 @@ export default function DashboardPage() {
               transcript={liveTranscript}
               isListening={isListening}
               duration={voiceDuration}
+              audioLevel={voiceAudioLevel}
             />
 
             {/* Input bar */}

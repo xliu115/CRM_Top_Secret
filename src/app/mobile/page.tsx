@@ -113,6 +113,7 @@ export default function MobilePage() {
     liveTranscript,
     voiceSupported,
     voiceDuration,
+    voiceAudioLevel,
     startListening,
     stopListening,
   } = useChatSession();
@@ -297,6 +298,7 @@ export default function MobilePage() {
           transcript={liveTranscript}
           isListening={isListening}
           duration={voiceDuration}
+          audioLevel={voiceAudioLevel}
         />
 
         {/* Bottom area: quick actions + input */}
