@@ -28,6 +28,9 @@ const RULE_TYPE_LABEL: Record<string, string> = {
   EVENT_REGISTERED: "Event Outreach",
   ARTICLE_READ: "Content",
   LINKEDIN_ACTIVITY: "LinkedIn",
+  FOLLOW_UP: "Follow-up",
+  REPLY_NEEDED: "Reply Needed",
+  CAMPAIGN_APPROVAL: "Campaign Approval",
 };
 
 function buildDigestSms(

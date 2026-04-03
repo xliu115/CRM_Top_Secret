@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { campaignRepo } from "@/lib/repositories";
+import { prisma } from "@/lib/db/prisma";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +17,66 @@ export async function GET(request: NextRequest) {
       search,
     });
 
-    return NextResponse.json(campaigns);
+    const centralCampaignIds = campaigns
+      .filter((c) => c.source === "CENTRAL")
+      .map((c) => c.id);
+
+    let pendingCounts = new Map<string, number>();
+    let deadlines = new Map<string, string | null>();
+    let myRecipientCounts = new Map<string, number>();
+    if (centralCampaignIds.length > 0) {
+      const pendingGroups = await prisma.campaignRecipient.groupBy({
+        by: ["campaignId"],
+        where: {
+          campaignId: { in: centralCampaignIds },
+          assignedPartnerId: partnerId,
+          approvalStatus: "PENDING",
+        },
+        _count: { _all: true },
+      });
+      pendingCounts = new Map(pendingGroups.map((g) => [g.campaignId, g._count._all]));
+
+      const myGroups = await prisma.campaignRecipient.groupBy({
+        by: ["campaignId"],
+        where: {
+          campaignId: { in: centralCampaignIds },
+          assignedPartnerId: partnerId,
+        },
+        _count: { _all: true },
+      });
+      myRecipientCounts = new Map(myGroups.map((g) => [g.campaignId, g._count._all]));
+
+      const deadlineRows = await prisma.campaignRecipient.findMany({
+        where: {
+          campaignId: { in: centralCampaignIds },
+          assignedPartnerId: partnerId,
+          approvalDeadline: { not: null },
+        },
+        select: { campaignId: true, approvalDeadline: true },
+        orderBy: { approvalDeadline: "asc" },
+        distinct: ["campaignId"],
+      });
+      deadlines = new Map(
+        deadlineRows.map((r) => [r.campaignId, r.approvalDeadline?.toISOString() ?? null])
+      );
+    }
+
+    const enriched = campaigns.map((c) => {
+      const isCentral = c.source === "CENTRAL";
+      return {
+        ...c,
+        _count: {
+          ...c._count,
+          recipients: isCentral
+            ? (myRecipientCounts.get(c.id) ?? 0)
+            : c._count.recipients,
+        },
+        pendingApprovalCount: pendingCounts.get(c.id) ?? 0,
+        approvalDeadline: deadlines.get(c.id) ?? null,
+      };
+    });
+
+    return NextResponse.json(enriched);
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

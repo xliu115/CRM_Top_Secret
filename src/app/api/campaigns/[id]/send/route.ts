@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { campaignRepo, partnerRepo } from "@/lib/repositories";
 import { buildCampaignEmailHtml, sendCampaignEmail } from "@/lib/services/email-service";
+import { prisma } from "@/lib/db/prisma";
 
 export async function POST(
   _request: Request,
@@ -24,6 +25,8 @@ export async function POST(
       });
     }
 
+    const isCentral = campaign.source === "CENTRAL";
+
     const partner = await partnerRepo.findById(partnerId);
     if (!partner) {
       return NextResponse.json({ error: "Partner not found" }, { status: 404 });
@@ -43,14 +46,18 @@ export async function POST(
       eventLocation: cc.contentItem.eventLocation ?? undefined,
     }));
 
-    const toSend = campaign.recipients.filter(
+    let toSend = campaign.recipients.filter(
       (r) => r.status === "PENDING" || r.status === "FAILED"
     );
+
+    if (isCentral) {
+      toSend = toSend.filter((r) => r.approvalStatus === "APPROVED");
+    }
 
     if (toSend.length === 0) {
       const allRecipientsSent =
         campaign.recipients.length > 0 &&
-        campaign.recipients.every((r) => r.status === "SENT");
+        campaign.recipients.every((r) => r.status === "SENT" || (isCentral && r.approvalStatus === "REJECTED"));
       await campaignRepo.update(id, partnerId, {
         sendStartedAt: new Date(),
         status: allRecipientsSent ? "SENT" : "FAILED",
@@ -72,8 +79,27 @@ export async function POST(
     const now = new Date();
     await campaignRepo.update(id, partnerId, {
       sendStartedAt: now,
-      status: "SENDING",
+      status: "IN_PROGRESS",
     });
+
+    const senderDefault = { name: partner.name, email: partner.email };
+    const partnerCache = new Map<string, { name: string; email: string }>();
+    partnerCache.set(partnerId, senderDefault);
+
+    async function getSenderForRecipient(r: typeof toSend[0]) {
+      if (!isCentral || !r.assignedPartnerId) {
+        return senderDefault;
+      }
+      const cached = partnerCache.get(r.assignedPartnerId);
+      if (cached) return cached;
+      const assigned = await prisma.partner.findUnique({
+        where: { id: r.assignedPartnerId },
+        select: { name: true, email: true },
+      });
+      const sender = assigned ?? senderDefault;
+      partnerCache.set(r.assignedPartnerId, sender);
+      return sender;
+    }
 
     const results = await Promise.allSettled(
       toSend.map(async (r) => {
@@ -86,6 +112,8 @@ export async function POST(
           });
           return { recipientId: r.id, sent: false };
         }
+
+        const sender = await getSenderForRecipient(r);
 
         const opening = r.personalizedBody ?? "";
         const html = buildCampaignEmailHtml({
@@ -100,8 +128,8 @@ export async function POST(
 
         const toName = contact?.name ?? email;
         const sendResult = await sendCampaignEmail({
-          fromName: partner.name,
-          fromEmail: partner.email,
+          fromName: sender.name,
+          fromEmail: sender.email,
           toEmail: email,
           toName,
           subject,

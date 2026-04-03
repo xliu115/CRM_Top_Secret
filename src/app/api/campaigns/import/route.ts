@@ -3,20 +3,28 @@ import { prisma } from "@/lib/db/prisma";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { campaignRepo } from "@/lib/repositories";
 
+type ImportBody = {
+  name?: string;
+  source?: string;
+  subject?: string;
+  bodyTemplate?: string;
+  importedFrom?: string;
+  approvalDeadline?: string;
+  recipients?: {
+    email: string;
+    partnerId?: string;
+    personalizedBody?: string;
+    status?: string;
+    engagements?: { type: string; timestamp?: string }[];
+  }[];
+  contentItemIds?: string[];
+};
+
 export async function POST(request: NextRequest) {
   try {
     const partnerId = await requirePartnerId();
 
-    let body: {
-      name?: string;
-      importedFrom?: string;
-      recipients?: {
-        email: string;
-        status?: string;
-        engagements?: { type: string; timestamp?: string }[];
-      }[];
-      contentItemIds?: string[];
-    } = {};
+    let body: ImportBody = {};
 
     try {
       body = await request.json();
@@ -37,65 +45,95 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const campaign = await campaignRepo.create({
-      partnerId,
-      name,
-      source: "IMPORTED",
-    });
+    const isCentral = body.source === "CENTRAL";
 
-    if (body.importedFrom) {
-      await prisma.campaign.update({
-        where: { id: campaign.id },
-        data: { importedFrom: body.importedFrom },
-      });
-    }
+    const campaign = await prisma.campaign.create({
+      data: {
+        partnerId,
+        name,
+        source: isCentral ? "CENTRAL" : "IMPORTED",
+        status: isCentral ? "PENDING_APPROVAL" : "DRAFT",
+        subject: body.subject ?? null,
+        bodyTemplate: body.bodyTemplate ?? null,
+        importedFrom: body.importedFrom ?? null,
+      },
+    });
 
     if (Array.isArray(body.contentItemIds) && body.contentItemIds.length > 0) {
       await campaignRepo.addContent(campaign.id, body.contentItemIds);
     }
 
-    const uniqueEmails = [...new Set(rows.map((r) => r.email.trim()))];
+    const approvalDeadline = body.approvalDeadline
+      ? new Date(body.approvalDeadline)
+      : null;
 
-    const contacts = await prisma.contact.findMany({
-      where: {
-        partnerId,
-        email: { in: uniqueEmails },
-      },
-    });
+    if (isCentral) {
+      for (const row of rows) {
+        const emailKey = row.email.trim().toLowerCase();
+        const assignedPartnerId = row.partnerId ?? partnerId;
 
-    const byEmail = new Map(
-      contacts.map((c) => [c.email.toLowerCase(), c] as const)
-    );
-
-    for (const row of rows) {
-      const emailKey = row.email.trim().toLowerCase();
-      const contact = byEmail.get(emailKey);
-
-      const recipient = await prisma.campaignRecipient.create({
-        data: {
-          campaignId: campaign.id,
-          contactId: contact?.id ?? null,
-          unmatchedEmail: contact ? null : row.email.trim(),
-          status: row.status ?? "PENDING",
-        },
-      });
-
-      const engagements = Array.isArray(row.engagements)
-        ? row.engagements
-        : [];
-      for (const eng of engagements) {
-        const ts = eng.timestamp
-          ? new Date(eng.timestamp)
-          : new Date();
-        if (Number.isNaN(ts.getTime())) continue;
-
-        await prisma.campaignEngagement.create({
-          data: {
-            recipientId: recipient.id,
-            type: eng.type,
-            timestamp: ts,
+        const contact = await prisma.contact.findFirst({
+          where: {
+            partnerId: assignedPartnerId,
+            email: { equals: emailKey },
           },
         });
+
+        await prisma.campaignRecipient.create({
+          data: {
+            campaignId: campaign.id,
+            contactId: contact?.id ?? null,
+            unmatchedEmail: contact ? null : row.email.trim(),
+            personalizedBody: row.personalizedBody ?? null,
+            status: "PENDING",
+            assignedPartnerId,
+            approvalStatus: "PENDING",
+            approvalDeadline: approvalDeadline,
+          },
+        });
+      }
+    } else {
+      const uniqueEmails = [...new Set(rows.map((r) => r.email.trim()))];
+      const contacts = await prisma.contact.findMany({
+        where: {
+          partnerId,
+          email: { in: uniqueEmails },
+        },
+      });
+      const byEmail = new Map(
+        contacts.map((c) => [c.email.toLowerCase(), c] as const)
+      );
+
+      for (const row of rows) {
+        const emailKey = row.email.trim().toLowerCase();
+        const contact = byEmail.get(emailKey);
+
+        const recipient = await prisma.campaignRecipient.create({
+          data: {
+            campaignId: campaign.id,
+            contactId: contact?.id ?? null,
+            unmatchedEmail: contact ? null : row.email.trim(),
+            status: row.status ?? "PENDING",
+          },
+        });
+
+        const engagements = Array.isArray(row.engagements)
+          ? row.engagements
+          : [];
+        for (const eng of engagements) {
+          const ts = eng.timestamp
+            ? new Date(eng.timestamp)
+            : new Date();
+          if (Number.isNaN(ts.getTime())) continue;
+
+          await prisma.campaignEngagement.create({
+            data: {
+              recipientId: recipient.id,
+              type: eng.type,
+              timestamp: ts,
+            },
+          });
+        }
       }
     }
 

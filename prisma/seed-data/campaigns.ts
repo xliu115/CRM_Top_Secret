@@ -1014,5 +1014,307 @@ export function generateMockCampaigns(contacts: ContactRef[]): {
     });
   }
 
+  // ===================================================================
+  // CENTRAL CAMPAIGNS — 1-2 per partner, cross-partner assignment
+  // ===================================================================
+
+  const approvalDeadline7 = new Date("2026-04-09T23:59:59Z");
+  const approvalDeadline14 = new Date("2026-04-16T23:59:59Z");
+  const approvalDeadline3 = new Date("2026-04-05T23:59:59Z");
+
+  // --- Central Campaign 1: Global Energy Forum (PENDING_APPROVAL) ---
+  // Assigned to Ava, Jordan, Morgan — mix of PENDING/APPROVED
+  const cc1 = "camp-central-001";
+  campaigns.push({
+    id: cc1,
+    partnerId: "p-ava-patel",
+    name: "McKinsey Global Energy Forum — Invite",
+    subject: "You're invited: McKinsey Global Energy Forum (Jun 12, London)",
+    bodyTemplate:
+      "Hi {{name}},\n\nOn behalf of McKinsey's Energy & Materials Practice, I'd like to personally invite you to our Global Energy Forum in London this June.\n\nGiven {{company}}'s strategic priorities, I think you'd find the sessions on energy transition especially valuable.\n\nPlease RSVP below.",
+    source: "CENTRAL",
+    status: "PENDING_APPROVAL",
+    pointOfContact: "Sarah Mitchell, Global Events Lead",
+    createdAt: new Date("2026-03-30T10:00:00Z"),
+    updatedAt: new Date("2026-03-30T10:00:00Z"),
+  });
+  campaignContents.push({
+    id: nextCc(),
+    campaignId: cc1,
+    contentItemId: "ci-evt-001",
+    position: 0,
+  });
+  const cc1Contacts = [
+    ...ava.slice(0, 5),
+    ...jordan.slice(0, 4),
+    ...morgan.slice(0, 3),
+  ];
+  const cc1Partners = [
+    "p-ava-patel", "p-ava-patel", "p-ava-patel", "p-ava-patel", "p-ava-patel",
+    "p-jordan-kim", "p-jordan-kim", "p-jordan-kim", "p-jordan-kim",
+    "p-morgan-chen", "p-morgan-chen", "p-morgan-chen",
+  ];
+  const cc1Approvals: (string | null)[] = [
+    "APPROVED", "PENDING", "PENDING", "PENDING", "APPROVED",
+    "APPROVED", "APPROVED", "PENDING", "PENDING",
+    "PENDING", "PENDING", "APPROVED",
+  ];
+  for (let i = 0; i < cc1Contacts.length; i++) {
+    const c = cc1Contacts[i];
+    recipients.push({
+      id: `cr-central-001-${i}`,
+      campaignId: cc1,
+      contactId: c.id,
+      status: "PENDING",
+      assignedPartnerId: cc1Partners[i],
+      approvalStatus: cc1Approvals[i],
+      approvalDeadline: approvalDeadline7,
+      personalizedBody: `Hi ${c.name.split(" ")[0]},\n\nOn behalf of McKinsey's Energy & Materials Practice, I'd like to personally invite you to our Global Energy Forum in London this June.\n\nGiven your role as ${c.title}, I think you'd find the sessions on energy transition especially valuable.\n\nPlease RSVP below.`,
+    });
+  }
+
+  // --- Central Campaign 2: Q2 Thought Leadership (PENDING_APPROVAL) ---
+  // Assigned to Sam, Taylor — all still PENDING
+  const cc2 = "camp-central-002";
+  campaigns.push({
+    id: cc2,
+    partnerId: "p-ava-patel",
+    name: "Q2 Thought Leadership: Digital Transformation",
+    subject: "Sharing McKinsey's latest on digital transformation",
+    bodyTemplate:
+      "Hi {{name}},\n\nI wanted to share our latest thinking on digital transformation — particularly relevant given {{company}}'s strategic agenda.\n\nHappy to discuss further.",
+    source: "CENTRAL",
+    status: "PENDING_APPROVAL",
+    pointOfContact: "David Park, Content Marketing",
+    createdAt: new Date("2026-03-31T09:00:00Z"),
+    updatedAt: new Date("2026-03-31T09:00:00Z"),
+  });
+  campaignContents.push({
+    id: nextCc(),
+    campaignId: cc2,
+    contentItemId: "ci-art-008",
+    position: 0,
+  });
+  const cc2Contacts = [
+    ...sam.slice(0, 5),
+    ...taylor.slice(0, 4),
+  ];
+  const cc2Partners = [
+    "p-sam-rivera", "p-sam-rivera", "p-sam-rivera", "p-sam-rivera", "p-sam-rivera",
+    "p-taylor-brooks", "p-taylor-brooks", "p-taylor-brooks", "p-taylor-brooks",
+  ];
+  const cc2Approvals: (string | null)[] = [
+    "PENDING", "PENDING", "APPROVED", "PENDING", "PENDING",
+    "PENDING", "PENDING", "APPROVED", "PENDING",
+  ];
+  for (let i = 0; i < cc2Contacts.length; i++) {
+    const c = cc2Contacts[i];
+    recipients.push({
+      id: `cr-central-002-${i}`,
+      campaignId: cc2,
+      contactId: c.id,
+      status: "PENDING",
+      assignedPartnerId: cc2Partners[i],
+      approvalStatus: cc2Approvals[i],
+      approvalDeadline: approvalDeadline14,
+      personalizedBody: `Hi ${c.name.split(" ")[0]},\n\nI wanted to share our latest thinking on digital transformation — particularly relevant given your strategic agenda as ${c.title}.\n\nHappy to discuss further.`,
+    });
+  }
+
+  // --- Central Campaign 3: AI Leaders Summit (PENDING_APPROVAL, near deadline) ---
+  // Assigned to Ava, Sam — mostly APPROVED, one PENDING
+  const cc3 = "camp-central-003";
+  campaigns.push({
+    id: cc3,
+    partnerId: "p-ava-patel",
+    name: "AI Leaders Summit — Exclusive Invite",
+    subject: "Exclusive invitation: McKinsey AI Leaders Summit (May 8, NYC)",
+    bodyTemplate:
+      "Hi {{name}},\n\nYou're among a select group of leaders invited to our AI Leaders Summit in New York this May.\n\nThe agenda covers practical AI scaling strategies that align with {{company}}'s goals.\n\nWe'd love to see you there.",
+    source: "CENTRAL",
+    status: "PENDING_APPROVAL",
+    pointOfContact: "Sarah Mitchell, Global Events Lead",
+    createdAt: new Date("2026-03-28T14:00:00Z"),
+    updatedAt: new Date("2026-03-28T14:00:00Z"),
+  });
+  campaignContents.push({
+    id: nextCc(),
+    campaignId: cc3,
+    contentItemId: "ci-evt-004",
+    position: 0,
+  });
+  const cc3Contacts = [
+    ...ava.slice(3, 7),
+    ...sam.slice(3, 6),
+    ...jordan.slice(0, 2),
+  ];
+  const cc3Partners = [
+    "p-ava-patel", "p-ava-patel", "p-ava-patel", "p-ava-patel",
+    "p-sam-rivera", "p-sam-rivera", "p-sam-rivera",
+    "p-jordan-kim", "p-jordan-kim",
+  ];
+  const cc3Approvals: (string | null)[] = [
+    "APPROVED", "APPROVED", "PENDING", "PENDING",
+    "APPROVED", "PENDING", "APPROVED",
+    "APPROVED", "PENDING",
+  ];
+  for (let i = 0; i < cc3Contacts.length; i++) {
+    if (!cc3Contacts[i]) continue;
+    const c = cc3Contacts[i];
+    recipients.push({
+      id: `cr-central-003-${i}`,
+      campaignId: cc3,
+      contactId: c.id,
+      status: "PENDING",
+      assignedPartnerId: cc3Partners[i],
+      approvalStatus: cc3Approvals[i],
+      approvalDeadline: approvalDeadline3,
+      personalizedBody: `Hi ${c.name.split(" ")[0]},\n\nYou're among a select group of leaders invited to our AI Leaders Summit in New York this May.\n\nThe agenda covers practical AI scaling strategies that align with your work as ${c.title}.\n\nWe'd love to see you there.`,
+    });
+  }
+
+  // --- Central Campaign 4: CFO Outlook (PENDING_APPROVAL) ---
+  // Assigned to Morgan, Taylor
+  const cc4 = "camp-central-004";
+  campaigns.push({
+    id: cc4,
+    partnerId: "p-ava-patel",
+    name: "CFO Outlook Series — Personalized Invite",
+    subject: "McKinsey CFO Outlook: Capital allocation in an uncertain world",
+    bodyTemplate:
+      "Hi {{name}},\n\nOur CFO Outlook Series is exploring capital allocation strategies under uncertainty — a topic I know is top of mind for {{company}}.\n\nI'd love for you to join us.",
+    source: "CENTRAL",
+    status: "PENDING_APPROVAL",
+    pointOfContact: "Rachel Foster, CFO Practice Marketing",
+    createdAt: new Date("2026-04-01T08:00:00Z"),
+    updatedAt: new Date("2026-04-01T08:00:00Z"),
+  });
+  campaignContents.push({
+    id: nextCc(),
+    campaignId: cc4,
+    contentItemId: "ci-evt-006",
+    position: 0,
+  });
+  const cc4Contacts = [
+    ...morgan.slice(2, 6),
+    ...taylor.slice(2, 6),
+  ];
+  const cc4Partners = [
+    "p-morgan-chen", "p-morgan-chen", "p-morgan-chen", "p-morgan-chen",
+    "p-taylor-brooks", "p-taylor-brooks", "p-taylor-brooks", "p-taylor-brooks",
+  ];
+  const cc4Approvals: (string | null)[] = [
+    "PENDING", "APPROVED", "PENDING", "PENDING",
+    "PENDING", "PENDING", "APPROVED", "PENDING",
+  ];
+  for (let i = 0; i < cc4Contacts.length; i++) {
+    if (!cc4Contacts[i]) continue;
+    const c = cc4Contacts[i];
+    recipients.push({
+      id: `cr-central-004-${i}`,
+      campaignId: cc4,
+      contactId: c.id,
+      status: "PENDING",
+      assignedPartnerId: cc4Partners[i],
+      approvalStatus: cc4Approvals[i],
+      approvalDeadline: approvalDeadline7,
+      personalizedBody: `Hi ${c.name.split(" ")[0]},\n\nOur CFO Outlook Series is exploring capital allocation strategies under uncertainty — a topic I know is top of mind given your role as ${c.title}.\n\nI'd love for you to join us.`,
+    });
+  }
+
+  // --- Central Campaign 5: Cybersecurity Roundtable (PENDING_APPROVAL) ---
+  // Assigned to Jordan, Taylor — mix
+  const cc5 = "camp-central-005";
+  campaigns.push({
+    id: cc5,
+    partnerId: "p-ava-patel",
+    name: "Cybersecurity Executive Roundtable — Invite",
+    subject: "Invitation: Cybersecurity Executive Roundtable (Jun 5, Virtual)",
+    bodyTemplate:
+      "Hi {{name}},\n\nCyber risk is top of mind for every board. I'd like to invite you to our upcoming Cybersecurity Roundtable — a small-group conversation with peers navigating similar challenges at {{company}}.\n\nPlease RSVP below.",
+    source: "CENTRAL",
+    status: "PENDING_APPROVAL",
+    pointOfContact: "James Wu, Cybersecurity Practice Marketing",
+    createdAt: new Date("2026-04-01T11:00:00Z"),
+    updatedAt: new Date("2026-04-01T11:00:00Z"),
+  });
+  campaignContents.push({
+    id: nextCc(),
+    campaignId: cc5,
+    contentItemId: "ci-art-010",
+    position: 0,
+  });
+  const cc5Contacts = [
+    ...jordan.slice(2, 6),
+    ...taylor.slice(0, 4),
+  ];
+  const cc5Partners = [
+    "p-jordan-kim", "p-jordan-kim", "p-jordan-kim", "p-jordan-kim",
+    "p-taylor-brooks", "p-taylor-brooks", "p-taylor-brooks", "p-taylor-brooks",
+  ];
+  const cc5Approvals: (string | null)[] = [
+    "PENDING", "APPROVED", "PENDING", "PENDING",
+    "APPROVED", "PENDING", "PENDING", "APPROVED",
+  ];
+  for (let i = 0; i < cc5Contacts.length; i++) {
+    if (!cc5Contacts[i]) continue;
+    const c = cc5Contacts[i];
+    recipients.push({
+      id: `cr-central-005-${i}`,
+      campaignId: cc5,
+      contactId: c.id,
+      status: "PENDING",
+      assignedPartnerId: cc5Partners[i],
+      approvalStatus: cc5Approvals[i],
+      approvalDeadline: approvalDeadline14,
+      personalizedBody: `Hi ${c.name.split(" ")[0]},\n\nCyber risk is top of mind for every board. I'd like to invite you to our upcoming Cybersecurity Roundtable — a small-group conversation with peers navigating similar challenges in your role as ${c.title}.\n\nPlease RSVP below.`,
+    });
+  }
+
+  // --- Central Campaign 6: Sustainability Insights (IN_PROGRESS — fully approved) ---
+  // Assigned to Morgan, Sam — all APPROVED, already moved to IN_PROGRESS
+  const cc6 = "camp-central-006";
+  campaigns.push({
+    id: cc6,
+    partnerId: "p-ava-patel",
+    name: "Sustainability & ESG Insights — Personalized Share",
+    subject: "New McKinsey research: Sustainability leadership in practice",
+    bodyTemplate:
+      "Hi {{name}},\n\nSharing our latest research on sustainability leadership — timely for {{company}}'s ESG commitments.\n\nWould love to hear your thoughts.",
+    source: "CENTRAL",
+    status: "IN_PROGRESS",
+    pointOfContact: "Lisa Novak, Sustainability Practice Marketing",
+    sendStartedAt: new Date("2026-04-01T15:00:00Z"),
+    createdAt: new Date("2026-03-27T10:00:00Z"),
+    updatedAt: new Date("2026-04-01T15:00:00Z"),
+  });
+  campaignContents.push({
+    id: nextCc(),
+    campaignId: cc6,
+    contentItemId: "ci-art-007",
+    position: 0,
+  });
+  const cc6Contacts = [
+    ...morgan.slice(0, 3),
+    ...sam.slice(1, 4),
+  ];
+  const cc6Partners = [
+    "p-morgan-chen", "p-morgan-chen", "p-morgan-chen",
+    "p-sam-rivera", "p-sam-rivera", "p-sam-rivera",
+  ];
+  for (let i = 0; i < cc6Contacts.length; i++) {
+    const c = cc6Contacts[i];
+    recipients.push({
+      id: `cr-central-006-${i}`,
+      campaignId: cc6,
+      contactId: c.id,
+      status: "PENDING",
+      assignedPartnerId: cc6Partners[i],
+      approvalStatus: "APPROVED",
+      approvalDeadline: new Date("2026-03-31T23:59:59Z"),
+      personalizedBody: `Hi ${c.name.split(" ")[0]},\n\nSharing our latest research on sustainability leadership — timely given your work as ${c.title}.\n\nWould love to hear your thoughts.`,
+    });
+  }
+
   return { campaigns, campaignContents, recipients, engagements };
 }

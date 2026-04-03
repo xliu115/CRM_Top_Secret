@@ -15,11 +15,12 @@ model Partner {
   timezone        String   @default("America/New_York") @map("timezone")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  contacts           Contact[]
-  meetings           Meeting[]
-  nudgeRuleConfig    NudgeRuleConfig?
-  outreachSequences  OutreachSequence[]
-  campaigns          Campaign[]
+  contacts              Contact[]
+  meetings              Meeting[]
+  nudgeRuleConfig       NudgeRuleConfig?
+  outreachSequences     OutreachSequence[]
+  campaigns             Campaign[]
+  assignedRecipients    CampaignRecipient[] @relation("AssignedRecipients")
 
   @@map("partners")
 }
@@ -310,6 +311,7 @@ model Campaign {
   sendStartedAt   DateTime? @map("send_started_at")
   lastError       String?   @map("last_error")
   importedFrom    String?   @map("imported_from")
+  pointOfContact  String?   @map("point_of_contact")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -339,27 +341,32 @@ model CampaignContent {
 }
 
 model CampaignRecipient {
-  id              String    @id @default(uuid())
-  campaignId      String    @map("campaign_id")
-  contactId       String?   @map("contact_id")
-  unmatchedEmail  String?   @map("unmatched_email")
-  personalizedBody String?  @map("personalized_body")
-  rsvpToken       String?   @map("rsvp_token")
-  rsvpStatus      String?   @map("rsvp_status")
-  rsvpRespondedAt DateTime? @map("rsvp_responded_at")
-  status          String    @default("PENDING")
-  failureReason   String?   @map("failure_reason")
-  sentAt          DateTime? @map("sent_at")
+  id               String    @id @default(uuid())
+  campaignId       String    @map("campaign_id")
+  contactId        String?   @map("contact_id")
+  unmatchedEmail   String?   @map("unmatched_email")
+  personalizedBody String?   @map("personalized_body")
+  rsvpToken        String?   @map("rsvp_token")
+  rsvpStatus       String?   @map("rsvp_status")
+  rsvpRespondedAt  DateTime? @map("rsvp_responded_at")
+  status           String    @default("PENDING")
+  failureReason    String?   @map("failure_reason")
+  sentAt           DateTime? @map("sent_at")
+  assignedPartnerId  String?   @map("assigned_partner_id")
+  approvalStatus     String?   @map("approval_status")
+  approvalDeadline   DateTime? @map("approval_deadline")
 
-  campaign    Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  contact     Contact?             @relation(fields: [contactId], references: [id])
-  engagements CampaignEngagement[]
+  campaign        Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact         Contact?             @relation(fields: [contactId], references: [id])
+  assignedPartner Partner?             @relation("AssignedRecipients", fields: [assignedPartnerId], references: [id])
+  engagements     CampaignEngagement[]
 
   @@unique([campaignId, contactId])
   @@index([campaignId])
   @@index([contactId])
   @@index([campaignId, status])
   @@index([rsvpToken])
+  @@index([assignedPartnerId, approvalStatus])
   @@map("campaign_recipients")
 }
 

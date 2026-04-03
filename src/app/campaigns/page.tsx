@@ -31,6 +31,8 @@ type CampaignRow = {
     contentItem: { id: string; title: string; type: string };
   }>;
   stats: { openRate: number; clickRate: number };
+  pendingApprovalCount?: number;
+  approvalDeadline?: string | null;
 };
 
 type ContentItemRow = {
@@ -54,11 +56,13 @@ function pct(n: number) {
 
 function statusBadgeClass(status: string) {
   switch (status) {
+    case "PENDING_APPROVAL":
+      return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200";
     case "DRAFT":
       return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100";
     case "SENT":
       return "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300";
-    case "SENDING":
+    case "IN_PROGRESS":
       return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300";
     default:
       return "bg-gray-100 text-gray-800";
@@ -67,11 +71,13 @@ function statusBadgeClass(status: string) {
 
 function statusLabel(status: string) {
   switch (status) {
+    case "PENDING_APPROVAL":
+      return "Pending Approval";
     case "DRAFT":
       return "Draft";
     case "SENT":
       return "Sent";
-    case "SENDING":
+    case "IN_PROGRESS":
       return "In Progress";
     default:
       return status;
@@ -196,9 +202,10 @@ function MyCampaignsTab() {
 
   const STATUS_OPTIONS: { label: string; value: string | "" }[] = [
     { label: "All", value: "" },
+    { label: "Pending Approval", value: "PENDING_APPROVAL" },
     { label: "Draft", value: "DRAFT" },
+    { label: "In Progress", value: "IN_PROGRESS" },
     { label: "Sent", value: "SENT" },
-    { label: "In Progress", value: "SENDING" },
   ];
 
   return (
@@ -264,11 +271,18 @@ function MyCampaignsTab() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {campaigns.map((c) => (
+          {campaigns.map((c) => {
+            const isPendingApproval = c.status === "PENDING_APPROVAL";
+            return (
             <Link
               key={c.id}
               href={`/campaigns/${c.id}`}
-              className="group block rounded-xl border border-border bg-white p-4 shadow-sm transition-all hover:shadow-md hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-card"
+              className={cn(
+                "group block rounded-xl border bg-white p-4 shadow-sm transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-card",
+                isPendingApproval
+                  ? "border-amber-300 hover:border-amber-400 dark:border-amber-800"
+                  : "border-border hover:border-primary/40"
+              )}
             >
               <div className="flex flex-wrap items-start gap-2 mb-2">
                 <h2 className="text-base font-semibold text-foreground group-hover:text-primary line-clamp-2 min-w-0 flex-1">
@@ -283,13 +297,18 @@ function MyCampaignsTab() {
                 {c.source === "IMPORTED" && (
                   <Badge
                     variant="outline"
-                    className="shrink-0 border-amber-200 bg-amber-50 text-amber-900 text-[10px] dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                    className="shrink-0 border-amber-200 bg-amber-50 text-amber-900 text-[11px] dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
                   >
                     Imported
                     {c.importedFrom ? ` · ${c.importedFrom}` : ""}
                   </Badge>
                 )}
               </div>
+              {isPendingApproval && c.pendingApprovalCount != null && c.pendingApprovalCount > 0 && (
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-300 mb-2">
+                  {c.pendingApprovalCount} contact{c.pendingApprovalCount !== 1 ? "s" : ""} need{c.pendingApprovalCount === 1 ? "s" : ""} your review
+                </p>
+              )}
               {c.contents.length > 0 && (
                 <ul className="text-sm text-muted-foreground space-y-0.5 mb-3">
                   {c.contents.slice(0, 3).map((row) => (
@@ -310,7 +329,11 @@ function MyCampaignsTab() {
               <p className="text-xs text-muted-foreground-subtle mb-3">
                 {c.sentAt
                   ? `Sent ${format(new Date(c.sentAt), "MMM d, yyyy")}`
-                  : "Draft"}
+                  : isPendingApproval && c.approvalDeadline
+                    ? `Due ${format(new Date(c.approvalDeadline), "MMM d, yyyy")}`
+                    : isPendingApproval
+                      ? "Pending approval"
+                      : "Draft"}
               </p>
               <div className="flex flex-wrap gap-4 text-sm border-t border-border/60 pt-3">
                 <span className="text-muted-foreground-subtle">
@@ -319,21 +342,26 @@ function MyCampaignsTab() {
                     {c._count.recipients}
                   </span>
                 </span>
-                <span className="text-muted-foreground-subtle">
-                  Open:{" "}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {pct(c.stats.openRate)}
-                  </span>
-                </span>
-                <span className="text-muted-foreground-subtle">
-                  Click:{" "}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {pct(c.stats.clickRate)}
-                  </span>
-                </span>
+                {c.status === "SENT" || c.status === "IN_PROGRESS" ? (
+                  <>
+                    <span className="text-muted-foreground-subtle">
+                      Open:{" "}
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {pct(c.stats.openRate)}
+                      </span>
+                    </span>
+                    <span className="text-muted-foreground-subtle">
+                      Click:{" "}
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {pct(c.stats.clickRate)}
+                      </span>
+                    </span>
+                  </>
+                ) : null}
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

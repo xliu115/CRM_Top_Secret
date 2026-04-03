@@ -23,6 +23,8 @@ import {
   AlignLeft,
   List,
   Forward,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -37,7 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
-import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
+import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -1120,6 +1122,70 @@ export default function DashboardPage() {
                         const nudge = item.nudge;
                         const insights = parseInsights(nudge.metadata);
                         const fragments = buildSummaryFragments(nudge, insights);
+
+                        if (nudge.ruleType === "CAMPAIGN_APPROVAL") {
+                          const camp = parseCampaignApprovalNudgeDisplay(nudge);
+                          return (
+                            <Card key={nudge.id} className="overflow-hidden border-l-4 border-l-amber-400 dark:border-l-amber-600">
+                              <CardHeader className="pb-3 pt-5">
+                                <div className="flex items-start gap-4">
+                                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-950/30 ring-2 ring-amber-200/70 dark:ring-amber-800/50">
+                                    <ShieldCheck className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <CardTitle className="text-lg font-bold">
+                                        <Link href={camp.campaignHref} className="hover:text-primary hover:underline transition-colors">
+                                          {camp.campaignName}
+                                        </Link>
+                                      </CardTitle>
+                                      <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                                        {nudge.priority}
+                                      </Badge>
+                                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400">
+                                        <ShieldCheck className="h-3 w-3 mr-1" />
+                                        Campaign Approval
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CardHeader>
+
+                              <CardContent className="space-y-3">
+                                <p className="text-sm font-medium text-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <Users className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                    {camp.pendingCount} pending
+                                  </span>
+                                  {camp.deadlineLabel && (
+                                    <span className="text-amber-800 dark:text-amber-200">{camp.deadlineLabel}</span>
+                                  )}
+                                </p>
+
+                                <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">AI Summary</span>
+                                  </div>
+                                  <div className="text-sm text-foreground/70 leading-relaxed">
+                                    <FragmentText fragments={fragments} />
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <Link
+                                    href={camp.campaignHref}
+                                    className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                  >
+                                    Review campaign
+                                    <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                                  </Link>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+
                         return (
                           <Card key={nudge.id} className="overflow-hidden">
                             <CardHeader className="pb-3 pt-5">

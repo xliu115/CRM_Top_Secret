@@ -38,15 +38,16 @@ const PRIORITY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, L
 const TYPE_RANK: Record<string, number> = {
   MEETING_PREP: 0,
   REPLY_NEEDED: 1,
-  FOLLOW_UP: 2,
-  STALE_CONTACT: 3,
-  JOB_CHANGE: 4,
-  LINKEDIN_ACTIVITY: 5,
-  EVENT_ATTENDED: 6,
-  EVENT_REGISTERED: 7,
-  ARTICLE_READ: 8,
-  UPCOMING_EVENT: 9,
-  COMPANY_NEWS: 10,
+  CAMPAIGN_APPROVAL: 2,
+  FOLLOW_UP: 3,
+  STALE_CONTACT: 4,
+  JOB_CHANGE: 5,
+  LINKEDIN_ACTIVITY: 6,
+  EVENT_ATTENDED: 7,
+  EVENT_REGISTERED: 8,
+  ARTICLE_READ: 9,
+  UPCOMING_EVENT: 10,
+  COMPANY_NEWS: 11,
 };
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
@@ -468,6 +469,73 @@ export async function refreshNudgesForPartner(partnerId: string) {
     }
 
     candidates.push(candidate);
+  }
+
+  // --- Campaign Approval nudges (one per campaign, not per contact) ---
+  const pendingApprovalRecipients = await prisma.campaignRecipient.findMany({
+    where: {
+      assignedPartnerId: partnerId,
+      approvalStatus: "PENDING",
+    },
+    include: {
+      campaign: true,
+      contact: { select: { id: true, name: true, companyId: true, company: { select: { name: true } } } },
+    },
+  });
+
+  const byCampaign = new Map<string, typeof pendingApprovalRecipients>();
+  for (const r of pendingApprovalRecipients) {
+    const arr = byCampaign.get(r.campaignId);
+    if (arr) arr.push(r);
+    else byCampaign.set(r.campaignId, [r]);
+  }
+
+  for (const [campaignId, recs] of byCampaign) {
+    const campaign = recs[0].campaign;
+    if (campaign.status !== "PENDING_APPROVAL") continue;
+
+    const pendingCount = recs.length;
+    const deadline = recs[0].approvalDeadline;
+    const daysUntilDeadline = deadline
+      ? differenceInDays(new Date(deadline), now)
+      : null;
+
+    let priority: string;
+    if (daysUntilDeadline !== null && daysUntilDeadline < 2) {
+      priority = "URGENT";
+    } else if (daysUntilDeadline !== null && daysUntilDeadline < 7) {
+      priority = "HIGH";
+    } else if (daysUntilDeadline !== null) {
+      priority = "MEDIUM";
+    } else {
+      priority = "LOW";
+    }
+
+    const deadlineStr = deadline
+      ? ` (due ${new Date(deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`
+      : "";
+    const reason = `Campaign "${campaign.name}" has ${pendingCount} contact${pendingCount !== 1 ? "s" : ""} pending your review${deadlineStr}.`;
+
+    const firstContactWithId = recs.find((r) => r.contactId);
+    const contactId = firstContactWithId?.contactId ?? contacts[0]?.id;
+    if (!contactId) continue;
+
+    candidates.push({
+      contactId,
+      ruleType: "CAMPAIGN_APPROVAL",
+      reason,
+      priority,
+      metadata: JSON.stringify({
+        insights: [{
+          type: "CAMPAIGN_APPROVAL",
+          reason,
+          priority,
+        }],
+        campaignId,
+        pendingCount,
+        deadline: deadline?.toISOString() ?? null,
+      }),
+    });
   }
 
   await nudgeRepo.deleteOpenByPartnerId(partnerId);

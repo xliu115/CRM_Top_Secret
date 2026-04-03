@@ -15,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
 
-    return NextResponse.json(campaign);
+    return NextResponse.json({ ...campaign, currentPartnerId: partnerId });
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,18 +1,22 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Calendar,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   FileText,
   Loader2,
   Minus,
   Send,
+  ShieldCheck,
+  User,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
@@ -33,6 +37,8 @@ type CampaignDetailJson = {
   source: string;
   sentAt: string | null;
   importedFrom: string | null;
+  pointOfContact: string | null;
+  currentPartnerId?: string;
   contents: Array<{
     contentItem: {
       id: string;
@@ -45,10 +51,16 @@ type CampaignDetailJson = {
     id: string;
     status: string;
     rsvpStatus: string | null;
+    approvalStatus: string | null;
+    personalizedBody: string | null;
+    assignedPartnerId: string | null;
+    assignedPartner: { id: string; name: string } | null;
+    approvalDeadline: string | null;
     contact: {
       id: string;
       name: string;
       email: string;
+      title: string;
       company: { name: string };
     } | null;
     unmatchedEmail: string | null;
@@ -69,11 +81,13 @@ function pct(n: number) {
 
 function statusBadgeClass(status: string) {
   switch (status) {
+    case "PENDING_APPROVAL":
+      return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200";
     case "DRAFT":
       return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100";
     case "SENT":
       return "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300";
-    case "SENDING":
+    case "IN_PROGRESS":
       return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300";
     default:
       return "bg-gray-100 text-gray-800";
@@ -82,11 +96,13 @@ function statusBadgeClass(status: string) {
 
 function statusLabel(status: string) {
   switch (status) {
+    case "PENDING_APPROVAL":
+      return "Pending Approval";
     case "DRAFT":
       return "Draft";
     case "SENT":
       return "Sent";
-    case "SENDING":
+    case "IN_PROGRESS":
       return "In Progress";
     default:
       return status;
@@ -162,13 +178,17 @@ function computeStats(campaign: CampaignDetailJson | null) {
       rsvpPending: 0,
     };
   }
-  const n = campaign.recipients.length;
+  const isCentral = campaign.source === "CENTRAL";
+  const recipients = isCentral && campaign.currentPartnerId
+    ? campaign.recipients.filter((r) => r.assignedPartnerId === campaign.currentPartnerId)
+    : campaign.recipients;
+  const n = recipients.length;
   let opens = 0;
   let clicks = 0;
   let rsvpAccepted = 0;
   let rsvpDeclined = 0;
   let rsvpPending = 0;
-  for (const r of campaign.recipients) {
+  for (const r of recipients) {
     if (hasEngagement(r, "OPENED")) opens++;
     if (hasEngagement(r, "CLICKED")) clicks++;
     if (r.rsvpStatus === "ACCEPTED") rsvpAccepted++;
@@ -254,12 +274,21 @@ function CampaignDetailBody({ id }: { id: string }) {
 
   const stats = useMemo(() => computeStats(campaign), [campaign]);
 
-  const sentRecipientIds = useMemo(() => {
+  const displayRecipients = useMemo(() => {
     if (!campaign) return [];
-    return campaign.recipients
+    if (campaign.source === "CENTRAL" && campaign.currentPartnerId) {
+      return campaign.recipients.filter(
+        (r) => r.assignedPartnerId === campaign.currentPartnerId
+      );
+    }
+    return campaign.recipients;
+  }, [campaign]);
+
+  const sentRecipientIds = useMemo(() => {
+    return displayRecipients
       .filter((r) => r.status === "SENT")
       .map((r) => r.id);
-  }, [campaign]);
+  }, [displayRecipients]);
 
   const allSentSelected =
     sentRecipientIds.length > 0 &&
@@ -403,6 +432,8 @@ function CampaignDetailBody({ id }: { id: string }) {
   }
 
   const isDraft = campaign.status === "DRAFT";
+  const isCentralPendingApproval =
+    campaign.source === "CENTRAL" && campaign.status === "PENDING_APPROVAL";
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 pb-10">
@@ -427,7 +458,7 @@ function CampaignDetailBody({ id }: { id: string }) {
               {campaign.source === "IMPORTED" && (
                 <Badge
                   variant="outline"
-                  className="shrink-0 border-amber-200 bg-amber-50 text-amber-900 text-[10px] dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                  className="shrink-0 border-amber-200 bg-amber-50 text-amber-900 text-[11px] dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
                 >
                   Imported
                   {campaign.importedFrom ? ` · ${campaign.importedFrom}` : ""}
@@ -437,8 +468,19 @@ function CampaignDetailBody({ id }: { id: string }) {
             <p className="text-sm text-muted-foreground">
               {campaign.sentAt
                 ? `Sent ${format(new Date(campaign.sentAt), "MMM d, yyyy · h:mm a")}`
-                : "Not sent yet"}
+                : isCentralPendingApproval
+                  ? (() => {
+                      const dl = campaign.recipients.find((r) => r.approvalDeadline)?.approvalDeadline;
+                      return dl ? `Due ${format(new Date(dl), "MMM d, yyyy")}` : "Pending approval";
+                    })()
+                  : "Not sent yet"}
             </p>
+            {campaign.source === "CENTRAL" && campaign.pointOfContact && (
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Point of contact: <span className="font-medium text-foreground">{campaign.pointOfContact}</span>
+              </p>
+            )}
           </div>
           {isDraft && (
             <div className="flex flex-wrap gap-2 shrink-0">
@@ -479,27 +521,36 @@ function CampaignDetailBody({ id }: { id: string }) {
         )}
       </div>
 
-      <div
-        className={cn(
-          "grid gap-4 sm:grid-cols-2 lg:grid-cols-3",
-          !isEventCampaign && "lg:max-w-4xl"
-        )}
-      >
-        <MetricCard
-          label="Total Recipients"
-          value={String(stats.total)}
-          large
+      {isCentralPendingApproval && (
+        <ApprovalReviewSection
+          campaign={campaign}
+          onUpdate={fetchCampaign}
         />
-        <MetricCard label="Open Rate" value={pct(stats.openRate)} large />
-        <MetricCard label="Click Rate" value={pct(stats.clickRate)} large />
-        {isEventCampaign && (
-          <>
-            <MetricCard label="RSVP Accepted" value={String(stats.rsvpAccepted)} />
-            <MetricCard label="RSVP Declined" value={String(stats.rsvpDeclined)} />
-            <MetricCard label="RSVP Pending" value={String(stats.rsvpPending)} />
-          </>
-        )}
-      </div>
+      )}
+
+      {!isCentralPendingApproval && (
+        <div
+          className={cn(
+            "grid gap-4 sm:grid-cols-2 lg:grid-cols-3",
+            !isEventCampaign && "lg:max-w-4xl"
+          )}
+        >
+          <MetricCard
+            label="Total Recipients"
+            value={String(stats.total)}
+            large
+          />
+          <MetricCard label="Open Rate" value={pct(stats.openRate)} large />
+          <MetricCard label="Click Rate" value={pct(stats.clickRate)} large />
+          {isEventCampaign && (
+            <>
+              <MetricCard label="RSVP Accepted" value={String(stats.rsvpAccepted)} />
+              <MetricCard label="RSVP Declined" value={String(stats.rsvpDeclined)} />
+              <MetricCard label="RSVP Pending" value={String(stats.rsvpPending)} />
+            </>
+          )}
+        </div>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-foreground">
@@ -542,6 +593,7 @@ function CampaignDetailBody({ id }: { id: string }) {
         )}
       </section>
 
+      {!isCentralPendingApproval && (
       <section className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-foreground">
@@ -601,7 +653,7 @@ function CampaignDetailBody({ id }: { id: string }) {
               </tr>
             </thead>
             <tbody>
-              {campaign.recipients.map((r) => {
+              {displayRecipients.map((r) => {
                 const name =
                   r.contact?.name ?? r.unmatchedEmail ?? "—";
                 const company = r.contact?.company?.name ?? "—";
@@ -700,6 +752,7 @@ function CampaignDetailBody({ id }: { id: string }) {
           </table>
         </div>
       </section>
+      )}
 
       {(followUpLoading || (drafts && drafts.length > 0)) && (
         <section className="space-y-3">
@@ -802,6 +855,284 @@ function CampaignDetailBody({ id }: { id: string }) {
         </section>
       )}
     </div>
+  );
+}
+
+function ApprovalReviewSection({
+  campaign,
+  onUpdate,
+}: {
+  campaign: CampaignDetailJson;
+  onUpdate: () => Promise<void>;
+}) {
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showSuccess(msg: string) {
+    setSuccessMsg(msg);
+    if (successTimer.current) clearTimeout(successTimer.current);
+    successTimer.current = setTimeout(() => setSuccessMsg(null), 3000);
+  }
+
+  const currentPartnerId = campaign.currentPartnerId;
+  const myRecipients = campaign.recipients
+    .filter((r) => r.approvalStatus != null && r.assignedPartnerId === currentPartnerId)
+    .sort((a, b) => {
+      const order: Record<string, number> = { PENDING: 0, APPROVED: 1, REJECTED: 2 };
+      return (order[a.approvalStatus ?? ""] ?? 3) - (order[b.approvalStatus ?? ""] ?? 3);
+    });
+
+  const pending = myRecipients.filter((r) => r.approvalStatus === "PENDING");
+  const approved = myRecipients.filter((r) => r.approvalStatus === "APPROVED");
+  const rejected = myRecipients.filter((r) => r.approvalStatus === "REJECTED");
+
+  const deadline = myRecipients[0]?.approvalDeadline;
+
+  async function handleAction(
+    recipientId: string,
+    approvalStatus: "APPROVED" | "REJECTED"
+  ) {
+    setActionLoading(recipientId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/campaigns/recipients/${recipientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalStatus }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setError(typeof err.error === "string" ? err.error : "Action failed");
+        return;
+      }
+      await onUpdate();
+      showSuccess(`Contact ${approvalStatus === "APPROVED" ? "approved" : "rejected"}`);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleBulkAction(action: "APPROVED" | "REJECTED") {
+    const ids = pending.map((r) => r.id);
+    if (ids.length === 0) return;
+    if (
+      action === "REJECTED" &&
+      !window.confirm(
+        `Reject all ${ids.length} pending contact${ids.length !== 1 ? "s" : ""}? They will not receive this campaign on your behalf.`
+      )
+    )
+      return;
+    setBulkLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/bulk-approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientIds: ids, action }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setError(typeof err.error === "string" ? err.error : "Bulk action failed");
+        return;
+      }
+      await onUpdate();
+      showSuccess(
+        `${ids.length} contact${ids.length !== 1 ? "s" : ""} ${action === "APPROVED" ? "approved" : "rejected"}`
+      );
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden />
+            Review Contacts
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {pending.length} pending &middot; {approved.length} approved &middot; {rejected.length} rejected
+            {deadline && (
+              <span className="ml-2 text-amber-700 dark:text-amber-400 font-medium">
+                &middot; Due {format(new Date(deadline), "MMM d, yyyy")}
+              </span>
+            )}
+          </p>
+        </div>
+        {pending.length > 0 && (
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={bulkLoading}
+              onClick={() => handleBulkAction("REJECTED")}
+              className="border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+            >
+              {bulkLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <X className="h-4 w-4 mr-1.5" />}
+              Reject All ({pending.length})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={bulkLoading}
+              onClick={() => handleBulkAction("APPROVED")}
+              className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
+            >
+              {bulkLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
+              Approve All ({pending.length})
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <p className="text-sm text-destructive" role="alert">{error}</p>
+      )}
+      {successMsg && (
+        <p className="text-sm text-green-700 dark:text-green-400 font-medium" role="status">
+          <CheckCircle2 className="inline h-4 w-4 mr-1 -mt-0.5" />
+          {successMsg}
+        </p>
+      )}
+
+      <div className="overflow-x-auto -mx-1 px-1 rounded-xl border border-amber-200 bg-white shadow-sm dark:border-amber-900 dark:bg-card">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-xs font-medium uppercase tracking-wide text-muted-foreground-subtle">
+              <th className="py-3 pl-4 pr-3">Contact</th>
+              <th className="py-3 pr-3">Company</th>
+              <th className="py-3 pr-3">Title</th>
+              <th className="py-3 pr-3">Status</th>
+              <th className="py-3 pr-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {myRecipients.map((r) => {
+              const name = r.contact?.name ?? r.unmatchedEmail ?? "—";
+              const company = r.contact?.company?.name ?? "—";
+              const title = r.contact?.title ?? "—";
+              const isLoading = actionLoading === r.id;
+              const isPending = r.approvalStatus === "PENDING";
+              const isExpanded = expandedId === r.id;
+              const hasPreview = !!r.personalizedBody;
+
+              return (
+                <React.Fragment key={r.id}>
+                  <tr
+                    className={cn(
+                      "border-b border-border/60 last:border-0 transition-colors",
+                      isPending
+                        ? "bg-amber-50/50 dark:bg-amber-950/10"
+                        : r.approvalStatus === "APPROVED"
+                          ? "bg-green-50/30 dark:bg-green-950/10"
+                          : "bg-red-50/30 dark:bg-red-950/10"
+                    )}
+                  >
+                    <td className="py-3 pl-4 pr-3 font-medium text-foreground align-middle">
+                      {hasPreview ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 hover:text-primary transition-colors text-left"
+                          onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          )}
+                          {name}
+                        </button>
+                      ) : (
+                        name
+                      )}
+                    </td>
+                    <td className="py-3 pr-3 text-muted-foreground align-middle">
+                      {company}
+                    </td>
+                    <td className="py-3 pr-3 text-muted-foreground align-middle">
+                      {title}
+                    </td>
+                    <td className="py-3 pr-3 align-middle">
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "border-0 text-[10px]",
+                          r.approvalStatus === "APPROVED"
+                            ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
+                            : r.approvalStatus === "REJECTED"
+                              ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+                              : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                        )}
+                      >
+                        {r.approvalStatus === "APPROVED"
+                          ? "Approved"
+                          : r.approvalStatus === "REJECTED"
+                            ? "Rejected"
+                            : "Pending"}
+                      </Badge>
+                    </td>
+                    <td className="py-3 pr-4 text-right align-middle">
+                      {isPending ? (
+                        <div className="inline-flex gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={isLoading}
+                            onClick={() => handleAction(r.id, "REJECTED")}
+                            className="h-7 px-2 border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400"
+                          >
+                            {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={isLoading}
+                            onClick={() => handleAction(r.id, "APPROVED")}
+                            className="h-7 px-2 bg-green-600 text-white hover:bg-green-700 dark:bg-green-700"
+                          >
+                            {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground-subtle">—</span>
+                      )}
+                    </td>
+                  </tr>
+                  {isExpanded && hasPreview && (
+                    <tr className={cn(
+                      isPending
+                        ? "bg-amber-50/30 dark:bg-amber-950/5"
+                        : r.approvalStatus === "APPROVED"
+                          ? "bg-green-50/20 dark:bg-green-950/5"
+                          : "bg-red-50/20 dark:bg-red-950/5"
+                    )}>
+                      <td colSpan={5} className="px-4 pb-4 pt-1">
+                        <div className="rounded-lg border border-border/60 bg-white/80 dark:bg-card/80 p-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground-subtle mb-1.5">
+                            Email Preview
+                          </p>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                            {r.personalizedBody}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

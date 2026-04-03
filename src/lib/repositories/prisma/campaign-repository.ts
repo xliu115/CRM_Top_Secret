@@ -14,15 +14,20 @@ export class PrismaCampaignRepository implements ICampaignRepository {
     partnerId: string,
     filters?: { status?: string; source?: string; search?: string }
   ): Promise<CampaignWithStats[]> {
+    const statusFilter = filters?.status ? { status: filters.status } : {};
+    const sourceFilter = filters?.source ? { source: filters.source } : {};
+    const searchFilter = filters?.search
+      ? { name: { contains: filters.search } }
+      : {};
+
     const where: Prisma.CampaignWhereInput = {
-      partnerId,
-      ...(filters?.status ? { status: filters.status } : {}),
-      ...(filters?.source ? { source: filters.source } : {}),
-      ...(filters?.search
-        ? {
-            name: { contains: filters.search },
-          }
-        : {}),
+      OR: [
+        { partnerId },
+        { recipients: { some: { assignedPartnerId: partnerId } } },
+      ],
+      ...statusFilter,
+      ...sourceFilter,
+      ...searchFilter,
     };
 
     const campaigns = await prisma.campaign.findMany({
@@ -91,7 +96,13 @@ export class PrismaCampaignRepository implements ICampaignRepository {
 
   async findById(id: string, partnerId: string): Promise<CampaignDetail | null> {
     const campaign = await prisma.campaign.findFirst({
-      where: { id, partnerId },
+      where: {
+        id,
+        OR: [
+          { partnerId },
+          { recipients: { some: { assignedPartnerId: partnerId } } },
+        ],
+      },
       include: {
         contents: {
           include: { contentItem: true },
@@ -108,13 +119,16 @@ export class PrismaCampaignRepository implements ICampaignRepository {
                 company: { select: { name: true } },
               },
             },
+            assignedPartner: {
+              select: { id: true, name: true },
+            },
             engagements: true,
           },
           orderBy: { id: "asc" },
         },
       },
     });
-    return campaign;
+    return campaign as CampaignDetail | null;
   }
 
   async create(data: {

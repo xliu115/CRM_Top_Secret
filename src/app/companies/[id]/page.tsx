@@ -1111,7 +1111,7 @@ export default function CompanyDetailPage() {
                           </p>
                         </div>
                         <Badge variant="outline" className="shrink-0 text-[10px]">
-                          {c.status === "SENDING" ? "In Progress" : c.status === "SENT" ? "Sent" : c.status === "DRAFT" ? "Draft" : c.status}
+                          {c.status === "IN_PROGRESS" ? "In Progress" : c.status === "PENDING_APPROVAL" ? "Pending Approval" : c.status === "SENT" ? "Sent" : c.status === "DRAFT" ? "Draft" : c.status}
                         </Badge>
                       </Link>
                     ))}

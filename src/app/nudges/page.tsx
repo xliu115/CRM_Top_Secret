@@ -6,10 +6,10 @@ import {
   RefreshCw, Send, Moon, Check, ExternalLink, Settings, Clock, Briefcase, Newspaper,
   CalendarDays, ClipboardList, Ticket, CalendarCheck, BookOpen, Linkedin,
   Copy, RotateCcw, X, Loader2, Mail, FileText, Users, Sparkles,
-  Reply, Forward, Filter, Zap, CheckCircle2,
+  Reply, Forward, Filter, Zap, CheckCircle2, ShieldCheck,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { buildSummaryFragments } from "@/lib/utils/nudge-summary";
+import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,6 +114,7 @@ const NUDGE_TYPE_CONFIG: Record<string, NudgeTypeConfig> = {
   LINKEDIN_ACTIVITY: { icon: Linkedin, label: "LinkedIn Activity", ctaLabel: "Draft LinkedIn Email", ctaIcon: Mail, color: "text-sky-600", bgColor: "bg-sky-50 dark:bg-sky-950/30" },
   FOLLOW_UP: { icon: Forward, label: "Active Outreach", ctaLabel: "Continue Follow-up", ctaIcon: Forward, color: "text-violet-600", bgColor: "bg-violet-50 dark:bg-violet-950/30" },
   REPLY_NEEDED: { icon: Reply, label: "Reply Needed", ctaLabel: "Draft Reply", ctaIcon: Reply, color: "text-red-600", bgColor: "bg-red-50 dark:bg-red-950/30" },
+  CAMPAIGN_APPROVAL: { icon: ShieldCheck, label: "Campaign Approval", ctaLabel: "Review Campaign", ctaIcon: ShieldCheck, color: "text-amber-600", bgColor: "bg-amber-50 dark:bg-amber-950/30" },
 };
 
 const DEFAULT_TYPE_CONFIG: NudgeTypeConfig = {
@@ -435,9 +436,98 @@ function NudgeCard({
   const isFollowUp = nudge.ruleType === "FOLLOW_UP";
   const isReplyNeeded = nudge.ruleType === "REPLY_NEEDED";
   const isSequenceNudge = isFollowUp || isReplyNeeded;
+  const isCampaignApproval = nudge.ruleType === "CAMPAIGN_APPROVAL";
 
   const waitingMatch = nudge.reason.match(/no response in (\d+) day/);
   const waitingDays = waitingMatch ? parseInt(waitingMatch[1]) : null;
+
+  if (isCampaignApproval) {
+    const camp = parseCampaignApprovalNudgeDisplay(nudge);
+    return (
+      <Card className="overflow-hidden border-l-4 border-l-amber-400 dark:border-l-amber-600">
+        <CardHeader className="pb-3 pt-5">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-950/30 ring-2 ring-amber-200/70 dark:ring-amber-800/50">
+              <ShieldCheck className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-lg font-bold">
+                  <Link href={camp.campaignHref} className="hover:text-primary hover:underline transition-colors">
+                    {camp.campaignName}
+                  </Link>
+                </CardTitle>
+                <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                  {nudge.priority}
+                </Badge>
+                <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400">
+                  <ShieldCheck className="h-3 w-3 mr-1" />
+                  Campaign Approval
+                </Badge>
+              </div>
+              <CardDescription className="mt-0.5 text-muted-foreground">
+                Campaign-level action — review pending recipients before send
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border border-amber-200/90 bg-amber-50/70 px-4 py-3.5 dark:border-amber-900/60 dark:bg-amber-950/25 space-y-2">
+            <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Users className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>
+                {camp.pendingCount} contact{camp.pendingCount !== 1 ? "s" : ""} pending your review
+              </span>
+            </p>
+            {camp.deadlineLabel && (
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100 flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                {camp.deadlineLabel}
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">AI Summary</span>
+            </div>
+            <div className="text-sm text-foreground/70 leading-relaxed">
+              <NudgeSummary nudge={nudge} insights={insights} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button size="sm" asChild>
+              <Link href={camp.campaignHref}>
+                <CtaIcon className="h-4 w-4" />
+                {cfg.ctaLabel}
+              </Link>
+            </Button>
+            {nudge.status === "OPEN" && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "SNOOZED")}>
+                  <Moon className="h-4 w-4" />
+                  Snooze
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+                  <Check className="h-4 w-4" />
+                  Done
+                </Button>
+              </>
+            )}
+            {nudge.status === "SNOOZED" && (
+              <Button variant="ghost" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+                <Check className="h-4 w-4" />
+                Done
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className={`overflow-hidden ${isSequenceNudge ? "border-l-4 border-l-violet-400 dark:border-l-violet-600" : ""}`}>

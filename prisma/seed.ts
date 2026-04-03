@@ -179,6 +179,75 @@ async function main() {
     await prisma.campaignEngagement.createMany({ data: batch });
   }
 
+  // Campaign approval nudges — one per partner per pending-approval central campaign
+  {
+    const pendingRecipients = await prisma.campaignRecipient.findMany({
+      where: {
+        approvalStatus: "PENDING",
+        assignedPartnerId: { not: null },
+        campaign: { status: "PENDING_APPROVAL", source: "CENTRAL" },
+      },
+      include: { campaign: true },
+    });
+
+    const grouped = new Map<string, typeof pendingRecipients>();
+    for (const r of pendingRecipients) {
+      const key = `${r.assignedPartnerId}|${r.campaignId}`;
+      const arr = grouped.get(key);
+      if (arr) arr.push(r);
+      else grouped.set(key, [r]);
+    }
+
+    const approvalNudges: Array<{
+      id: string;
+      contactId: string;
+      ruleType: string;
+      reason: string;
+      priority: string;
+      metadata: string;
+    }> = [];
+
+    let idx = 0;
+    for (const [, recs] of grouped) {
+      const r = recs[0];
+      if (!r.contactId || !r.assignedPartnerId) continue;
+      const pendingCount = recs.length;
+      const deadline = r.approvalDeadline;
+      const daysUntil = deadline
+        ? Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000)
+        : null;
+      const priority =
+        daysUntil !== null && daysUntil < 2
+          ? "URGENT"
+          : daysUntil !== null && daysUntil < 7
+            ? "HIGH"
+            : "MEDIUM";
+      const deadlineStr = deadline
+        ? ` (due ${new Date(deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`
+        : "";
+      const reason = `Campaign "${r.campaign.name}" has ${pendingCount} contact${pendingCount !== 1 ? "s" : ""} pending your review${deadlineStr}.`;
+
+      approvalNudges.push({
+        id: `nudge-approval-${String(idx++).padStart(3, "0")}`,
+        contactId: r.contactId,
+        ruleType: "CAMPAIGN_APPROVAL",
+        reason,
+        priority,
+        metadata: JSON.stringify({
+          insights: [{ type: "CAMPAIGN_APPROVAL", reason, priority }],
+          campaignId: r.campaignId,
+          pendingCount,
+          deadline: deadline?.toISOString() ?? null,
+        }),
+      });
+    }
+
+    if (approvalNudges.length > 0) {
+      console.log(`Creating ${approvalNudges.length} campaign approval nudges...`);
+      await prisma.nudge.createMany({ data: approvalNudges });
+    }
+  }
+
   // Cadence engine demo data: sequences, steps, follow-up nudges
   const seqData = generateSequenceData(contactRefs);
 

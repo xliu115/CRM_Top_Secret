@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+
 function naturalizeInteractionSummary(s: string): string {
   if (!s) return s;
   return s[0].toLowerCase() + s.slice(1);
@@ -34,6 +36,59 @@ export type NudgeForSummary = {
 
 export type SentenceFragment = { text: string; bold?: boolean; lineBreak?: boolean };
 
+export type CampaignApprovalNudgeDisplay = {
+  campaignName: string;
+  pendingCount: number;
+  deadlineLabel: string | null;
+  campaignHref: string;
+};
+
+/** Parsed campaign-centric fields for CAMPAIGN_APPROVAL nudge cards (metadata + reason fallbacks). */
+export function parseCampaignApprovalNudgeDisplay(nudge: {
+  reason: string;
+  metadata?: string | null;
+}): CampaignApprovalNudgeDisplay {
+  let campaignId: string | undefined;
+  let pendingCount: number | undefined;
+  let deadlineIso: string | null | undefined;
+  try {
+    const m = JSON.parse(nudge.metadata ?? "{}") as {
+      campaignId?: string;
+      pendingCount?: number;
+      deadline?: string | null;
+    };
+    if (typeof m.campaignId === "string") campaignId = m.campaignId;
+    if (typeof m.pendingCount === "number") pendingCount = m.pendingCount;
+    deadlineIso = m.deadline ?? undefined;
+  } catch {
+    /* ignore */
+  }
+
+  const nameMatch = nudge.reason.match(/Campaign "([^"]+)"/);
+  const campaignName = nameMatch?.[1] ?? "Campaign";
+
+  if (pendingCount === undefined) {
+    const c = nudge.reason.match(/has (\d+) contacts?/);
+    pendingCount = c ? parseInt(c[1], 10) : 0;
+  }
+
+  let deadlineLabel: string | null = null;
+  if (deadlineIso) {
+    const d = new Date(deadlineIso);
+    if (!Number.isNaN(d.getTime())) {
+      deadlineLabel = `Due ${format(d, "MMM d, yyyy")}`;
+    }
+  }
+  if (!deadlineLabel) {
+    const dm = nudge.reason.match(/\(due ([^)]+)\)/);
+    if (dm) deadlineLabel = `Due ${dm[1].trim()}`;
+  }
+
+  const campaignHref = campaignId ? `/campaigns/${campaignId}` : "/campaigns";
+
+  return { campaignName, pendingCount, deadlineLabel, campaignHref };
+}
+
 const TYPE_LABELS: Record<string, string> = {
   STALE_CONTACT: "reconnect",
   JOB_CHANGE: "executive transition",
@@ -46,6 +101,7 @@ const TYPE_LABELS: Record<string, string> = {
   LINKEDIN_ACTIVITY: "LinkedIn activity",
   FOLLOW_UP: "follow-up",
   REPLY_NEEDED: "reply",
+  CAMPAIGN_APPROVAL: "campaign approval",
 };
 
 function getLabel(ruleType: string): string {
@@ -96,6 +152,10 @@ export function extractInsightSnippet(insight: InsightData): string | null {
       return insight.lastEmailSubject ?? null;
     case "REPLY_NEEDED":
       return insight.inboundSummary ?? null;
+    case "CAMPAIGN_APPROVAL": {
+      const m = insight.reason.match(/"([^"]+)"/);
+      return m ? m[1] : "a campaign needing review";
+    }
     default:
       return null;
   }
@@ -106,6 +166,22 @@ export function buildSummaryFragments(
   insights: InsightData[]
 ): SentenceFragment[] {
   if (insights.length === 0) return [{ text: nudge.reason }];
+
+  const campaignApproval = insights.find((i) => i.type === "CAMPAIGN_APPROVAL");
+  if (campaignApproval) {
+    const campaignName = campaignApproval.reason.match(/"([^"]+)"/)?.[1] ?? "a campaign";
+    const countMatch = campaignApproval.reason.match(/has (\d+) contacts?/);
+    const count = countMatch ? parseInt(countMatch[1], 10) : 0;
+    const deadlineMatch = campaignApproval.reason.match(/\(due ([^)]+)\)/);
+    const deadlineStr = deadlineMatch ? ` by ${deadlineMatch[1]}` : "";
+
+    const fragments: SentenceFragment[] = [
+      { text: "Campaign " },
+      { text: campaignName, bold: true },
+      { text: ` has ${count} contact${count !== 1 ? "s" : ""} pending your approval${deadlineStr}. Review and approve so the campaign can go out on your behalf.` },
+    ];
+    return fragments;
+  }
 
   const firstName = nudge.contact.name.split(" ")[0];
 
@@ -336,4 +412,6 @@ function buildFragmentsFromTopicLines(
 
   return fragments;
 }
+
+
 
