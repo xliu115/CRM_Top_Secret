@@ -32,7 +32,7 @@ describe("transcribe route - prompt parameter", () => {
       body: formData,
     });
 
-    await POST(request as any);
+    await POST(request as unknown as Parameters<typeof POST>[0]);
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -58,7 +58,7 @@ describe("transcribe route - prompt parameter", () => {
       body: formData,
     });
 
-    await POST(request as any);
+    await POST(request as unknown as Parameters<typeof POST>[0]);
 
     const callArgs = mockCreate.mock.calls[0][0];
     expect(callArgs.prompt).toBeUndefined();

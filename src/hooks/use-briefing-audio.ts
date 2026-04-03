@@ -138,7 +138,7 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
         };
 
         audio.load();
-      } catch (err) {
+      } catch {
         playWithSpeechSynthesis(text);
       }
     },
