@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { AssistantReply } from "@/components/chat/assistant-reply";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useChatSession, type ChatMessage } from "@/hooks/use-chat-session";
+import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 
 type BriefingData = {
   briefing: string;
@@ -106,6 +107,7 @@ export default function MobilePage() {
     prependMessage,
     isListening,
     isTranscribing,
+    liveTranscript,
     voiceSupported,
     voiceDuration,
     startListening,
@@ -264,6 +266,12 @@ export default function MobilePage() {
             <div ref={scrollRef} />
           </div>
         </div>
+
+        <LiveTranscriptPreview
+          transcript={liveTranscript}
+          isListening={isListening}
+          duration={voiceDuration}
+        />
 
         {/* Bottom area: quick actions + input */}
         <div

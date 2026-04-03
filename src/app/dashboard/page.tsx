@@ -41,7 +41,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
 import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useStreamingTranscription } from "@/hooks/use-streaming-transcription";
+import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import {
   loadDashboardPrefs,
@@ -740,8 +741,14 @@ export default function DashboardPage() {
     setChatInput(transcript);
   }, []);
 
-  const { isListening, transcript: liveTranscript, isSupported, startListening, stopListening } =
-    useSpeechRecognition({ onResult: handleVoiceResult });
+  const {
+    isListening,
+    liveTranscript,
+    isSupported,
+    duration: voiceDuration,
+    startListening,
+    stopListening,
+  } = useStreamingTranscription({ onResult: handleVoiceResult });
 
   useEffect(() => {
     if (pendingVoiceRef.current && !isListening) {
@@ -961,6 +968,12 @@ export default function DashboardPage() {
                 </>
               ) : null}
             </div>
+
+            <LiveTranscriptPreview
+              transcript={liveTranscript}
+              isListening={isListening}
+              duration={voiceDuration}
+            />
 
             {/* Input bar */}
             <div className="border-t border-border p-4">
