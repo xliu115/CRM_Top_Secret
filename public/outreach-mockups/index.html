@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Outreach milestone 1 — mockups (MDS)</title>
+  <link rel="stylesheet" href="./mds-email.css" />
+  <style>
+    .mds-index-wrap { max-width: 560px; margin: 0 auto; padding: 32px 20px 48px; }
+    .mds-index-wrap h1 {
+      font-family: var(--mds-font-serif);
+      font-size: 22px;
+      color: var(--mds-deep-blue);
+      font-weight: 700;
+      margin: 0 0 8px;
+      letter-spacing: -0.3px;
+    }
+    .mds-index-wrap .lead { font-size: 14px; color: var(--mds-text-light); margin-bottom: 24px; }
+    .mds-index-wrap ul { padding-left: 1.15rem; margin: 0; }
+    .mds-index-wrap li { margin-bottom: 10px; font-size: 15px; }
+    .mds-index-wrap a { color: var(--mds-blue); font-weight: 600; text-decoration: none; }
+    .mds-index-wrap a:hover { text-decoration: underline; }
+    .mds-index-foot { margin-top: 28px; font-size: 13px; color: var(--mds-text-light); border-top: 1px solid var(--mds-border); padding-top: 16px; }
+    .mds-index-foot code { color: var(--mds-deep-blue); font-size: 12px; }
+  </style>
+</head>
+<body style="margin:0;background:var(--mds-bg-light);font-family:var(--mds-font-sans);color:var(--mds-text);">
+  <div class="mds-index-wrap">
+    <div class="mds-email-kicker" style="color:var(--mds-electric-blue);margin-bottom:8px;">Activate</div>
+    <h1>Outreach email mockups</h1>
+    <p class="lead">Partner digests list <strong>articles to share with each contact</strong> (0–2). All “Draft …” buttons go to one static preview. MDS tokens match <code style="font-size:13px;color:var(--mds-deep-blue);">email-service.ts</code>. With <code>npm run dev</code>:</p>
+    <ul>
+      <li><a href="/outreach-mockups/draft-email-preview.html">Email draft preview</a> (target for Draft buttons)</li>
+      <li><a href="/outreach-mockups/biweekly-digest.html">Bi-weekly digest (partner)</a></li>
+      <li><a href="/outreach-mockups/daily-adhoc.html">Daily ad-hoc (partner)</a></li>
+      <li><a href="/outreach-mockups/nudge-emails-both-full.html">Both nudge emails — one scroll (iframes)</a></li>
+      <li><a href="/outreach-mockups/external-stale-example.html">External — stale check-in</a></li>
+      <li><a href="/outreach-mockups/external-transition-example.html">External — transition</a></li>
+      <li><a href="/outreach-mockups/external-news-example.html">External — company news</a></li>
+    </ul>
+    <p class="mds-index-foot">
+      Full copy: <code>docs/outreach/outreach-email-copy-milestone-1.md</code><br />
+      Screenshots: <code>docs/outreach/SCREENSHOTS.md</code><br />
+      Styles: <code>public/outreach-mockups/mds-email.css</code>
+    </p>
+  </div>
+</body>
+</html>

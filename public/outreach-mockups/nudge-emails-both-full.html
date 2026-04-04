@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Both nudge emails — full capture</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #cbd5e1; font-family: system-ui, sans-serif; }
+    .capture-banner {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 16px 20px;
+      background: #1e293b;
+      color: #f8fafc;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .capture-banner code { background: #334155; padding: 2px 6px; border-radius: 4px; }
+    .capture-wrap { max-width: 640px; margin: 0 auto; background: #f5f5f5; }
+    iframe { display: block; width: 100%; border: 0; background: #f5f5f5; }
+    .iframe-biweekly { height: 5200px; }
+    .iframe-daily { height: 3200px; }
+    @media print {
+      .capture-banner { display: none; }
+      body { background: #fff; }
+    }
+  </style>
+</head>
+<body>
+  <div class="capture-banner">
+    <strong>One page, both nudge emails</strong> — Scroll for a single long screenshot, or use Chrome DevTools → ⋮ → Capture full size screenshot (see <code>docs/outreach/SCREENSHOTS.md</code>).
+  </div>
+  <div class="capture-wrap">
+    <iframe class="iframe-biweekly" src="./biweekly-digest.html" title="Bi-weekly digest mockup"></iframe>
+    <iframe class="iframe-daily" src="./daily-adhoc.html" title="Daily ad-hoc mockup"></iframe>
+  </div>
+</body>
+</html>

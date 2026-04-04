@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
-import { nudgeRepo, meetingRepo, signalRepo, partnerRepo } from "@/lib/repositories";
-import { generateNarrativeBriefing, type NarrativeBriefingContext } from "@/lib/services/llm-service";
+import {
+  nudgeRepo,
+  meetingRepo,
+  signalRepo,
+  partnerRepo,
+  interactionRepo,
+} from "@/lib/repositories";
+import {
+  buildTopNudgePayloads,
+  mapLatestInteractionSummaryByContact,
+} from "@/lib/services/briefing-nudge-payload";
+import {
+  generateNarrativeBriefing,
+  generateVoiceMemoScript,
+  generateVoiceMemoScriptFallback,
+  type NarrativeBriefingContext,
+} from "@/lib/services/llm-service";
+import { buildDataDrivenSummaryMarkdown } from "@/lib/services/structured-briefing";
+import { synthesizeVoiceMemo } from "@/lib/services/voice-briefing-service";
 import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
-import { addDays, isBefore, format, differenceInDays } from "date-fns";
+import { addDays, isBefore, format } from "date-fns";
 
 export async function GET(_request: NextRequest) {
   try {
@@ -27,22 +44,16 @@ export async function GET(_request: NextRequest) {
       (a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4)
     );
 
-    const topNudges = sortedNudges.slice(0, 5).map((n) => {
-      const daysSince = n.contact.lastContacted
-        ? differenceInDays(now, new Date(n.contact.lastContacted))
-        : undefined;
+    const topContactIds = sortedNudges.slice(0, 5).map((n) => n.contact.id);
+    const interactionsForTop =
+      topContactIds.length > 0
+        ? await interactionRepo.findByContactIds(topContactIds)
+        : [];
+    const latestSummaryByContact = mapLatestInteractionSummaryByContact(
+      interactionsForTop.map((i) => ({ contactId: i.contactId, summary: i.summary }))
+    );
 
-      return {
-        contactName: n.contact.name,
-        company: n.contact.company.name,
-        reason: n.reason,
-        priority: n.priority,
-        contactId: n.contact.id,
-        nudgeId: n.id,
-        ruleType: n.ruleType,
-        daysSince,
-      };
-    });
+    const topNudges = buildTopNudgePayloads(sortedNudges, now, latestSummaryByContact);
 
     const twoDaysFromNow = addDays(now, 2);
     const nearMeetings = allUpcomingMeetings
@@ -68,7 +79,26 @@ export async function GET(_request: NextRequest) {
       clientNews: newsItems,
     };
 
-    const result = await generateNarrativeBriefing(ctx);
+    const [result, voiceSegments] = await Promise.all([
+      generateNarrativeBriefing(ctx),
+      generateVoiceMemoScript(ctx).catch((err) => {
+        console.warn("[dashboard/briefing] Voice script generation failed:", err);
+        return generateVoiceMemoScriptFallback(ctx);
+      }),
+    ]);
+    let dataDrivenSummary = "";
+    try {
+      dataDrivenSummary = buildDataDrivenSummaryMarkdown(ctx);
+    } catch (ddErr) {
+      console.error("[dashboard/briefing] dataDrivenSummary failed:", ddErr);
+    }
+
+    let voiceMemo = null;
+    try {
+      voiceMemo = await synthesizeVoiceMemo(partnerId, voiceSegments);
+    } catch (voiceErr) {
+      console.warn("[dashboard/briefing] Voice memo skipped:", voiceErr);
+    }
 
     const newsWithUrls = clientNews.slice(0, 5).map((s) => ({
       content: s.content,
@@ -78,9 +108,19 @@ export async function GET(_request: NextRequest) {
       url: s.url,
     }));
 
+    const voiceOutline = voiceSegments.map(({ id, headline, script, deeplink }) => ({
+      id,
+      headline,
+      script,
+      ...(deeplink ? { deeplink } : {}),
+    }));
+
     return NextResponse.json({
       briefing: result.narrative,
       topActions: result.topActions,
+      voiceMemo,
+      voiceOutline,
+      dataDrivenSummary,
       structured: {
         nudges: topNudges,
         meetings: nearMeetings,

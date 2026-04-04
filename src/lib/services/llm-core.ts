@@ -64,6 +64,7 @@ export async function callLLMWithHistory(
 export async function callLLMJson<T = Record<string, unknown>>(
   systemPrompt: string,
   userPrompt: string,
+  options?: { maxTokens?: number },
 ): Promise<T | null> {
   if (!openai) return null;
   try {
@@ -74,7 +75,7 @@ export async function callLLMJson<T = Record<string, unknown>>(
         { role: "user", content: userPrompt },
       ],
       temperature: 0.2,
-      max_tokens: 500,
+      max_tokens: options?.maxTokens ?? 500,
       response_format: { type: "json_object" },
     });
     const text = res.choices[0]?.message?.content;

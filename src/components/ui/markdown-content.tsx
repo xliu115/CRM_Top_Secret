@@ -22,14 +22,24 @@ export function MarkdownContent({
         "prose-h1:text-xl prose-h1:leading-snug prose-h1:font-bold prose-h1:mt-4 prose-h1:mb-2",
         "prose-h2:text-[17px] prose-h2:leading-snug prose-h2:font-semibold prose-h2:mt-3.5 prose-h2:mb-1.5",
         "prose-h3:text-[15px] prose-h3:leading-snug prose-h3:font-semibold prose-h3:mt-3 prose-h3:mb-1",
-        "prose-strong:font-semibold",
+        "prose-strong:font-semibold prose-strong:text-foreground",
         "prose-hr:my-3",
       ].join(" ")
-    : "prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:mb-2 prose-headings:mt-3 prose-a:text-primary";
+    : "prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:mb-2 prose-headings:mt-3 prose-a:text-primary prose-strong:text-foreground";
 
   return (
     <div className={`${proseBase} ${className}`}>
-      <Markdown>{content}</Markdown>
+      <Markdown
+        components={{
+          strong: ({ children }) => (
+            <strong className="font-semibold text-foreground">{children}</strong>
+          ),
+          p: ({ children }) => <p className="text-foreground">{children}</p>,
+          li: ({ children }) => <li className="text-foreground">{children}</li>,
+        }}
+      >
+        {content}
+      </Markdown>
     </div>
   );
 }

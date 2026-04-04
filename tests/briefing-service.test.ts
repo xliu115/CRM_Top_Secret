@@ -7,6 +7,8 @@ const {
   mockMeetingFindUpcoming,
   mockSignalFindRecent,
   mockSequenceFindByPartnerId,
+  mockInteractionFindByContactIds,
+  mockInteractionFindByContactId,
   mockIngestNews,
   mockRefreshNudges,
   mockGenerateNarrativeBriefing,
@@ -18,6 +20,8 @@ const {
   mockMeetingFindUpcoming: vi.fn(),
   mockSignalFindRecent: vi.fn(),
   mockSequenceFindByPartnerId: vi.fn(),
+  mockInteractionFindByContactIds: vi.fn(),
+  mockInteractionFindByContactId: vi.fn(),
   mockIngestNews: vi.fn(),
   mockRefreshNudges: vi.fn(),
   mockGenerateNarrativeBriefing: vi.fn(),
@@ -35,8 +39,15 @@ vi.mock("@/lib/repositories", () => ({
   partnerRepo: { findById: mockPartnerFindById },
   nudgeRepo: { findByPartnerId: mockNudgeFindByPartnerId },
   meetingRepo: { findUpcomingByPartnerId: mockMeetingFindUpcoming },
-  signalRepo: { findRecentByPartnerId: mockSignalFindRecent },
+  signalRepo: {
+    findRecentByPartnerId: mockSignalFindRecent,
+    findByContactId: vi.fn().mockResolvedValue([]),
+  },
   sequenceRepo: { findByPartnerId: mockSequenceFindByPartnerId },
+  interactionRepo: {
+    findByContactIds: mockInteractionFindByContactIds,
+    findByContactId: mockInteractionFindByContactId,
+  },
 }));
 
 vi.mock("@/lib/services/nudge-engine", () => ({
@@ -53,6 +64,10 @@ vi.mock("@/lib/services/llm-service", () => ({
 
 vi.mock("@/lib/services/email-service", () => ({
   buildBriefingHtml: mockBuildBriefingHtml,
+}));
+
+vi.mock("@/lib/services/rag-service", () => ({
+  searchWeb: vi.fn().mockResolvedValue([]),
 }));
 
 function minimalPartner(overrides: Record<string, unknown> = {}) {
@@ -115,6 +130,8 @@ describe("briefing-service", () => {
       vi.clearAllMocks();
       mockIngestNews.mockResolvedValue(2);
       mockRefreshNudges.mockResolvedValue(4);
+      mockInteractionFindByContactIds.mockResolvedValue([]);
+      mockInteractionFindByContactId.mockResolvedValue([]);
       mockNudgeFindByPartnerId.mockResolvedValue([minimalNudge()]);
       mockMeetingFindUpcoming.mockResolvedValue([]);
       mockSignalFindRecent.mockResolvedValue([]);
