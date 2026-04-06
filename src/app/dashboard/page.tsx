@@ -48,6 +48,7 @@ import {
   loadDashboardPrefs,
   type DashboardCardPrefs,
 } from "@/lib/utils/dashboard-prefs";
+import { parseStructuredBrief } from "@/lib/types/structured-brief";
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -1068,12 +1069,18 @@ export default function DashboardPage() {
                           const attendeeNames = meeting.attendees
                             .map((a) => a.contact.name)
                             .join(", ");
-                          const summarySource = meeting.generatedBrief || meeting.purpose;
+                          const structuredBrief = parseStructuredBrief(meeting.generatedBrief);
+                          const summarySource = structuredBrief
+                            ? structuredBrief.meetingGoal.statement
+                            : (meeting.generatedBrief || meeting.purpose);
                           const summaryPreview = summarySource
                             ? summarySource.length > 200
                               ? summarySource.slice(0, 200).trimEnd() + "\u2026"
                               : summarySource
                             : null;
+                          const briefLabel = structuredBrief
+                            ? "Goal"
+                            : (meeting.generatedBrief ? "Brief" : "Purpose");
                           return (
                             <Card key={`mtg-${meeting.id}`} className="overflow-hidden">
                               <CardHeader className="pb-3 pt-5">
@@ -1105,7 +1112,7 @@ export default function DashboardPage() {
                                   <div className="flex items-center gap-1.5 mb-2">
                                     <Sparkles className="h-4 w-4 text-indigo-600" />
                                     <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                                      {meeting.generatedBrief ? "Brief" : "Purpose"}
+                                      {briefLabel}
                                     </span>
                                   </div>
                                   {summaryPreview ? (
@@ -1291,11 +1298,23 @@ export default function DashboardPage() {
                                 {format(new Date(meeting.startTime), "EEE h:mm a")}
                                 {topAttendee?.company && ` · ${topAttendee.company.name}`}
                               </p>
-                              {meeting.generatedBrief && (
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                                  {meeting.generatedBrief}
-                                </p>
-                              )}
+                              {meeting.generatedBrief && (() => {
+                                const sb = parseStructuredBrief(meeting.generatedBrief);
+                                return sb ? (
+                                  <div className="mt-1 space-y-0.5">
+                                    <p className="text-xs text-foreground/70 line-clamp-1">
+                                      {sb.meetingGoal.statement}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {sb.conversationStarters.length} conversation starters ready
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                                    {meeting.generatedBrief}
+                                  </p>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
