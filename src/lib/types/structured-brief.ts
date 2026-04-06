@@ -53,12 +53,41 @@ export interface StructuredBrief {
   }>;
 }
 
+const VALID_TEMPERATURES = new Set(["COLD", "COOL", "WARM", "HOT"]);
+
+function isValidStructuredBrief(p: Record<string, unknown>): boolean {
+  if (p.version !== 1) return false;
+
+  const goal = p.meetingGoal as Record<string, unknown> | undefined;
+  if (!goal || typeof goal !== "object") return false;
+  if (typeof goal.statement !== "string") return false;
+
+  const contact = p.primaryContactProfile as Record<string, unknown> | undefined;
+  if (!contact || typeof contact !== "object") return false;
+  if (!Array.isArray(contact.bullets)) return false;
+
+  if (!Array.isArray(p.conversationStarters)) return false;
+  if (!Array.isArray(p.newsInsights)) return false;
+
+  const exec = p.executiveProfile as Record<string, unknown> | undefined;
+  if (!exec || typeof exec !== "object") return false;
+
+  const rel = p.relationshipHistory as Record<string, unknown> | undefined;
+  if (!rel || typeof rel !== "object") return false;
+  if (typeof rel.temperature !== "string" || !VALID_TEMPERATURES.has(rel.temperature)) return false;
+
+  if (!Array.isArray(p.attendees)) return false;
+
+  return true;
+}
+
 export function parseStructuredBrief(raw: string | null): StructuredBrief | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    if (parsed?.version === 1 && parsed?.meetingGoal) return parsed as StructuredBrief;
-    return null;
+    if (typeof parsed !== "object" || parsed === null) return null;
+    if (!isValidStructuredBrief(parsed)) return null;
+    return parsed as StructuredBrief;
   } catch {
     return null;
   }
@@ -96,6 +125,10 @@ export function formatBriefAsText(brief: StructuredBrief): string {
       lines.push(n.body);
       lines.push("");
     }
+  } else if (brief.newsEmptyReason) {
+    lines.push("NEWS INSIGHTS");
+    lines.push(brief.newsEmptyReason);
+    lines.push("");
   }
 
   if (brief.executiveProfile.bioSummary) {
@@ -117,6 +150,19 @@ export function formatBriefAsText(brief: StructuredBrief): string {
 
   lines.push(`RELATIONSHIP: ${brief.relationshipHistory.temperature}`);
   lines.push(brief.relationshipHistory.summary);
+  if (brief.relationshipHistory.engagements.length > 0) {
+    for (const e of brief.relationshipHistory.engagements) {
+      lines.push(`• ${e.period}: ${e.description}`);
+    }
+  }
+  lines.push("");
+
+  if (brief.attendees.length > 0) {
+    lines.push("ATTENDEES");
+    for (const a of brief.attendees) {
+      lines.push(`• ${a.name} — ${a.title}`);
+    }
+  }
 
   return lines.join("\n");
 }

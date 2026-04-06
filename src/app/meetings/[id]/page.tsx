@@ -81,6 +81,10 @@ export default function MeetingDetailPage() {
   }
 
   useEffect(() => {
+    setMeeting(null);
+    setLoading(true);
+    setError(null);
+    setBriefError(null);
     fetchMeeting();
   }, [id]);
 
@@ -113,15 +117,20 @@ export default function MeetingDetailPage() {
     }
   }
 
-  function handleCopyBrief() {
+  async function handleCopyBrief() {
     if (!meeting?.generatedBrief) return;
     const structured = parseStructuredBrief(meeting.generatedBrief);
     const text = structured
       ? formatBriefAsText(structured)
       : meeting.generatedBrief;
-    void navigator.clipboard.writeText(text);
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      setBriefError("Failed to copy to clipboard");
+      setTimeout(() => setBriefError(null), 3000);
+    }
   }
 
   if (loading && !meeting) {

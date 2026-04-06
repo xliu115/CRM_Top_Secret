@@ -1,5 +1,5 @@
-import { callLLM } from "./llm-core";
-import type { StructuredBrief } from "@/lib/types/structured-brief";
+import { callLLM, callLLMJson } from "./llm-core";
+import { parseStructuredBrief } from "@/lib/types/structured-brief";
 
 export interface MeetingBriefContext {
   meetingTitle: string;
@@ -61,9 +61,7 @@ QUALITY RULES:
 
 When data is thin, use emptyReason fields rather than generating low-quality content. Honesty about gaps > hallucinated data.`;
 
-export async function generateMeetingBrief(
-  ctx: MeetingBriefContext
-): Promise<string> {
+function buildUserPrompt(ctx: MeetingBriefContext): string {
   const attendeeDetails = ctx.attendees
     .map(
       (a) =>
@@ -71,40 +69,49 @@ export async function generateMeetingBrief(
     )
     .join("\n\n");
 
-  const userPrompt = `Generate a structured meeting brief for: "${ctx.meetingTitle}"
+  return `Generate a structured meeting brief for: "${ctx.meetingTitle}"
 
 Purpose: ${ctx.meetingPurpose || "General relationship meeting"}
 
 Attendees:
 ${attendeeDetails}
 
-Return ONLY the JSON object. No markdown fences, no explanation.`;
+Return ONLY the JSON object.`;
+}
 
-  const result = await callLLM(STRUCTURED_BRIEF_SYSTEM_PROMPT, userPrompt);
+function validateAndStringify(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const json = JSON.stringify(data);
+  return parseStructuredBrief(json) ? json : null;
+}
 
-  if (result) {
-    const cleaned = result.replace(/```json\n?|\n?```/g, "").trim();
+export async function generateMeetingBrief(
+  ctx: MeetingBriefContext
+): Promise<string> {
+  const userPrompt = buildUserPrompt(ctx);
+
+  // Attempt 1: JSON mode (response_format: json_object)
+  const jsonResult = await callLLMJson<Record<string, unknown>>(
+    STRUCTURED_BRIEF_SYSTEM_PROMPT,
+    userPrompt,
+    { maxTokens: 4000, temperature: 0.7 }
+  );
+  const validated = validateAndStringify(jsonResult);
+  if (validated) return validated;
+
+  // Attempt 2: plain text call with fence stripping (fallback for API issues)
+  const textResult = await callLLM(
+    STRUCTURED_BRIEF_SYSTEM_PROMPT,
+    `Your response must be ONLY a valid JSON object matching the schema. No markdown, no explanation.\n\n${userPrompt}`
+  );
+  if (textResult) {
+    const cleaned = textResult.replace(/```json\n?|\n?```/g, "").trim();
     try {
       const parsed = JSON.parse(cleaned);
-      if (parsed?.version === 1 && parsed?.meetingGoal) {
-        return JSON.stringify(parsed);
-      }
+      const retryValidated = validateAndStringify(parsed);
+      if (retryValidated) return retryValidated;
     } catch {
-      const retry = await callLLM(
-        STRUCTURED_BRIEF_SYSTEM_PROMPT,
-        `Your previous response was not valid JSON. Please output ONLY the JSON object for this meeting brief, no other text.\n\n${userPrompt}`
-      );
-      if (retry) {
-        const retryCleaned = retry.replace(/```json\n?|\n?```/g, "").trim();
-        try {
-          const retryParsed = JSON.parse(retryCleaned);
-          if (retryParsed?.version === 1 && retryParsed?.meetingGoal) {
-            return JSON.stringify(retryParsed);
-          }
-        } catch {
-          // Fall through to template
-        }
-      }
+      // Fall through to template
     }
   }
 

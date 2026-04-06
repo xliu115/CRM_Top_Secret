@@ -39,7 +39,7 @@ const temperatureConfig = {
 export function RelationshipHistoryCard({
   history,
 }: RelationshipHistoryCardProps) {
-  const config = temperatureConfig[history.temperature];
+  const config = temperatureConfig[history.temperature] ?? temperatureConfig.COOL;
 
   return (
     <PrepDetailSection
@@ -56,7 +56,15 @@ export function RelationshipHistoryCard({
               {config.label}
             </span>
           </div>
-          <div className="h-2 w-full rounded-full bg-muted">
+          <div
+            role="meter"
+            aria-label="Relationship temperature"
+            aria-valuenow={["COLD", "COOL", "WARM", "HOT"].indexOf(history.temperature) + 1}
+            aria-valuemin={1}
+            aria-valuemax={4}
+            aria-valuetext={config.label}
+            className="h-2 w-full rounded-full bg-muted"
+          >
             <div
               className={cn("h-2 rounded-full transition-all", config.barClass, config.width)}
             />
