@@ -101,7 +101,12 @@ export async function sendMorningBriefing(
       (a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4)
     );
 
-    const topNudges = sortedNudges.slice(0, 5).map((n) => {
+    const campaignApprovalNudges = sortedNudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
+    const otherNudges = sortedNudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL");
+    const remainingSlots = Math.max(0, 5 - campaignApprovalNudges.length);
+    const mergedNudges = [...campaignApprovalNudges, ...otherNudges.slice(0, remainingSlots)];
+
+    const topNudges = mergedNudges.map((n) => {
       const daysSince = n.contact.lastContacted
         ? differenceInDays(now, new Date(n.contact.lastContacted))
         : undefined;
@@ -115,6 +120,7 @@ export async function sendMorningBriefing(
         nudgeId: n.id,
         ruleType: n.ruleType,
         daysSince,
+        metadata: n.metadata ?? undefined,
       };
     });
 

@@ -87,6 +87,7 @@ export interface NarrativeBriefingContext extends DashboardBriefingContext {
     nudgeId?: string;
     ruleType?: string;
     daysSince?: number;
+    metadata?: string;
   })[];
   meetings: (DashboardBriefingContext["meetings"][number] & {
     meetingId?: string;
@@ -104,13 +105,15 @@ Rules:
 - Keep it under 250 words — this is a 2-minute read over coffee.
 - Be specific: use actual names, companies, days-since numbers, meeting times.
 - Use **bold** (markdown) to highlight key information that should catch the reader's eye: contact full names on first mention, company names, days-since numbers, meeting titles, and key news headlines. Do NOT bold generic phrases — only specific names, numbers, and facts.
+- IMPORTANT: If any nudge has [type: CAMPAIGN_APPROVAL], call it out explicitly. Mention the campaign name, how many contacts are pending approval, and the deadline if present. Frame it as an action item — e.g. "You have a campaign pending your approval: **{campaign name}** with {N} contacts awaiting review{deadline}. Review and approve so it can go out on your behalf." Campaign approvals are time-sensitive and should be prominently mentioned, not buried.
 
 After the narrative, output a JSON block with exactly 3 top actions in this format:
 ---ACTIONS---
 [{"contactName":"...","company":"...","actionLabel":"...","detail":"..."}]
 
-actionLabel should be a short CTA like "Draft check-in email", "Review meeting brief", or "View company news".
-detail should be a brief reason like "94 days since last contact" or "Meeting tomorrow at 10am".`;
+actionLabel should be a short CTA like "Draft check-in email", "Review meeting brief", "View company news", or "Review campaign" (for CAMPAIGN_APPROVAL nudges).
+detail should be a brief reason like "94 days since last contact", "Meeting tomorrow at 10am", or "5 contacts pending approval, due Apr 10".
+For CAMPAIGN_APPROVAL actions, use the campaign name as "contactName" and set "company" to "Campaign".`;
 
 export async function generateNarrativeBriefing(
   ctx: NarrativeBriefingContext
@@ -177,12 +180,34 @@ function parseNarrativeResponse(
 
 function resolveDeeplink(
   contactName: string,
-  _company: string,
+  company: string,
   ctx: NarrativeBriefingContext
 ): string {
+  if (company === "Campaign") {
+    const campNudge = ctx.nudges.find(
+      (n) => n.ruleType === "CAMPAIGN_APPROVAL"
+    );
+    if (campNudge?.metadata) {
+      try {
+        const meta = JSON.parse(campNudge.metadata);
+        if (meta.campaignId) return `/campaigns/${meta.campaignId}`;
+      } catch { /* fallback */ }
+    }
+    return "/campaigns";
+  }
+
   const nudge = ctx.nudges.find(
     (n) => n.contactName.toLowerCase() === contactName.toLowerCase()
   );
+  if (nudge?.ruleType === "CAMPAIGN_APPROVAL") {
+    if (nudge.metadata) {
+      try {
+        const meta = JSON.parse(nudge.metadata);
+        if (meta.campaignId) return `/campaigns/${meta.campaignId}`;
+      } catch { /* fallback */ }
+    }
+    return "/campaigns";
+  }
   if (nudge?.contactId && nudge?.nudgeId) {
     return `/contacts/${nudge.contactId}?nudge=${nudge.nudgeId}`;
   }
@@ -244,17 +269,31 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
   const paragraphs: string[] = [];
   const firstName = ctx.partnerName.split(" ")[0];
 
-  if (ctx.nudges.length > 0) {
-    const top = ctx.nudges[0];
+  const campaignNudges = ctx.nudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
+  const contactNudges = ctx.nudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL");
+
+  if (campaignNudges.length > 0) {
+    const campLines = campaignNudges.map((n) => {
+      const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
+      const campName = nameMatch?.[1] ?? "a campaign";
+      return `**${campName}** needs your approval — ${n.reason}`;
+    });
+    paragraphs.push(
+      `${firstName}, you have ${campaignNudges.length === 1 ? "a campaign" : `${campaignNudges.length} campaigns`} pending your review. ${campLines.join(" ")} Review and approve so ${campaignNudges.length === 1 ? "it" : "they"} can go out on your behalf.`
+    );
+  }
+
+  if (contactNudges.length > 0) {
+    const top = contactNudges[0];
     const daysPart = top.daysSince
       ? ` — it's been **${top.daysSince} days** since your last conversation`
       : "";
     paragraphs.push(
-      `${firstName}, your most important move today is reaching out to **${top.contactName}** at **${top.company}**${daysPart}. ${top.reason}`
+      `${campaignNudges.length > 0 ? "Beyond that, your" : `${firstName}, your`} most important move today is reaching out to **${top.contactName}** at **${top.company}**${daysPart}. ${top.reason}`
     );
 
-    if (ctx.nudges.length > 1) {
-      const others = ctx.nudges
+    if (contactNudges.length > 1) {
+      const others = contactNudges
         .slice(1, 3)
         .map((n) => `**${n.contactName}** at **${n.company}**`)
         .join(" and ");

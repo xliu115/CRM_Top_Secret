@@ -111,6 +111,7 @@ type StructuredBriefingData = {
     nudgeId: string;
     ruleType: string;
     daysSince?: number;
+    metadata?: string;
   }[];
   meetings: {
     title: string;
@@ -284,6 +285,7 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   EVENT_REGISTERED: "event outreach",
   ARTICLE_READ: "content engagement",
   LINKEDIN_ACTIVITY: "LinkedIn activity",
+  CAMPAIGN_APPROVAL: "campaign approval",
 };
 
 function summarizeNudgeReasons(nudges: StructuredBriefingData["nudges"], contactName: string, company: string): string {
@@ -348,9 +350,13 @@ function StructuredBriefingView({
     );
   }
 
+  // Separate campaign approval nudges from contact-centric nudges
+  const campaignApprovalNudges = data.nudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
+  const contactNudges = data.nudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL");
+
   // Group contacts and sort groups by highest priority within
   const contactMap = new Map<string, StructuredBriefingData["nudges"][number][]>();
-  for (const n of data.nudges) {
+  for (const n of contactNudges) {
     const key = `${n.contactName}||${n.company}`;
     const list = contactMap.get(key) ?? [];
     list.push(n);
@@ -433,6 +439,57 @@ function StructuredBriefingView({
                       {nudges.length} {nudges.length === 1 ? "reason" : "reasons"} to reach out: {reasonsSummary}.
                     </p>
                   )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Campaign Approvals */}
+      {campaignApprovalNudges.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-950/40">
+              <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Campaigns pending your approval
+            </h3>
+          </div>
+          <div className="space-y-3 pl-8">
+            {campaignApprovalNudges.map((n) => {
+              const camp = parseCampaignApprovalNudgeDisplay({
+                reason: n.reason,
+                metadata: n.metadata,
+              });
+              return (
+                <div key={`ca-${n.nudgeId}`} className="group">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <Link
+                      href={camp.campaignHref}
+                      className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
+                    >
+                      {camp.campaignName}
+                    </Link>
+                    {n.priority === "URGENT" && (
+                      <Badge variant="outline" className="ml-1 border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400 text-[10px] py-0">
+                        Urgent
+                      </Badge>
+                    )}
+                    {n.priority === "HIGH" && (
+                      <Badge variant="outline" className="ml-1 border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400 text-[10px] py-0">
+                        High
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="ml-1 border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400 text-[10px] py-0">
+                      <ShieldCheck className="h-2.5 w-2.5 mr-0.5" />
+                      Approval
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {camp.pendingCount} contact{camp.pendingCount !== 1 ? "s" : ""} pending your review{camp.deadlineLabel ? ` · ${camp.deadlineLabel}` : ""}.
+                  </p>
                 </div>
               );
             })}
@@ -682,8 +739,11 @@ export default function DashboardPage() {
         setDashboardData(dashboard);
 
         if (nudgesRes.ok) {
-          const nudges = await nudgesRes.json();
-          setTopNudges(nudges.slice(0, 5));
+          const nudges: Nudge[] = await nudgesRes.json();
+          const campaignApprovals = nudges.filter((n: Nudge) => n.ruleType === "CAMPAIGN_APPROVAL");
+          const others = nudges.filter((n: Nudge) => n.ruleType !== "CAMPAIGN_APPROVAL");
+          const remaining = Math.max(0, 5 - campaignApprovals.length);
+          setTopNudges([...campaignApprovals, ...others.slice(0, remaining)]);
         }
       } catch (err) {
         if (cancelled) return;
