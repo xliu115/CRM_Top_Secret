@@ -86,9 +86,20 @@ Output format changes from multi-paragraph prose to:
 - Bold headline sentence
 - Bullet sections with bold labels
 
-### 3. Frontend Spacing (optional, minor) (`src/app/dashboard/page.tsx`)
+### 3. Email Bullet Rendering (`src/lib/services/email-service.ts`)
+
+The email renderer (`buildBriefingHtml`, line 274) currently splits the narrative on blank lines and wraps each block in a `<p>` tag, converting only `**bold**` to `<strong>`. With the new bullet format, raw `- ` prefixes would appear in the email.
+
+**Fix:** Update the narrative rendering pipeline to detect consecutive markdown bullet lines (`- ...`) within a paragraph block and convert them to proper HTML `<ul><li>` elements, styled inline for email compatibility (email clients ignore `<style>` blocks). Bold section labels (e.g., `**Priority contacts**`) that appear alone on a line should render as styled `<p>` headings (bold, slightly smaller).
+
+### 4. Frontend Spacing (optional, minor) (`src/app/dashboard/page.tsx`)
 
 The `MarkdownContent` component (line 992) already renders markdown bullets and bold. May need a small spacing adjustment to ensure bullet lists have comfortable breathing room. Check and adjust if needed — likely just adding `space-y-1` or `prose-sm` to the wrapper.
+
+### 5. Mobile and TTS — No Changes Needed
+
+- **Mobile page** (`/mobile`) renders via the same `MarkdownContent` component — bullets and bold render correctly. Shorter text is a win on mobile.
+- **Listen/TTS** (`prepareBriefingForTTS`) uses `stripMarkdownToPlainText` which already strips bold, converts `- ` to `• `, and strips headers. The section labels ("Priority contacts") serve as natural verbal transitions when read aloud.
 
 ## What Does NOT Change
 
@@ -102,8 +113,9 @@ The `MarkdownContent` component (line 992) already renders markdown bullets and 
 
 ## Scope
 
-Two files change:
+Three files change:
 - `src/lib/services/llm-briefing.ts` — prompt rewrite + fallback template rewrite
+- `src/lib/services/email-service.ts` — convert markdown bullets to HTML `<ul>/<li>` in email rendering
 - `src/app/dashboard/page.tsx` — possible minor CSS spacing tweak
 
-No new components, no new dependencies, no API changes.
+No new components, no new dependencies, no API changes. Mobile page and TTS are unaffected.
