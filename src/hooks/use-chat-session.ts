@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useStreamingTranscription } from "@/hooks/use-streaming-transcription";
 
 export type ChatSource = {
   type: string;
@@ -37,9 +37,10 @@ export function useChatSession() {
     transcript: liveTranscript,
     isSupported: voiceSupported,
     duration: voiceDuration,
+    audioLevel: voiceAudioLevel,
     startListening,
     stopListening,
-  } = useSpeechRecognition({ onResult: handleVoiceResult });
+  } = useStreamingTranscription({ onResult: handleVoiceResult });
 
   const handleSend = useCallback(
     async (message?: string) => {
@@ -144,6 +145,7 @@ export function useChatSession() {
     liveTranscript,
     voiceSupported,
     voiceDuration,
+    voiceAudioLevel,
     startListening,
     stopListening,
   };

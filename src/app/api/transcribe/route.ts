@@ -22,10 +22,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const rawPrompt = formData.get("prompt");
+    const prompt = typeof rawPrompt === "string" && rawPrompt.length > 0 ? rawPrompt : null;
+
     const transcription = await openai.audio.transcriptions.create({
       model: "whisper-1",
       file,
       language: "en",
+      ...(prompt ? { prompt } : {}),
     });
 
     return NextResponse.json({ text: transcription.text });

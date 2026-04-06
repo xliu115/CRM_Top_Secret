@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 import { AssistantReply } from "@/components/chat/assistant-reply";
 import { useChatSession } from "@/hooks/use-chat-session";
+import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 
 const SUGGESTED_QUESTIONS = [
   "What's the latest news about Microsoft?",
@@ -37,8 +38,10 @@ function ChatPageContent() {
     handleKeyDown,
     isListening,
     isTranscribing,
+    liveTranscript,
     voiceSupported,
     voiceDuration,
+    voiceAudioLevel,
     startListening,
     stopListening,
   } = useChatSession();
@@ -170,6 +173,13 @@ function ChatPageContent() {
               </div>
             )}
           </div>
+
+          <LiveTranscriptPreview
+            transcript={liveTranscript}
+            isListening={isListening}
+            duration={voiceDuration}
+            audioLevel={voiceAudioLevel}
+          />
 
           <div className="border-t border-border p-4">
             <form

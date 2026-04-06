@@ -41,12 +41,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
 import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useStreamingTranscription } from "@/hooks/use-streaming-transcription";
+import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import {
   loadDashboardPrefs,
   type DashboardCardPrefs,
 } from "@/lib/utils/dashboard-prefs";
+import { parseStructuredBrief } from "@/lib/types/structured-brief";
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -740,8 +742,15 @@ export default function DashboardPage() {
     setChatInput(transcript);
   }, []);
 
-  const { isListening, transcript: liveTranscript, isSupported, startListening, stopListening } =
-    useSpeechRecognition({ onResult: handleVoiceResult });
+  const {
+    isListening,
+    liveTranscript,
+    isSupported,
+    duration: voiceDuration,
+    audioLevel: voiceAudioLevel,
+    startListening,
+    stopListening,
+  } = useStreamingTranscription({ onResult: handleVoiceResult });
 
   useEffect(() => {
     if (pendingVoiceRef.current && !isListening) {
@@ -962,6 +971,13 @@ export default function DashboardPage() {
               ) : null}
             </div>
 
+            <LiveTranscriptPreview
+              transcript={liveTranscript}
+              isListening={isListening}
+              duration={voiceDuration}
+              audioLevel={voiceAudioLevel}
+            />
+
             {/* Input bar */}
             <div className="border-t border-border p-4">
               <form onSubmit={handleChatSubmit} className="space-y-3">
@@ -1053,12 +1069,18 @@ export default function DashboardPage() {
                           const attendeeNames = meeting.attendees
                             .map((a) => a.contact.name)
                             .join(", ");
-                          const summarySource = meeting.generatedBrief || meeting.purpose;
+                          const structuredBrief = parseStructuredBrief(meeting.generatedBrief);
+                          const summarySource = structuredBrief
+                            ? structuredBrief.meetingGoal.statement
+                            : (meeting.generatedBrief || meeting.purpose);
                           const summaryPreview = summarySource
                             ? summarySource.length > 200
                               ? summarySource.slice(0, 200).trimEnd() + "\u2026"
                               : summarySource
                             : null;
+                          const briefLabel = structuredBrief
+                            ? "Goal"
+                            : (meeting.generatedBrief ? "Brief" : "Purpose");
                           return (
                             <Card key={`mtg-${meeting.id}`} className="overflow-hidden">
                               <CardHeader className="pb-3 pt-5">
@@ -1090,7 +1112,7 @@ export default function DashboardPage() {
                                   <div className="flex items-center gap-1.5 mb-2">
                                     <Sparkles className="h-4 w-4 text-indigo-600" />
                                     <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                                      {meeting.generatedBrief ? "Brief" : "Purpose"}
+                                      {briefLabel}
                                     </span>
                                   </div>
                                   {summaryPreview ? (
@@ -1276,11 +1298,23 @@ export default function DashboardPage() {
                                 {format(new Date(meeting.startTime), "EEE h:mm a")}
                                 {topAttendee?.company && ` · ${topAttendee.company.name}`}
                               </p>
-                              {meeting.generatedBrief && (
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                                  {meeting.generatedBrief}
-                                </p>
-                              )}
+                              {meeting.generatedBrief && (() => {
+                                const sb = parseStructuredBrief(meeting.generatedBrief);
+                                return sb ? (
+                                  <div className="mt-1 space-y-0.5">
+                                    <p className="text-xs text-foreground/70 line-clamp-1">
+                                      {sb.meetingGoal.statement}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {sb.conversationStarters.length} conversation starters ready
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                                    {meeting.generatedBrief}
+                                  </p>
+                                );
+                              })()}
                             </div>
                           </div>
                         );

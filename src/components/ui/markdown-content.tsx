@@ -11,9 +11,12 @@ export function MarkdownContent({
 }) {
   const isMobile = className.includes("text-[15px]");
 
+  // No dark:prose-invert: OS dark mode would invert prose to light text while our shell
+  // stays on light tokens (bg-card / --background), making headings unreadable.
   const proseBase = isMobile
     ? [
-        "prose max-w-none dark:prose-invert prose-a:text-primary",
+        "prose max-w-none prose-a:text-primary",
+        "prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground",
         // Body: 15px
         "prose-p:text-[15px] prose-p:leading-relaxed prose-p:my-1.5",
         "prose-li:text-[15px] prose-li:my-0.5",
@@ -25,7 +28,10 @@ export function MarkdownContent({
         "prose-strong:font-semibold prose-strong:text-foreground",
         "prose-hr:my-3",
       ].join(" ")
-    : "prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:mb-2 prose-headings:mt-3 prose-a:text-primary prose-strong:text-foreground";
+    : [
+        "prose prose-sm max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:mb-2 prose-headings:mt-3 prose-a:text-primary",
+        "prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground",
+      ].join(" ");
 
   return (
     <div className={`${proseBase} ${className}`}>
