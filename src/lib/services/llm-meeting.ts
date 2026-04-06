@@ -1,6 +1,5 @@
 import { callLLM } from "./llm-core";
-
-// ── Meeting Brief ───────────────────────────────────────────────────
+import type { StructuredBrief } from "@/lib/types/structured-brief";
 
 export interface MeetingBriefContext {
   meetingTitle: string;
@@ -14,6 +13,54 @@ export interface MeetingBriefContext {
   }[];
 }
 
+const STRUCTURED_BRIEF_SYSTEM_PROMPT = `You are a trusted chief of staff preparing a senior consulting partner for a specific meeting. Your job is to make them walk in feeling sharp and confident — not to dump data.
+
+Return ONLY a valid JSON object matching this exact schema (no markdown, no explanation, no wrapping):
+
+{
+  "version": 1,
+  "meetingGoal": {
+    "statement": "1-2 sentences. Format: [Action verb] [what].",
+    "successCriteria": "Success = [measurable outcome]"
+  },
+  "primaryContactProfile": {
+    "name": "Full name of primary attendee",
+    "bullets": [
+      { "label": "2-4 word bolded descriptor", "detail": "1-2 sentences of evidence" }
+    ],
+    "emptyReason": "Only if fewer than 3 bullets possible"
+  },
+  "conversationStarters": [
+    { "question": "Specific question in quotes", "tacticalNote": "Max 15 words: why this works" }
+  ],
+  "newsInsights": [
+    { "headline": "ALL CAPS, max 8 words, states implication", "body": "2-3 sentences connecting to this meeting" }
+  ],
+  "newsEmptyReason": "Only if no meaningful news available",
+  "executiveProfile": {
+    "bioSummary": "2-3 sentences career arc, not full CV",
+    "recentMoves": [{ "date": "Mon YYYY", "description": "What they did" }],
+    "patternCallout": "2-3 sentences on the pattern, only if clear pattern exists"
+  },
+  "relationshipHistory": {
+    "temperature": "COLD|COOL|WARM|HOT",
+    "summary": "1-2 sentences on relationship state",
+    "engagements": [{ "period": "YYYY-YYYY", "description": "What happened" }]
+  },
+  "attendees": [{ "name": "Full Name", "title": "Abbreviated title", "initials": "FN" }]
+}
+
+QUALITY RULES:
+- meetingGoal: Must include a concrete success criteria that someone could evaluate post-meeting. Not vague.
+- primaryContactProfile.bullets: Each starts with a bold 2-4 word label. Never include LinkedIn connections, education (unless relevant), or generic title descriptions. Prioritize recent actions, public statements, decision patterns. Target 3 bullets.
+- conversationStarters: Exactly 3. Each must be specific to THIS person, THIS company, THIS meeting. If a question could be asked to any executive in the same industry, rewrite it. Each gets a tacticalNote (max 15 words) explaining the strategic purpose.
+- newsInsights: Target 3. Headlines must state the IMPLICATION, not the event. Body must connect to this meeting specifically. If no meaningful news, set newsEmptyReason and leave array empty.
+- executiveProfile: Career arc, not full CV. recentMoves in reverse chronological order. patternCallout only if a clear pattern exists.
+- relationshipHistory: Temperature based on engagement frequency and recency. COLD = no engagement 2+ years. COOL = sparse. WARM = regular. HOT = active with champion. Synthesize from interaction history.
+- attendees: Include all meeting attendees with abbreviated titles and initials.
+
+When data is thin, use emptyReason fields rather than generating low-quality content. Honesty about gaps > hallucinated data.`;
+
 export async function generateMeetingBrief(
   ctx: MeetingBriefContext
 ): Promise<string> {
@@ -24,25 +71,44 @@ export async function generateMeetingBrief(
     )
     .join("\n\n");
 
-  const result = await callLLM(
-    `You are an expert meeting preparation assistant. Generate structured, actionable meeting briefs.`,
-    `Generate a meeting brief for: "${ctx.meetingTitle}"
+  const userPrompt = `Generate a structured meeting brief for: "${ctx.meetingTitle}"
 
-Purpose: ${ctx.meetingPurpose}
+Purpose: ${ctx.meetingPurpose || "General relationship meeting"}
 
 Attendees:
 ${attendeeDetails}
 
-Structure the brief with these sections:
-1. **Meeting Context** – Why this meeting matters
-2. **Attendee Insights** – Key facts about each person
-3. **Recommended Agenda** – 3-5 agenda items
-4. **Suggested Questions** – 3-5 strategic questions to ask
-5. **Risks & Watch-outs** – Potential concerns to be aware of
-6. **Preparation Checklist** – 2-3 things to prepare before the meeting`
-  );
+Return ONLY the JSON object. No markdown fences, no explanation.`;
 
-  return result ?? generateBriefTemplate(ctx);
+  const result = await callLLM(STRUCTURED_BRIEF_SYSTEM_PROMPT, userPrompt);
+
+  if (result) {
+    const cleaned = result.replace(/```json\n?|\n?```/g, "").trim();
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (parsed?.version === 1 && parsed?.meetingGoal) {
+        return JSON.stringify(parsed);
+      }
+    } catch {
+      const retry = await callLLM(
+        STRUCTURED_BRIEF_SYSTEM_PROMPT,
+        `Your previous response was not valid JSON. Please output ONLY the JSON object for this meeting brief, no other text.\n\n${userPrompt}`
+      );
+      if (retry) {
+        const retryCleaned = retry.replace(/```json\n?|\n?```/g, "").trim();
+        try {
+          const retryParsed = JSON.parse(retryCleaned);
+          if (retryParsed?.version === 1 && retryParsed?.meetingGoal) {
+            return JSON.stringify(retryParsed);
+          }
+        } catch {
+          // Fall through to template
+        }
+      }
+    }
+  }
+
+  return generateBriefTemplate(ctx);
 }
 
 function generateBriefTemplate(ctx: MeetingBriefContext): string {
