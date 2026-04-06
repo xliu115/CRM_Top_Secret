@@ -637,7 +637,7 @@ function StructuredBriefingView({
               {action.actionLabel} — {action.contactName}
             </Link>
           ))}
-          {[...new Map(actions.map((a) => [a.contactName, a.contactName])).values()].map((name) => (
+          {[...new Map(actions.filter((a) => a.company !== "Campaign").map((a) => [a.contactName, a.contactName])).values()].map((name) => (
             <button
               key={`q360-struct-${name}`}
               onClick={() => onQuick360(name)}
@@ -1003,8 +1003,8 @@ export default function DashboardPage() {
                                 {action.actionLabel} — {action.contactName}
                               </Link>
                             ))}
-                            {/* Quick 360 buttons — navigate to chat with 360 query */}
-                            {[...new Map(briefingActions.map((a) => [a.contactName, a.contactName])).values()].map((name) => (
+                            {/* Quick 360 buttons — contacts only, not campaigns */}
+                            {[...new Map(briefingActions.filter((a) => a.company !== "Campaign").map((a) => [a.contactName, a.contactName])).values()].map((name) => (
                               <button
                                 key={`q360-${name}`}
                                 onClick={() => handleQuick360(name)}
