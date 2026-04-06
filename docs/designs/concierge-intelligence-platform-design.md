@@ -50,6 +50,8 @@ The workaround cost: missed follow-ups, cold relationships, duplicated outreach 
 
 ## Premises
 
+Consolidated product design principles (six principles) live in the executive product document: [Activate — Executive Product Document](./Xinyu_Liu-main-design-20260331-083116.md#4-design-principles).
+
 1. **Zero-effort value delivery is critical.** The existing CRM failed because it demanded work without proportional value. Activate must deliver value with ZERO Partner effort. If it requires manual input, adoption will be as low as the existing CRM.
 
 2. **The nudge IS the product.** The #1 value proposition is "someone tells you exactly who to contact and why, with a draft email ready to send." Dashboard, contacts list, meetings page are supporting infrastructure. If you ship ONE thing to prove value, it's a daily push notification with top nudges + draft emails.
