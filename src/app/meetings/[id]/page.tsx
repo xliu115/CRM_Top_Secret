@@ -9,6 +9,8 @@ import {
   Loader2,
   Copy,
   Check,
+  RefreshCw,
+  Users,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -22,12 +24,23 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownPreview } from "@/components/ui/markdown-preview";
+import { FreshnessIndicator } from "@/components/meetings/freshness-indicator";
+import { StructuredBriefCard } from "@/components/meetings/structured-brief-card";
+import { NewsInsightsCard } from "@/components/meetings/news-insights-card";
+import { ExecutiveProfileCard } from "@/components/meetings/executive-profile-card";
+import { RelationshipHistoryCard } from "@/components/meetings/relationship-history-card";
+import { AttendeeChipGrid } from "@/components/meetings/attendee-chip-grid";
+import {
+  parseStructuredBrief,
+  formatBriefAsText,
+} from "@/lib/types/structured-brief";
 
 type Meeting = {
   id: string;
   title: string;
   purpose: string | null;
   startTime: string;
+  createdAt?: string;
   generatedBrief: string | null;
   attendees: {
     contact: {
@@ -92,7 +105,9 @@ export default function MeetingDetailPage() {
         prev ? { ...prev, generatedBrief: brief } : null
       );
     } catch (err) {
-      setBriefError(err instanceof Error ? err.message : "Failed to generate brief");
+      setBriefError(
+        err instanceof Error ? err.message : "Failed to generate brief"
+      );
     } finally {
       setGeneratingBrief(false);
     }
@@ -100,7 +115,11 @@ export default function MeetingDetailPage() {
 
   function handleCopyBrief() {
     if (!meeting?.generatedBrief) return;
-    void navigator.clipboard.writeText(meeting.generatedBrief);
+    const structured = parseStructuredBrief(meeting.generatedBrief);
+    const text = structured
+      ? formatBriefAsText(structured)
+      : meeting.generatedBrief;
+    void navigator.clipboard.writeText(text);
     setCopySuccess(true);
     setTimeout(() => setCopySuccess(false), 2000);
   }
@@ -135,6 +154,8 @@ export default function MeetingDetailPage() {
     );
   }
 
+  const structuredBrief = parseStructuredBrief(meeting.generatedBrief);
+
   return (
     <DashboardShell>
       <div className="space-y-6">
@@ -145,97 +166,191 @@ export default function MeetingDetailPage() {
           </Link>
         </Button>
 
+        {/* Meeting Header */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">{meeting.title}</CardTitle>
-            <CardDescription>
-              {format(new Date(meeting.startTime), "EEEE, MMMM d, yyyy 'at' h:mm a")}
-            </CardDescription>
-            {meeting.purpose && (
-              <p className="text-foreground">{meeting.purpose}</p>
-            )}
-          </CardHeader>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attendees</CardTitle>
-            <CardDescription>People invited to this meeting</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {meeting.attendees.map((a) => (
-                <Link
-                  key={a.contact.id}
-                  href={`/contacts/${a.contact.id}`}
-                  className="flex items-center gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50"
-                >
-                  <Avatar name={a.contact.name} size="lg" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-foreground">{a.contact.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {a.contact.title} at {a.contact.company.name}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Meeting Brief</CardTitle>
-            <CardDescription>
-              AI-generated preparation brief for this meeting
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {meeting.generatedBrief ? (
-              <>
-                <div className="rounded-md border border-border bg-muted/30 p-4">
-                  <MarkdownPreview content={meeting.generatedBrief} />
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleCopyBrief}
-                >
-                  {copySuccess ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copy Brief
-                    </>
+            <div className="flex items-start justify-between">
+              <div>
+                <CardTitle className="text-2xl">{meeting.title}</CardTitle>
+                <CardDescription className="mt-1">
+                  {format(
+                    new Date(meeting.startTime),
+                    "EEEE, MMMM d, yyyy 'at' h:mm a"
                   )}
-                </Button>
-              </>
-            ) : (
-              <div className="space-y-4">
-                <Button
-                  onClick={handleGenerateBrief}
-                  disabled={generatingBrief}
-                >
-                  {generatingBrief ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    "Generate Brief"
-                  )}
-                </Button>
-                {briefError && (
-                  <p className="text-sm text-destructive">{briefError}</p>
-                )}
+                </CardDescription>
               </div>
+              <div className="flex items-center gap-3">
+                {meeting.generatedBrief && (
+                  <FreshnessIndicator generatedAt={meeting.createdAt ?? null} />
+                )}
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Users className="h-4 w-4" />
+                  {meeting.attendees.length}
+                </div>
+              </div>
+            </div>
+            {meeting.purpose && (
+              <p className="text-foreground mt-2">{meeting.purpose}</p>
             )}
-          </CardContent>
+          </CardHeader>
         </Card>
+
+        {/* Brief content — structured or legacy */}
+        {structuredBrief ? (
+          <>
+            {/* Hero Card */}
+            <StructuredBriefCard brief={structuredBrief} />
+
+            {/* Detailed Prep divider */}
+            <div className="flex items-center gap-3 pt-2">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Detailed Prep
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            {/* Prep Detail sections */}
+            <NewsInsightsCard
+              insights={structuredBrief.newsInsights}
+              emptyReason={structuredBrief.newsEmptyReason}
+            />
+            <ExecutiveProfileCard
+              profile={structuredBrief.executiveProfile}
+            />
+            <RelationshipHistoryCard
+              history={structuredBrief.relationshipHistory}
+            />
+            <AttendeeChipGrid attendees={structuredBrief.attendees} />
+
+            {/* Actions */}
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateBrief}
+                disabled={generatingBrief}
+              >
+                {generatingBrief ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Regenerate Brief
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleCopyBrief}
+              >
+                {copySuccess ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy Brief
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Legacy: Attendees card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Attendees</CardTitle>
+                <CardDescription>
+                  People invited to this meeting
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {meeting.attendees.map((a) => (
+                    <Link
+                      key={a.contact.id}
+                      href={`/contacts/${a.contact.id}`}
+                      className="flex items-center gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50"
+                    >
+                      <Avatar name={a.contact.name} size="lg" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-foreground">
+                          {a.contact.name}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {a.contact.title} at {a.contact.company.name}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Legacy: Meeting Brief card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Meeting Brief</CardTitle>
+                <CardDescription>
+                  AI-generated preparation brief for this meeting
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {meeting.generatedBrief ? (
+                  <>
+                    <div className="rounded-md border border-border bg-muted/30 p-4">
+                      <MarkdownPreview content={meeting.generatedBrief} />
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleCopyBrief}
+                    >
+                      {copySuccess ? (
+                        <>
+                          <Check className="h-4 w-4" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4" />
+                          Copy Brief
+                        </>
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <Button
+                      onClick={handleGenerateBrief}
+                      disabled={generatingBrief}
+                    >
+                      {generatingBrief ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        "Generate Brief"
+                      )}
+                    </Button>
+                    {briefError && (
+                      <p className="text-sm text-destructive">{briefError}</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </DashboardShell>
   );
