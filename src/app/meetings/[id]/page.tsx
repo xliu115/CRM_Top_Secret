@@ -260,6 +260,9 @@ export default function MeetingDetailPage() {
                   </>
                 )}
               </Button>
+              {briefError && (
+                <p className="text-sm text-destructive">{briefError}</p>
+              )}
             </div>
           </>
         ) : (
