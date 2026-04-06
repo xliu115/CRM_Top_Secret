@@ -288,6 +288,60 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   CAMPAIGN_APPROVAL: "campaign approval",
 };
 
+const RULE_TYPE_CHAT_ACTION: Record<string, string> = {
+  STALE_CONTACT: "Draft a check-in email to",
+  JOB_CHANGE: "Draft an email about their new role to",
+  COMPANY_NEWS: "Draft an email referencing recent news to",
+  UPCOMING_EVENT: "Draft an event outreach email to",
+  MEETING_PREP: "Prepare me for the meeting with",
+  EVENT_ATTENDED: "Draft an event follow-up email to",
+  EVENT_REGISTERED: "Draft an event outreach email to",
+  ARTICLE_READ: "Draft an email about our content to",
+  LINKEDIN_ACTIVITY: "Draft an email to",
+};
+
+function buildChatUrl(params: {
+  q: string;
+  nudgeId?: string;
+  contactId?: string;
+  meetingId?: string;
+}): string {
+  const sp = new URLSearchParams({ q: params.q });
+  if (params.nudgeId) sp.set("nudgeId", params.nudgeId);
+  if (params.contactId) sp.set("contactId", params.contactId);
+  if (params.meetingId) sp.set("meetingId", params.meetingId);
+  return `/chat?${sp.toString()}`;
+}
+
+function parseDeeplinkIds(deeplink: string): {
+  contactId?: string;
+  nudgeId?: string;
+  meetingId?: string;
+} {
+  const contactMatch = deeplink.match(/\/contacts\/([^?/]+)/);
+  const nudgeMatch = deeplink.match(/[?&]nudge=([^&]+)/);
+  const meetingMatch = deeplink.match(/\/meetings\/([^?/]+)/);
+  return {
+    contactId: contactMatch?.[1],
+    nudgeId: nudgeMatch?.[1],
+    meetingId: meetingMatch?.[1],
+  };
+}
+
+function buildBriefingActionHref(action: {
+  contactName: string;
+  company: string;
+  actionLabel: string;
+  deeplink: string;
+}): string {
+  if (action.company === "Campaign" || action.deeplink.startsWith("/campaigns")) {
+    return action.deeplink;
+  }
+  const ids = parseDeeplinkIds(action.deeplink);
+  const q = `${action.actionLabel} ${action.contactName}`;
+  return buildChatUrl({ q, ...ids });
+}
+
 function summarizeNudgeReasons(nudges: StructuredBriefingData["nudges"], contactName: string, company: string): string {
   const contactNudges = nudges.filter(
     (n) => n.contactName === contactName && n.company === company
@@ -630,7 +684,7 @@ function StructuredBriefingView({
           {actions.map((action, i) => (
               <Link
               key={`${action.deeplink}-${i}`}
-              href={action.deeplink}
+              href={buildBriefingActionHref(action)}
               className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3.5 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 min-h-[36px]"
             >
               <ChevronRight className="h-3 w-3" />
@@ -996,7 +1050,7 @@ export default function DashboardPage() {
                             {briefingActions.map((action, i) => (
                               <Link
                                 key={`${action.deeplink}-${i}`}
-                                href={action.deeplink}
+                                href={buildBriefingActionHref(action)}
                                 className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3.5 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 min-h-[36px]"
                               >
                                 <ChevronRight className="h-3 w-3" />
@@ -1189,7 +1243,10 @@ export default function DashboardPage() {
 
                                 <div>
                                   <Link
-                                    href={`/meetings/${meeting.id}`}
+                                    href={buildChatUrl({
+                                      q: `Prepare me for the ${meeting.title} meeting`,
+                                      meetingId: meeting.id,
+                                    })}
                                     className="inline-flex items-center text-xs font-medium text-primary hover:underline"
                                   >
                                     View more
@@ -1304,7 +1361,11 @@ export default function DashboardPage() {
 
                               <div>
                                 <Link
-                                  href={`/contacts/${nudge.contact.id}?nudge=${nudge.id}`}
+                                  href={buildChatUrl({
+                                    q: `${RULE_TYPE_CHAT_ACTION[nudge.ruleType] ?? "Draft an email to"} ${nudge.contact.name}`,
+                                    nudgeId: nudge.id,
+                                    contactId: nudge.contact.id,
+                                  })}
                                   className="inline-flex items-center text-xs font-medium text-primary hover:underline"
                                 >
                                   Take action

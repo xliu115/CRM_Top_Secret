@@ -50,8 +50,14 @@ function ChatPageContent() {
     const q = searchParams.get("q");
     if (q && !initialQuerySentRef.current) {
       initialQuerySentRef.current = true;
+      const nudgeId = searchParams.get("nudgeId") ?? undefined;
+      const contactId = searchParams.get("contactId") ?? undefined;
+      const meetingId = searchParams.get("meetingId") ?? undefined;
       window.history.replaceState({}, "", "/chat");
-      handleSend(q);
+      const context = (nudgeId || contactId || meetingId)
+        ? { nudgeId, contactId, meetingId }
+        : undefined;
+      handleSend(q, context);
     }
   }, [searchParams, handleSend]);
 

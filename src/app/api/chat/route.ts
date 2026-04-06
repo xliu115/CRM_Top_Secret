@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
     let body: {
       message?: string;
       history?: { role: "user" | "assistant"; content: string }[];
+      context?: { nudgeId?: string; contactId?: string; meetingId?: string };
     } = {};
     try {
       body = await request.json();
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const ctx_ids = body.context ?? {};
     const partner = await partnerRepo.findById(partnerId);
     const partnerName = partner?.name ?? "User";
 
@@ -123,9 +125,14 @@ export async function POST(request: NextRequest) {
           .trim();
 
         const meetings = await meetingRepo.findUpcomingByPartnerId(partnerId);
-        const match = meetings.find((m) =>
-          m.title.toLowerCase().includes(meetingTitle.toLowerCase())
-        ) ?? meetings[0];
+        let match = ctx_ids.meetingId
+          ? meetings.find((m) => m.id === ctx_ids.meetingId)
+          : undefined;
+        if (!match) {
+          match = meetings.find((m) =>
+            m.title.toLowerCase().includes(meetingTitle.toLowerCase())
+          ) ?? meetings[0];
+        }
 
         if (match) {
           const attendeeIds = match.attendees.map((a) => a.contactId);
@@ -470,9 +477,15 @@ export async function POST(request: NextRequest) {
           }
 
           // ── Contact-based intents (Full 360, Quick 360, Draft Email, Share) ──
-          const contacts = await contactRepo.search(nameQuery, partnerId);
-          if (contacts.length > 0) {
-            const contact = contacts[0];
+          let contact: Awaited<ReturnType<typeof contactRepo.search>>[0] | null = null;
+          if (ctx_ids.contactId) {
+            contact = await contactRepo.findById(ctx_ids.contactId, partnerId);
+          }
+          if (!contact) {
+            const contacts = await contactRepo.search(nameQuery, partnerId);
+            contact = contacts[0] ?? null;
+          }
+          if (contact) {
             const company = (contact as Record<string, unknown>).company as { name: string; industry?: string; employeeCount?: number; website?: string } | undefined;
 
             // Build shared contact context
@@ -496,12 +509,17 @@ export async function POST(request: NextRequest) {
 
             // ── Draft Email ──
             if (isDraftEmail) {
+              let nudgeReason = "Proactive outreach to strengthen the relationship";
+              if (ctx_ids.nudgeId) {
+                const nudge = await prisma.nudge.findUnique({ where: { id: ctx_ids.nudgeId } }).catch(() => null);
+                if (nudge?.reason) nudgeReason = nudge.reason;
+              }
               const emailResult = await generateEmail({
                 partnerName,
                 contactName: contact.name,
                 contactTitle: contact.title ?? "",
                 companyName: company?.name ?? "",
-                nudgeReason: "Proactive outreach to strengthen the relationship",
+                nudgeReason,
                 recentInteractions: ctx.interactions.slice(0, 5).map((i) => `${i.type} on ${i.date}: ${i.summary}`),
                 signals: ctx.signals.slice(0, 3).map((s) => `${s.type}: ${s.content.slice(0, 100)}`),
               });

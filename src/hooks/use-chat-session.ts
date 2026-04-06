@@ -18,6 +18,12 @@ export type ChatMessage = {
   sources?: ChatSource[];
 };
 
+export type ChatContext = {
+  nudgeId?: string;
+  contactId?: string;
+  meetingId?: string;
+};
+
 export function useChatSession() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -43,7 +49,7 @@ export function useChatSession() {
   } = useStreamingTranscription({ onResult: handleVoiceResult });
 
   const handleSend = useCallback(
-    async (message?: string) => {
+    async (message?: string, context?: ChatContext) => {
       const text = (message ?? input).trim();
       if (!text || loading) return;
 
@@ -61,10 +67,12 @@ export function useChatSession() {
           role: m.role,
           content: m.content,
         }));
+        const payload: Record<string, unknown> = { message: text, history };
+        if (context) payload.context = context;
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, history }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           const errBody = await res.json().catch(() => ({}));
