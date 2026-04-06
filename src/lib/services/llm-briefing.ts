@@ -96,18 +96,20 @@ export interface NarrativeBriefingContext extends DashboardBriefingContext {
 
 const NARRATIVE_SYSTEM_PROMPT = `You are a trusted chief of staff writing a morning briefing for a senior consulting Partner. Your tone is warm, direct, and efficient — like a colleague who knows their priorities.
 
-Rules:
-- Write flowing prose, 3-4 short paragraphs. NO bullet points, NO headers.
-- Lead with the single most important action — the one that would keep the Partner up at night if missed.
+Format:
+- Open with ONE bold headline sentence that names the single most important action today and why. If a campaign approval exists, lead with that; otherwise lead with the top-priority contact.
+- Below the headline, use SHORT BULLET SECTIONS grouped by category. Each section has a bold label on its own line, then 1-3 markdown bullet points. Only include sections that have data:
+  - **Campaign approvals** — campaign name, pending count, deadline. List first when present.
+  - **Priority contacts** — who to reach out to, company, days-since, why.
+  - **Meetings** — title, time, key attendees, optional prep note.
+  - **On the radar** — notable client news worth knowing.
+- Write each bullet as a short, natural sentence — like a colleague briefing you verbally. Use "you/your" voice (e.g. "hasn't heard from you in 94 days", not "94 days since last contact"). NOT a data dump.
+- Use **bold** for: contact full names (first mention), company names, days-since numbers, meeting titles, campaign names, and deadlines. Do NOT bold generic phrases.
 - Reference people by full name on first mention, first name only after.
-- Weave nudges, meetings, and news into a coherent narrative — don't list them separately.
-- End with a brief "on the radar" note for lower-priority signals worth noting.
-- Keep it under 250 words — this is a 2-minute read over coffee.
-- Be specific: use actual names, companies, days-since numbers, meeting times.
-- Use **bold** (markdown) to highlight key information that should catch the reader's eye: contact full names on first mention, company names, days-since numbers, meeting titles, and key news headlines. Do NOT bold generic phrases — only specific names, numbers, and facts.
-- IMPORTANT: If any nudge has [type: CAMPAIGN_APPROVAL], call it out explicitly. Mention the campaign name, how many contacts are pending approval, and the deadline if present. Frame it as an action item — e.g. "You have a campaign pending your approval: **{campaign name}** with {N} contacts awaiting review{deadline}. Review and approve so it can go out on your behalf." Campaign approvals are time-sensitive and should be prominently mentioned, not buried.
+- Total length: 100-150 words. This is a 60-second glance, not a 2-minute read.
+- Do NOT write flowing paragraphs. Use the bullet format described above.
 
-After the narrative, output a JSON block with exactly 3 top actions in this format:
+After the briefing, output a JSON block with exactly 3 top actions in this format:
 ---ACTIONS---
 [{"contactName":"...","company":"...","actionLabel":"...","detail":"..."}]
 
@@ -266,67 +268,92 @@ function buildFallbackActions(ctx: NarrativeBriefingContext): NarrativeBriefingA
 }
 
 function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBriefingResult {
-  const paragraphs: string[] = [];
+  const lines: string[] = [];
   const firstName = ctx.partnerName.split(" ")[0];
 
   const campaignNudges = ctx.nudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
   const contactNudges = ctx.nudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL");
 
+  // Bold headline — campaign approval takes priority, then top contact nudge
   if (campaignNudges.length > 0) {
-    const campLines = campaignNudges.map((n) => {
-      const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
-      const campName = nameMatch?.[1] ?? "a campaign";
-      return `**${campName}** needs your approval — ${n.reason}`;
-    });
-    paragraphs.push(
-      `${firstName}, you have ${campaignNudges.length === 1 ? "a campaign" : `${campaignNudges.length} campaigns`} pending your review. ${campLines.join(" ")} Review and approve so ${campaignNudges.length === 1 ? "it" : "they"} can go out on your behalf.`
+    const nameMatch = campaignNudges[0].reason.match(/Campaign "([^"]+)"/);
+    const campName = nameMatch?.[1] ?? "a campaign";
+    lines.push(
+      `**${firstName}, approve **${campName}** today — ${campaignNudges.length === 1 ? "it needs" : "they need"} your sign-off before going out.**`
+    );
+  } else if (contactNudges.length > 0) {
+    const top = contactNudges[0];
+    const daysPart = top.daysSince ? ` — it's been **${top.daysSince} days**` : "";
+    lines.push(
+      `**Reach out to ${top.contactName} at ${top.company} today${daysPart}.**`
     );
   }
 
-  if (contactNudges.length > 0) {
-    const top = contactNudges[0];
-    const daysPart = top.daysSince
-      ? ` — it's been **${top.daysSince} days** since your last conversation`
-      : "";
-    paragraphs.push(
-      `${campaignNudges.length > 0 ? "Beyond that, your" : `${firstName}, your`} most important move today is reaching out to **${top.contactName}** at **${top.company}**${daysPart}. ${top.reason}`
-    );
+  // Campaign approvals section
+  if (campaignNudges.length > 0) {
+    lines.push("");
+    lines.push("**Campaign approvals**");
+    for (const n of campaignNudges) {
+      const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
+      const campName = nameMatch?.[1] ?? "A campaign";
+      lines.push(`- **${campName}** needs your approval — review and approve so it can go out on your behalf.`);
+    }
+  }
 
-    if (contactNudges.length > 1) {
-      const others = contactNudges
-        .slice(1, 3)
-        .map((n) => `**${n.contactName}** at **${n.company}**`)
-        .join(" and ");
-      paragraphs.push(
-        `You also have ${others} on your radar. ${ctx.nudges.length > 3 ? `That's **${ctx.nudges.length} total nudges** to work through today.` : ""}`
+  // Priority contacts section
+  if (contactNudges.length > 0) {
+    lines.push("");
+    lines.push("**Priority contacts**");
+    for (const n of contactNudges.slice(0, 3)) {
+      const daysPart = n.daysSince
+        ? ` hasn't heard from you in **${n.daysSince} days**.`
+        : ".";
+      const reasonSnippet = n.reason.length > 80
+        ? n.reason.slice(0, 77) + "..."
+        : n.reason;
+      lines.push(
+        `- **${n.contactName}** at **${n.company}**${daysPart} ${reasonSnippet}`
       );
     }
   }
 
+  // Meetings section
   if (ctx.meetings.length > 0) {
-    const m = ctx.meetings[0];
-    const attendees = m.attendeeNames.map((n) => `**${n}**`).join(", ");
-    paragraphs.push(
-      `Coming up: **"${m.title}"** at **${m.startTime}** with ${attendees}.${ctx.meetings.length > 1 ? ` Plus ${ctx.meetings.length - 1} more meeting${ctx.meetings.length > 2 ? "s" : ""} this week.` : ""}`
-    );
+    lines.push("");
+    lines.push("**Meetings**");
+    for (const m of ctx.meetings.slice(0, 2)) {
+      const attendees = m.attendeeNames.map((a) => `**${a}**`).join(", ");
+      lines.push(
+        `- You've got **"${m.title}"** at **${m.startTime}** with ${attendees}.`
+      );
+    }
+    if (ctx.meetings.length > 2) {
+      lines.push(`- Plus **${ctx.meetings.length - 2}** more this week.`);
+    }
   }
 
+  // On the radar section
   if (ctx.clientNews.length > 0) {
-    const news = ctx.clientNews[0];
-    const headline = news.content.slice(0, 120) + (news.content.length > 120 ? "..." : "");
-    paragraphs.push(
-      `On the radar: ${news.company ? `**${news.company}** is in the news — ` : ""}${headline}`
-    );
+    lines.push("");
+    lines.push("**On the radar**");
+    for (const news of ctx.clientNews.slice(0, 2)) {
+      const headline = news.content.slice(0, 120) + (news.content.length > 120 ? "..." : "");
+      lines.push(
+        news.company
+          ? `- **${news.company}** is in the news — ${headline}`
+          : `- ${headline}`
+      );
+    }
   }
 
-  if (paragraphs.length === 0) {
-    paragraphs.push(
-      `${firstName}, it's a quiet day — no urgent nudges, upcoming meetings, or client news on your radar. A great time for proactive outreach to strengthen your key relationships.`
+  if (lines.length === 0) {
+    lines.push(
+      `**${firstName}, it's a quiet day — a great time for proactive outreach to strengthen your key relationships.**`
     );
   }
 
   return {
-    narrative: paragraphs.join("\n\n"),
+    narrative: lines.join("\n"),
     topActions: buildFallbackActions(ctx),
   };
 }

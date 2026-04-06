@@ -280,11 +280,7 @@ export function buildBriefingHtml(data: BriefingEmailData, appUrl: string): stri
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
-  const narrativeParagraphs = data.narrative
-    .split(/\n\n+/)
-    .filter(Boolean)
-    .map((p) => `<p style="margin: 0 0 16px 0; font-size: 15px; color: ${MDS.text}; line-height: 1.7;">${markdownBoldToHtml(p.trim())}</p>`)
-    .join("");
+  const narrativeParagraphs = narrativeToEmailHtml(data.narrative);
 
   const actionRows = data.topActions
     .map((a, i) => {
@@ -516,6 +512,53 @@ interface Contact360ResultForEmail {
   summary: string;
   sections: Contact360Section[];
   talkingPoints?: string[];
+}
+
+/**
+ * Converts a markdown narrative (headline + bold section labels + bullet points)
+ * into email-safe HTML with inline styles.
+ */
+function narrativeToEmailHtml(narrative: string): string {
+  const rawLines = narrative.split("\n");
+  const html: string[] = [];
+  let bulletBuffer: string[] = [];
+
+  function flushBullets() {
+    if (bulletBuffer.length === 0) return;
+    const items = bulletBuffer
+      .map((b) => `<li style="margin: 0 0 6px 0; font-size: 14px; color: ${MDS.text}; line-height: 1.6;">${markdownBoldToHtml(b)}</li>`)
+      .join("");
+    html.push(`<ul style="margin: 0 0 16px 0; padding-left: 20px; list-style-type: disc;">${items}</ul>`);
+    bulletBuffer = [];
+  }
+
+  for (const raw of rawLines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    const bulletMatch = line.match(/^[-*]\s+(.*)/);
+    if (bulletMatch) {
+      bulletBuffer.push(bulletMatch[1]);
+      continue;
+    }
+
+    flushBullets();
+
+    const isSectionLabel = /^\*\*[^*]+\*\*$/.test(line);
+    if (isSectionLabel) {
+      const label = line.replace(/\*\*/g, "");
+      html.push(
+        `<p style="margin: 16px 0 6px 0; font-size: 13px; font-weight: 700; color: ${MDS.deepBlue}; text-transform: uppercase; letter-spacing: 0.3px;">${escHtml(label)}</p>`
+      );
+    } else {
+      html.push(
+        `<p style="margin: 0 0 16px 0; font-size: 15px; color: ${MDS.text}; line-height: 1.7;">${markdownBoldToHtml(line)}</p>`
+      );
+    }
+  }
+
+  flushBullets();
+  return html.join("");
 }
 
 function markdownBoldToHtml(text: string): string {
