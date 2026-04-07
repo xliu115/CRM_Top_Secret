@@ -18,15 +18,24 @@ type BriefingData = {
   briefing: string;
   topActions: { contactName: string; company: string; actionLabel: string; detail: string; deeplink: string; contactId?: string }[];
   structured: {
-    nudges: { contactName: string; company: string; contactId: string }[];
+    nudges: { contactName: string; company: string; contactId: string; ruleType?: string }[];
     meetings: { title: string; startTime: string; meetingId: string }[];
   };
 };
 
 function extractContactNames(data: BriefingData): string[] {
   const names = new Set<string>();
-  data.topActions?.forEach((a) => names.add(a.contactName));
-  data.structured?.nudges?.forEach((n) => names.add(n.contactName));
+  data.topActions?.forEach((a) => {
+    if (a.company === "Campaign" || a.company === "Article Campaign") return;
+    if (a.deeplink?.startsWith("/meetings") || a.deeplink?.startsWith("/campaigns")) return;
+    if (/\bmeeting\b/i.test(a.actionLabel)) return;
+    names.add(a.contactName);
+  });
+  data.structured?.nudges?.forEach((n) => {
+    if (n.company === "Campaign" || n.company === "Article Campaign") return;
+    if (n.ruleType === "MEETING_PREP" || n.ruleType === "CAMPAIGN_APPROVAL" || n.ruleType === "ARTICLE_CAMPAIGN") return;
+    names.add(n.contactName);
+  });
   return Array.from(names).slice(0, 3);
 }
 

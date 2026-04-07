@@ -372,6 +372,14 @@ type BriefingAction = {
   detail: string;
 };
 
+function isContactAction(a: BriefingAction): boolean {
+  if (a.company === "Campaign" || a.company === "Article Campaign") return false;
+  if (a.deeplink.startsWith("/campaigns")) return false;
+  if (a.deeplink.startsWith("/meetings")) return false;
+  if (/\bmeeting\b/i.test(a.actionLabel)) return false;
+  return true;
+}
+
 /** Shape returned by GET /api/sequences (Prisma JSON). */
 type ActiveSequenceBriefingItem = {
   id: string;
@@ -450,8 +458,24 @@ function StructuredBriefingView({
     return aHasPriority - bHasPriority;
   });
 
+  const actionItems: string[] = [];
+  if (sortedContacts.length > 0) actionItems.push(`${sortedContacts.length} contact${sortedContacts.length > 1 ? "s" : ""} to reach`);
+  if (campaignApprovalNudges.length > 0) actionItems.push(`${campaignApprovalNudges.length} campaign${campaignApprovalNudges.length > 1 ? "s" : ""} to approve`);
+  if (articleCampaignNudges.length > 0) actionItems.push(`${articleCampaignNudges.length} article${articleCampaignNudges.length > 1 ? "s" : ""} to share`);
+  if (activeSequences.length > 0) actionItems.push(`${activeSequences.length} follow-up${activeSequences.length > 1 ? "s" : ""}`);
+
+  const openingDetail =
+    actionItems.length > 0
+      ? ` You have ${actionItems.join(", ")}.`
+      : "";
+
   return (
     <div className="space-y-6 px-1">
+      {/* Opening line */}
+      <p className="text-sm text-muted-foreground">
+        Here is your daily morning briefing.{openingDetail}
+      </p>
+
       {/* Priority Contacts */}
       {sortedContacts.length > 0 && (
         <section>
@@ -546,7 +570,7 @@ function StructuredBriefingView({
               <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
             </div>
             <h3 className="text-sm font-semibold text-foreground">
-              Share articles with your contacts
+              Share newly published articles with your contacts
             </h3>
           </div>
           <div className="space-y-3 pl-8">
@@ -713,7 +737,7 @@ function StructuredBriefingView({
               {action.actionLabel} — {action.contactName}
             </Link>
           ))}
-          {[...new Map(actions.filter((a) => a.company !== "Campaign").map((a) => [a.contactName, a.contactName])).values()].map((name) => (
+          {[...new Map(actions.filter(isContactAction).map((a) => [a.contactName, a.contactName])).values()].map((name) => (
             <button
               key={`q360-struct-${name}`}
               onClick={() => onQuick360(name)}
@@ -787,9 +811,9 @@ export default function DashboardPage() {
   const [briefingView, setBriefingView] = useState<"conversational" | "structured">("structured");
   const [briefingLoading, setBriefingLoading] = useState(true);
   const [briefingReady, setBriefingReady] = useState(false);
-  const [briefingRevealed, setBriefingRevealed] = useState(() => {
-    try { return sessionStorage.getItem("briefingRevealed") === "1"; } catch { return false; }
-  });
+  // DEMO MODE: always start unrevealed so click-to-reveal triggers every load
+  // Revert to: useState(() => { try { return sessionStorage.getItem("briefingRevealed") === "1"; } catch { return false; } })
+  const [briefingRevealed, setBriefingRevealed] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
   const pendingVoiceRef = useRef<string | null>(null);
@@ -867,7 +891,8 @@ export default function DashboardPage() {
       } finally {
         if (!cancelled) {
           setBriefingReady(true);
-          try { if (sessionStorage.getItem("briefingRevealed") === "1") setBriefingLoading(false); } catch {}
+          // DEMO MODE: skip auto-reveal so click-to-reveal always triggers
+          // Revert to: try { if (sessionStorage.getItem("briefingRevealed") === "1") setBriefingLoading(false); } catch {}
         }
       }
     }
@@ -1102,8 +1127,8 @@ export default function DashboardPage() {
                                 {action.actionLabel} — {action.contactName}
                               </Link>
                             ))}
-                            {/* Quick 360 buttons — contacts only, not campaigns */}
-                            {[...new Map(briefingActions.filter((a) => a.company !== "Campaign").map((a) => [a.contactName, a.contactName])).values()].map((name) => (
+                            {/* Quick 360 buttons — contacts only, not campaigns or meetings */}
+                            {[...new Map(briefingActions.filter(isContactAction).map((a) => [a.contactName, a.contactName])).values()].map((name) => (
                               <button
                                 key={`q360-${name}`}
                                 onClick={() => handleQuick360(name)}

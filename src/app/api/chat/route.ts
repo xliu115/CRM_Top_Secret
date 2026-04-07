@@ -179,7 +179,6 @@ export async function POST(request: NextRequest) {
             `---`,
             ...match.attendees.map((a) =>
               `<!--QUICK_ACTIONS:${JSON.stringify([
-                { label: `Quick 360: ${a.contact.name}`, query: `Quick 360 for ${a.contact.name}` },
                 { label: `Draft Email to ${a.contact.name}`, query: `Draft email to ${a.contact.name}` },
               ])}-->`
             ).slice(0, 1),
@@ -301,8 +300,11 @@ export async function POST(request: NextRequest) {
         if (todayMeetings.length > 0) {
           quickActions.push({ label: "Prep for next meeting", query: `Prepare me for the ${todayMeetings[0].title} meeting` });
         }
-        if (criticalNudges.length > 0) {
-          const topContact = criticalNudges[0].contact.name;
+        const contactOnlyNudge = criticalNudges.find((n) =>
+          n.ruleType !== "MEETING_PREP" && n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN"
+        );
+        if (contactOnlyNudge) {
+          const topContact = contactOnlyNudge.contact.name;
           quickActions.push({ label: `Quick 360: ${topContact}`, query: `Quick 360 for ${topContact}` });
         }
         quickActions.push({ label: "Who needs attention?", query: "Which contacts need attention?" });
@@ -371,7 +373,10 @@ export async function POST(request: NextRequest) {
           sections.push("All your key contacts look well-maintained. Nice work keeping up with your relationships!");
         }
 
-        const topContacts = [...openNudges.slice(0, 2).map((n) => n.contact.name), ...additionalStale.slice(0, 1).map((c) => c.name)];
+        const contactNudges = openNudges.filter((n) =>
+          n.ruleType !== "MEETING_PREP" && n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN"
+        );
+        const topContacts = [...contactNudges.slice(0, 2).map((n) => n.contact.name), ...additionalStale.slice(0, 1).map((c) => c.name)];
         const quickActions = topContacts.map((name) => ({
           label: `Quick 360: ${name}`,
           query: `Quick 360 for ${name}`,
