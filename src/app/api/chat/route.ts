@@ -21,7 +21,7 @@ const QUICK_360_INTENT =
 const COMPANY_360_INTENT =
   /\b(company ?360|company dossier|tell me about (?:the )?company|company intel(?:ligence)?)\b/i;
 const DRAFT_EMAIL_INTENT =
-  /\b(draft (?:an? )?email|write (?:an? )?email|email draft|compose (?:an? )?email)\b/i;
+  /\b(draft (?:an? )?(?:follow[- ]?up |reply )?email|write (?:an? )?(?:follow[- ]?up |reply )?email|email draft|compose (?:an? )?(?:follow[- ]?up |reply )?email|draft (?:a )?(?:follow[- ]?up|reply) to)\b/i;
 const SHARE_DOSSIER_INTENT =
   /\b(share (?:the )?dossier|share (?:the )?360|send (?:the )?dossier)\b/i;
 const MEETING_PREP_INTENT =

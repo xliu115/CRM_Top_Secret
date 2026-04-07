@@ -339,8 +339,13 @@ function buildBriefingActionHref(action: {
   actionLabel: string;
   deeplink: string;
 }): string {
-  if (action.company === "Campaign" || action.deeplink.startsWith("/campaigns")) {
-    return action.deeplink;
+  const isCampaignAction =
+    action.company === "Campaign" ||
+    action.company === "Article Campaign" ||
+    action.deeplink.startsWith("/campaigns") ||
+    /\bcampaign\b/i.test(action.actionLabel);
+  if (isCampaignAction) {
+    return action.deeplink.startsWith("/campaigns") ? action.deeplink : "/campaigns";
   }
   const ids = parseDeeplinkIds(action.deeplink);
   const q = `${action.actionLabel} ${action.contactName}`;

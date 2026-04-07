@@ -6,10 +6,10 @@ import {
   RefreshCw, Send, Moon, Check, ExternalLink, Settings, Clock, Briefcase, Newspaper,
   CalendarDays, ClipboardList, Ticket, CalendarCheck, BookOpen, Linkedin,
   Copy, RotateCcw, X, Loader2, Mail, FileText, Users, Sparkles,
-  Reply, Forward, Filter, Zap, CheckCircle2, ShieldCheck,
+  Reply, Forward, Filter, Zap, CheckCircle2, ShieldCheck, ChevronRight,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay } from "@/lib/utils/nudge-summary";
+import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay, parseArticleCampaignNudgeDisplay } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,6 +115,7 @@ const NUDGE_TYPE_CONFIG: Record<string, NudgeTypeConfig> = {
   FOLLOW_UP: { icon: Forward, label: "Active Outreach", ctaLabel: "Continue Follow-up", ctaIcon: Forward, color: "text-violet-600", bgColor: "bg-violet-50 dark:bg-violet-950/30" },
   REPLY_NEEDED: { icon: Reply, label: "Reply Needed", ctaLabel: "Draft Reply", ctaIcon: Reply, color: "text-red-600", bgColor: "bg-red-50 dark:bg-red-950/30" },
   CAMPAIGN_APPROVAL: { icon: ShieldCheck, label: "Campaign Approval", ctaLabel: "Review Campaign", ctaIcon: ShieldCheck, color: "text-amber-600", bgColor: "bg-amber-50 dark:bg-amber-950/30" },
+  ARTICLE_CAMPAIGN: { icon: BookOpen, label: "Article Campaign", ctaLabel: "View Campaign", ctaIcon: BookOpen, color: "text-blue-600", bgColor: "bg-blue-50 dark:bg-blue-950/30" },
 };
 
 const DEFAULT_TYPE_CONFIG: NudgeTypeConfig = {
@@ -437,9 +438,85 @@ function NudgeCard({
   const isReplyNeeded = nudge.ruleType === "REPLY_NEEDED";
   const isSequenceNudge = isFollowUp || isReplyNeeded;
   const isCampaignApproval = nudge.ruleType === "CAMPAIGN_APPROVAL";
+  const isArticleCampaign = nudge.ruleType === "ARTICLE_CAMPAIGN";
 
   const waitingMatch = nudge.reason.match(/no response in (\d+) day/);
   const waitingDays = waitingMatch ? parseInt(waitingMatch[1]) : null;
+
+  if (isArticleCampaign) {
+    const art = parseArticleCampaignNudgeDisplay(nudge);
+    const fragments = buildSummaryFragments(nudge, insights);
+    return (
+      <Card className="overflow-hidden border-l-4 border-l-blue-400 dark:border-l-blue-600">
+        <CardHeader className="pb-3 pt-5">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/30 ring-2 ring-blue-200/70 dark:ring-blue-800/50">
+              <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-lg font-bold">
+                  <Link href={art.campaignHref} className="hover:text-primary hover:underline transition-colors">
+                    {art.articleTitle}
+                  </Link>
+                </CardTitle>
+                <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                  {nudge.priority}
+                </Badge>
+                <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400">
+                  <BookOpen className="h-3 w-3 mr-1" />
+                  Article Campaign
+                </Badge>
+              </div>
+              <CardDescription className="mt-0.5 text-muted-foreground">
+                {art.matchCount} contact{art.matchCount !== 1 ? "s" : ""} matched for outreach
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">AI Summary</span>
+            </div>
+            <div className="text-sm text-foreground/70 leading-relaxed">
+              <FragmentText fragments={fragments} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button size="sm" asChild>
+              <Link href={art.campaignHref}>
+                <BookOpen className="h-4 w-4" />
+                View Campaign
+                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+            {nudge.status === "OPEN" && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => onUpdateStatus(nudge.id, "SNOOZED")}>
+                  <Moon className="h-4 w-4" />
+                  Snooze
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+                  <Check className="h-4 w-4" />
+                  Done
+                </Button>
+              </>
+            )}
+            {nudge.status === "SNOOZED" && (
+              <Button variant="ghost" size="sm" onClick={() => onUpdateStatus(nudge.id, "DONE")}>
+                <Check className="h-4 w-4" />
+                Done
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isCampaignApproval) {
     const camp = parseCampaignApprovalNudgeDisplay(nudge);
@@ -622,10 +699,28 @@ function NudgeCard({
               Generate Brief
             </Button>
           )}
-          <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} onClick={() => setOpenPanel(openPanel === "email" ? null : "email")}>
-            <CtaIcon className="h-4 w-4" />
-            {hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
-          </Button>
+          {isSequenceNudge ? (
+            <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} asChild>
+              <Link href={(() => {
+                const action = isReplyNeeded
+                  ? `Draft a reply to ${nudge.contact.name}`
+                  : `Draft a follow-up email to ${nudge.contact.name}`;
+                const sp = new URLSearchParams({ q: action });
+                sp.set("nudgeId", nudge.id);
+                sp.set("contactId", nudge.contact.id);
+                return `/chat?${sp.toString()}`;
+              })()}>
+                <CtaIcon className="h-4 w-4" />
+                {cfg.ctaLabel}
+                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : (
+            <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} onClick={() => setOpenPanel(openPanel === "email" ? null : "email")}>
+              <CtaIcon className="h-4 w-4" />
+              {hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
+            </Button>
+          )}
 
           {nudge.status === "OPEN" && (
             <>
@@ -650,7 +745,7 @@ function NudgeCard({
         {openPanel === "brief" && (
           <MeetingBriefPanel nudge={nudge} onClose={() => setOpenPanel(null)} />
         )}
-        {openPanel === "email" && (
+        {openPanel === "email" && !isSequenceNudge && (
           <DraftEmailPanel nudge={nudge} onClose={() => setOpenPanel(null)} onNudgeSent={onRefresh} />
         )}
       </CardContent>

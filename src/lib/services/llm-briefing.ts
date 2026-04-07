@@ -272,6 +272,12 @@ function buildFallbackActions(ctx: NarrativeBriefingContext): NarrativeBriefingA
     let deeplink: string;
     if (n.ruleType === "CAMPAIGN_APPROVAL") {
       deeplink = "/campaigns";
+      if (n.metadata) {
+        try {
+          const meta = JSON.parse(n.metadata);
+          if (meta.campaignId) deeplink = `/campaigns/${meta.campaignId}`;
+        } catch { /* fallback to /campaigns */ }
+      }
     } else if (n.ruleType === "ARTICLE_CAMPAIGN" && n.metadata) {
       try {
         const meta = JSON.parse(n.metadata);
@@ -286,9 +292,25 @@ function buildFallbackActions(ctx: NarrativeBriefingContext): NarrativeBriefingA
     } else {
       deeplink = "/nudges";
     }
+    const isCampaign = n.ruleType === "CAMPAIGN_APPROVAL";
+    const isArticleCampaign = n.ruleType === "ARTICLE_CAMPAIGN";
+    let displayName = n.contactName;
+    let displayCompany = n.company;
+    if (isCampaign) {
+      const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
+      displayName = nameMatch?.[1] ?? n.contactName;
+      displayCompany = "Campaign";
+    } else if (isArticleCampaign) {
+      try {
+        const meta = JSON.parse(n.metadata ?? "{}");
+        if (meta.articleTitle) displayName = meta.articleTitle;
+      } catch { /* ignore */ }
+      displayCompany = "Article Campaign";
+    }
+
     actions.push({
-      contactName: n.contactName,
-      company: n.company,
+      contactName: displayName,
+      company: displayCompany,
       actionLabel: ruleLabels[n.ruleType ?? ""] ?? "Take action",
       detail: n.daysSince ? `${n.daysSince} days since last contact` : n.reason.slice(0, 60),
       deeplink,

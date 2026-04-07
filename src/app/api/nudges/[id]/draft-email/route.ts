@@ -14,6 +14,8 @@ const RULE_TYPE_CONTEXT: Record<string, string> = {
   EVENT_REGISTERED: "This is an outreach email to connect before an event the contact is registered for.",
   ARTICLE_READ: "This is a follow-up email referencing content the contact recently engaged with.",
   LINKEDIN_ACTIVITY: "This is an outreach email inspired by the contact's recent LinkedIn activity.",
+  FOLLOW_UP: "This is a follow-up email as part of an active outreach sequence. The contact hasn't responded to your previous outreach.",
+  REPLY_NEEDED: "This is a reply to an inbound email from the contact that hasn't been responded to yet.",
 };
 
 export async function POST(
