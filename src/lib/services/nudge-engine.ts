@@ -410,7 +410,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
         insights.push({
           type: "FOLLOW_UP",
           reason: buildSequenceNudgeReason(contact.name, waitDays),
-          priority: waitDays >= 5 ? "HIGH" : "MEDIUM",
+          priority: "HIGH",
           lastEmailSubject: lastSentStep?.emailSubject ?? undefined,
           lastEmailSnippet: lastSentStep?.emailBody
             ? lastSentStep.emailBody.replace(/\n/g, " ").slice(0, 150)

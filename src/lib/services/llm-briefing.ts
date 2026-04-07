@@ -265,6 +265,8 @@ function buildFallbackActions(ctx: NarrativeBriefingContext): NarrativeBriefingA
       MEETING_PREP: "Review meeting brief",
       CAMPAIGN_APPROVAL: "Review campaign",
       ARTICLE_CAMPAIGN: "Review article campaign",
+      FOLLOW_UP: "Draft follow-up email",
+      REPLY_NEEDED: "Draft reply",
     };
 
     let deeplink: string;
@@ -313,7 +315,10 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
 
   const campaignNudges = ctx.nudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
   const articleCampaignNudges = ctx.nudges.filter((n) => n.ruleType === "ARTICLE_CAMPAIGN");
-  const contactNudges = ctx.nudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN");
+  const followUpNudges = ctx.nudges.filter((n) => n.ruleType === "FOLLOW_UP");
+  const contactNudges = ctx.nudges.filter((n) =>
+    n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN" && n.ruleType !== "FOLLOW_UP"
+  );
 
   // Bold headline — campaign approval takes priority, then top contact nudge
   if (campaignNudges.length > 0) {
@@ -326,6 +331,11 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
     const artTitle = articleCampaignNudges[0].reason.match(/article "([^"]+)"/)?.[1] ?? "a new article";
     lines.push(
       `**${firstName}, share **"${artTitle}"** with your contacts — we've matched relevant people for you.**`
+    );
+  } else if (followUpNudges.length > 0) {
+    const top = followUpNudges[0];
+    lines.push(
+      `**${firstName}, follow up with ${top.contactName} at ${top.company} — your outreach is waiting for a response.**`
     );
   } else if (contactNudges.length > 0) {
     const top = contactNudges[0];
@@ -359,6 +369,24 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
         matchCount = meta.matchCount ?? 0;
       } catch { /* ignore */ }
       lines.push(`- **"${artTitle}"** — ${matchCount} contact${matchCount !== 1 ? "s" : ""} matched. Review and send.`);
+    }
+  }
+
+  // Active follow-ups section
+  if (followUpNudges.length > 0) {
+    lines.push("");
+    lines.push("**Active follow-ups**");
+    for (const n of followUpNudges.slice(0, 2)) {
+      let waitDays = 0;
+      try {
+        const meta = JSON.parse(n.metadata ?? "{}");
+        const fuInsight = meta.insights?.find((i: { type: string }) => i.type === "FOLLOW_UP");
+        waitDays = fuInsight?.waitingDays ?? 0;
+      } catch { /* ignore */ }
+      const waitPart = waitDays > 0 ? ` — no response in **${waitDays} days**` : "";
+      lines.push(
+        `- **${n.contactName}** at **${n.company}**${waitPart}. Time to send a follow-up.`
+      );
     }
   }
 

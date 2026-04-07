@@ -287,6 +287,8 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   LINKEDIN_ACTIVITY: "LinkedIn activity",
   CAMPAIGN_APPROVAL: "campaign approval",
   ARTICLE_CAMPAIGN: "new article campaign",
+  FOLLOW_UP: "outreach follow-up",
+  REPLY_NEEDED: "reply needed",
 };
 
 const RULE_TYPE_CHAT_ACTION: Record<string, string> = {
@@ -299,6 +301,8 @@ const RULE_TYPE_CHAT_ACTION: Record<string, string> = {
   EVENT_REGISTERED: "Draft an event outreach email to",
   ARTICLE_READ: "Draft an email about our content to",
   LINKEDIN_ACTIVITY: "Draft an email to",
+  FOLLOW_UP: "Draft a follow-up email to",
+  REPLY_NEEDED: "Draft a reply to",
 };
 
 function buildChatUrl(params: {
@@ -835,11 +839,17 @@ export default function DashboardPage() {
 
         if (nudgesRes.ok) {
           const nudges: Nudge[] = await nudgesRes.json();
-          const priorityTypes = new Set(["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"]);
-          const priorityNudges = nudges.filter((n: Nudge) => priorityTypes.has(n.ruleType));
-          const others = nudges.filter((n: Nudge) => !priorityTypes.has(n.ruleType));
-          const remaining = Math.max(0, 5 - priorityNudges.length);
-          setTopNudges([...priorityNudges, ...others.slice(0, remaining)]);
+          const reservedTypes = new Set(["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN", "FOLLOW_UP"]);
+          const reserved = nudges.filter((n: Nudge) => reservedTypes.has(n.ruleType));
+          const others = nudges.filter((n: Nudge) => !reservedTypes.has(n.ruleType));
+          const seen = new Set<string>();
+          const deduped = reserved.filter((n) => {
+            if (seen.has(n.ruleType)) return false;
+            seen.add(n.ruleType);
+            return true;
+          });
+          const remaining = Math.max(0, 5 - deduped.length);
+          setTopNudges([...deduped, ...others.slice(0, remaining)]);
         }
       } catch (err) {
         if (cancelled) return;
@@ -1199,7 +1209,14 @@ export default function DashboardPage() {
         )}
 
         {/* Data Grid — secondary content */}
-        <div className="mt-12 grid gap-6 lg:grid-cols-[2fr_1fr]">
+        {(() => {
+          const hasRightColumn =
+            (cardPrefs?.clientNews !== false) ||
+            !!cardPrefs?.pipelinePulse ||
+            !!cardPrefs?.campaignMomentum ||
+            !!cardPrefs?.whitespace;
+          return (
+        <div className={`mt-12 ${hasRightColumn ? "grid gap-6 lg:grid-cols-[2fr_1fr]" : "mx-auto w-full max-w-[80%]"}`}>
           {/* Left column */}
           <div className="min-w-0 space-y-6">
             {/* Today's Top Nudges */}
@@ -1362,6 +1379,79 @@ export default function DashboardPage() {
                                     className="inline-flex items-center text-xs font-medium text-primary hover:underline"
                                   >
                                     Review campaign
+                                    <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                                  </Link>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+
+                        if (nudge.ruleType === "FOLLOW_UP") {
+                          let waitDays = 0;
+                          let lastSubject = "";
+                          try {
+                            const meta = JSON.parse(nudge.metadata ?? "{}");
+                            const fuInsight = meta.insights?.find((i: { type: string }) => i.type === "FOLLOW_UP");
+                            waitDays = fuInsight?.waitingDays ?? 0;
+                            lastSubject = fuInsight?.lastEmailSubject ?? "";
+                          } catch { /* ignore */ }
+                          return (
+                            <Card key={nudge.id} className="overflow-hidden border-l-4 border-l-teal-400 dark:border-l-teal-600">
+                              <CardHeader className="pb-3 pt-5">
+                                <div className="flex items-start gap-4">
+                                  <Avatar name={nudge.contact.name} size="lg" className="shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <CardTitle className="text-lg font-bold">
+                                        <Link href={`/contacts/${nudge.contact.id}`} className="hover:text-primary hover:underline transition-colors">
+                                          {nudge.contact.name}
+                                        </Link>
+                                      </CardTitle>
+                                      <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                                        {nudge.priority}
+                                      </Badge>
+                                      <Badge variant="outline" className="border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950 dark:text-teal-400">
+                                        <Forward className="h-3 w-3 mr-1" />
+                                        Follow-Up
+                                      </Badge>
+                                    </div>
+                                    <CardDescription className="mt-0.5">
+                                      {nudge.contact.title} at {nudge.contact.company.name}
+                                      {waitDays > 0 && ` · No response in ${waitDays} days`}
+                                    </CardDescription>
+                                  </div>
+                                </div>
+                              </CardHeader>
+
+                              <CardContent className="space-y-3">
+                                {lastSubject && (
+                                  <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                                    <Send className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                                    Last: &ldquo;{lastSubject}&rdquo;
+                                  </p>
+                                )}
+
+                                <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                                  <div className="flex items-center gap-1.5 mb-2.5">
+                                    <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300">AI Summary</span>
+                                  </div>
+                                  <div className="text-sm text-foreground/70 leading-relaxed">
+                                    <FragmentText fragments={fragments} />
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <Link
+                                    href={buildChatUrl({
+                                      q: `Draft a follow-up email to ${nudge.contact.name}`,
+                                      nudgeId: nudge.id,
+                                      contactId: nudge.contact.id,
+                                    })}
+                                    className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                  >
+                                    Draft follow-up
                                     <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
                                   </Link>
                                 </div>
@@ -1569,7 +1659,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Right column */}
-          <div className="min-w-0 space-y-6">
+          {hasRightColumn && <div className="min-w-0 space-y-6">
             {/* Client News */}
             {cardPrefs?.clientNews !== false && (
               <Card className="overflow-hidden">
@@ -1669,8 +1759,10 @@ export default function DashboardPage() {
                 description="Key clients with open pipeline, recent signals, and coverage gaps (e.g., single-threaded relationships, few senior contacts)."
               />
             )}
-          </div>
+          </div>}
         </div>
+          );
+        })()}
       </div>
     </DashboardShell>
   );

@@ -27,12 +27,17 @@ export async function GET(_request: NextRequest) {
       (a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4)
     );
 
-    const campaignApprovalNudges = sortedNudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
-    const articleCampaignNudges = sortedNudges.filter((n) => n.ruleType === "ARTICLE_CAMPAIGN");
-    const otherNudges = sortedNudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN");
-    const priorityNudges = [...campaignApprovalNudges, ...articleCampaignNudges];
-    const remainingSlots = Math.max(0, 5 - priorityNudges.length);
-    const mergedNudges = [...priorityNudges, ...otherNudges.slice(0, remainingSlots)];
+    const reservedTypes = new Set(["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN", "FOLLOW_UP"]);
+    const reserved = sortedNudges.filter((n) => reservedTypes.has(n.ruleType));
+    const otherNudges = sortedNudges.filter((n) => !reservedTypes.has(n.ruleType));
+    const seen = new Set<string>();
+    const dedupedReserved = reserved.filter((n) => {
+      if (seen.has(n.ruleType)) return false;
+      seen.add(n.ruleType);
+      return true;
+    });
+    const remainingSlots = Math.max(0, 5 - dedupedReserved.length);
+    const mergedNudges = [...dedupedReserved, ...otherNudges.slice(0, remainingSlots)];
 
     const topNudges = mergedNudges.map((n) => {
       const daysSince = n.contact.lastContacted

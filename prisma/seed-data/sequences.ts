@@ -154,6 +154,24 @@ export function generateSequenceData(contacts: ContactRef[]) {
       summary:
         "Shared detailed benchmarking analysis on streaming platform unit economics compared to peers.",
     },
+    {
+      name: "Ted Sarandos",
+      daysAgo: 6,
+      summary:
+        "Sent follow-up on content monetization analysis discussed at dinner, along with updated streaming unit economics benchmarks for Netflix vs. peers.",
+    },
+    {
+      name: "Marc Benioff",
+      daysAgo: 10,
+      summary:
+        "Sent initial outreach about Salesforce Agentforce launch and shared our AI platform economics research.",
+    },
+    {
+      name: "Marc Benioff",
+      daysAgo: 6,
+      summary:
+        "Sent follow-up sharing additional CRM-specific AI adoption data and offered to arrange a working session with our tech practice team.",
+    },
   ];
 
   const outboundInteractions: {
@@ -189,6 +207,8 @@ export function generateSequenceData(contacts: ContactRef[]) {
   const thomasKurian = findContact(contacts, "Thomas Kurian");
   const coletteKress = findContact(contacts, "Colette Kress");
   const parkerHarris = findContact(contacts, "Parker Harris");
+  const tedSarandos = findContact(contacts, "Ted Sarandos");
+  const marcBenioff = findContact(contacts, "Marc Benioff");
 
   const sequences: {
     id: string;
@@ -420,6 +440,142 @@ export function generateSequenceData(contacts: ContactRef[]) {
     );
   }
 
+  // Sequence 4: Ted Sarandos at Netflix — step 0 sent 6 days ago, waiting
+  if (tedSarandos) {
+    const seqId = "seq-demo-004";
+    sequences.push({
+      id: seqId,
+      contactId: tedSarandos.id,
+      partnerId: tedSarandos.partnerId,
+      originNudgeId: "nudge-origin-seq4",
+      status: "ACTIVE",
+      currentStep: 0,
+      totalSteps: 4,
+      angleStrategy: "value-add",
+      nextStepAt: daysAgo(-1),
+      createdAt: daysAgo(6),
+    });
+
+    cadenceSteps.push(
+      {
+        id: "step-seq4-0",
+        sequenceId: seqId,
+        stepNumber: 0,
+        type: "INITIAL",
+        status: "SENT",
+        scheduledAt: daysAgo(6),
+        executedAt: daysAgo(6),
+        emailSubject: "Content monetization benchmarks — updated analysis",
+        emailBody: `Hi Ted,\n\nGreat catching up at dinner last month. As promised, I'm sharing the updated streaming unit economics analysis our team put together — it includes fresh benchmarking data that I think is particularly relevant given Netflix's ad-tier growth trajectory.\n\nThe most interesting finding: platforms that invested in live sports content saw 2.3x higher ad-tier conversion rates. Given your recent NFL deal, this could be worth a deeper look.\n\nWould you have 20 minutes this week to walk through the key takeaways?\n\nBest regards`,
+        responseDetectedAt: null,
+      },
+      {
+        id: "step-seq4-1",
+        sequenceId: seqId,
+        stepNumber: 1,
+        type: "FOLLOW_UP",
+        status: "PENDING",
+        scheduledAt: daysAgo(-1),
+        executedAt: null,
+        emailSubject: "Following up — Netflix content economics analysis",
+        emailBody: `Hi Ted,\n\nI wanted to circle back on the content monetization benchmarks I shared. I know Q2 planning must be in full swing at Netflix, so I completely understand if timing is tight.\n\nOne additional data point that came in since my last note: our analysis shows a significant uplift in subscriber retention for platforms blending ad-supported and premium tiers — something Netflix seems uniquely positioned to capitalize on.\n\nHappy to do a quick 15-minute walk-through whenever works.\n\nBest`,
+        responseDetectedAt: null,
+      },
+      {
+        id: "step-seq4-2",
+        sequenceId: seqId,
+        stepNumber: 2,
+        type: "FOLLOW_UP",
+        status: "PENDING",
+        scheduledAt: daysAgo(-8),
+        executedAt: null,
+        emailSubject: null,
+        emailBody: null,
+        responseDetectedAt: null,
+      },
+      {
+        id: "step-seq4-3",
+        sequenceId: seqId,
+        stepNumber: 3,
+        type: "FOLLOW_UP",
+        status: "PENDING",
+        scheduledAt: daysAgo(-15),
+        executedAt: null,
+        emailSubject: null,
+        emailBody: null,
+        responseDetectedAt: null,
+      }
+    );
+  }
+
+  // Sequence 5: Marc Benioff at Salesforce — two emails sent, waiting 6 days
+  if (marcBenioff) {
+    const seqId = "seq-demo-005";
+    sequences.push({
+      id: seqId,
+      contactId: marcBenioff.id,
+      partnerId: marcBenioff.partnerId,
+      originNudgeId: "nudge-origin-seq5",
+      status: "ACTIVE",
+      currentStep: 1,
+      totalSteps: 4,
+      angleStrategy: "news-reference",
+      nextStepAt: daysAgo(-1),
+      createdAt: daysAgo(10),
+    });
+
+    cadenceSteps.push(
+      {
+        id: "step-seq5-0",
+        sequenceId: seqId,
+        stepNumber: 0,
+        type: "INITIAL",
+        status: "SENT",
+        scheduledAt: daysAgo(10),
+        executedAt: daysAgo(10),
+        emailSubject: "Agentforce and the future of enterprise AI platforms",
+        emailBody: `Hi Marc,\n\nCongratulations on the Agentforce launch — the platform-level approach to agentic AI is exactly what enterprises need right now. Our research shows that companies with platform-native AI see 3x faster time-to-value compared to bolt-on solutions.\n\nI'd love to share some of our findings on AI platform economics and discuss how the Salesforce ecosystem might evolve. I think there's a fascinating story unfolding around developer productivity and partner channel dynamics.\n\nWould you be open to a brief conversation? I'd genuinely value your perspective.\n\nBest regards`,
+        responseDetectedAt: null,
+      },
+      {
+        id: "step-seq5-1",
+        sequenceId: seqId,
+        stepNumber: 1,
+        type: "FOLLOW_UP",
+        status: "SENT",
+        scheduledAt: daysAgo(6),
+        executedAt: daysAgo(6),
+        emailSubject: "CRM-specific AI adoption — fresh data for Salesforce",
+        emailBody: `Hi Marc,\n\nFollowing up on my earlier note about Agentforce. Since then, our team has completed a deep dive specifically on CRM-embedded AI adoption patterns — the data is compelling and I think directly relevant to your go-to-market thinking.\n\nKey finding: enterprises that adopt AI within their existing CRM workflow see 40% higher sustained usage vs. standalone AI tools. This bodes well for the Agentforce thesis.\n\nHappy to share the full analysis or set up a working session with our tech practice leads.\n\nBest`,
+        responseDetectedAt: null,
+      },
+      {
+        id: "step-seq5-2",
+        sequenceId: seqId,
+        stepNumber: 2,
+        type: "FOLLOW_UP",
+        status: "PENDING",
+        scheduledAt: daysAgo(-1),
+        executedAt: null,
+        emailSubject: null,
+        emailBody: null,
+        responseDetectedAt: null,
+      },
+      {
+        id: "step-seq5-3",
+        sequenceId: seqId,
+        stepNumber: 3,
+        type: "FOLLOW_UP",
+        status: "PENDING",
+        scheduledAt: daysAgo(-8),
+        executedAt: null,
+        emailSubject: null,
+        emailBody: null,
+        responseDetectedAt: null,
+      }
+    );
+  }
+
   // ── FOLLOW_UP and REPLY_NEEDED Nudges ─────────────────────────────
 
   const sequenceNudges: {
@@ -560,6 +716,85 @@ export function generateSequenceData(contacts: ContactRef[]) {
       }),
       sequenceId: "seq-demo-003",
       cadenceStepId: "step-seq3-0",
+    });
+  }
+
+  if (tedSarandos) {
+    sequenceNudges.push({
+      id: `nudge-seq-${String(nudgeIdx++).padStart(3, "0")}`,
+      contactId: tedSarandos.id,
+      ruleType: "FOLLOW_UP",
+      reason: "Follow up with Ted at Netflix: no response in 6 days on content monetization benchmarks",
+      priority: "HIGH",
+      status: "OPEN",
+      generatedEmail: JSON.stringify({
+        subject: "Following up — Netflix content economics analysis",
+        body: "Hi Ted,\n\nI wanted to circle back on the content monetization benchmarks I shared. I know Q2 planning must be in full swing at Netflix, so I completely understand if timing is tight.\n\nOne additional data point that came in since my last note: our analysis shows a significant uplift in subscriber retention for platforms blending ad-supported and premium tiers — something Netflix seems uniquely positioned to capitalize on.\n\nHappy to do a quick 15-minute walk-through whenever works.\n\nBest",
+      }),
+      metadata: JSON.stringify({
+        insights: [
+          {
+            type: "FOLLOW_UP",
+            reason: "Follow up with Ted — no response in 6 days",
+            priority: "HIGH",
+            lastEmailSubject: "Content monetization benchmarks — updated analysis",
+            lastEmailSnippet: "updated streaming unit economics analysis with fresh benchmarking data relevant to Netflix's ad-tier growth trajectory and live sports content ROI",
+            waitingDays: 6,
+            lastInteraction: {
+              type: "NOTE",
+              date: "2026-03-16T00:00:00.000Z",
+              summary: "Dinner meeting — discussed content monetization analysis and potential deeper engagement with their finance team",
+            },
+          },
+          {
+            type: "LINKEDIN_ACTIVITY",
+            reason: "Ted Sarandos shared thoughts on content monetization trends in streaming",
+            priority: "LOW",
+          },
+        ],
+      }),
+      sequenceId: "seq-demo-004",
+      cadenceStepId: "step-seq4-0",
+    });
+  }
+
+  if (marcBenioff) {
+    sequenceNudges.push({
+      id: `nudge-seq-${String(nudgeIdx++).padStart(3, "0")}`,
+      contactId: marcBenioff.id,
+      ruleType: "FOLLOW_UP",
+      reason: "Follow up with Marc at Salesforce: no response in 6 days on CRM AI adoption research",
+      priority: "HIGH",
+      status: "OPEN",
+      generatedEmail: JSON.stringify({
+        subject: "Checking in — Salesforce AI platform research",
+        body: "Hi Marc,\n\nI hope all is well. I wanted to check in on the CRM-embedded AI adoption research I shared last week. The data continues to validate the Agentforce thesis — enterprises using in-CRM AI tools show significantly higher sustained adoption.\n\nOur tech practice team is available for a working session if that would be valuable. Happy to coordinate around your schedule.\n\nBest regards",
+      }),
+      metadata: JSON.stringify({
+        insights: [
+          {
+            type: "FOLLOW_UP",
+            reason: "Follow up with Marc — no response in 6 days",
+            priority: "HIGH",
+            lastEmailSubject: "CRM-specific AI adoption — fresh data for Salesforce",
+            lastEmailSnippet: "CRM-embedded AI adoption patterns showing 40% higher sustained usage vs. standalone AI tools, directly relevant to Agentforce thesis",
+            waitingDays: 6,
+            lastInteraction: {
+              type: "MEETING",
+              date: "2026-03-20T00:00:00.000Z",
+              summary: "Quarterly business review with Marc and their team on Salesforce platform strategy",
+            },
+          },
+          {
+            type: "COMPANY_NEWS",
+            reason: "Salesforce: \"Agentforce reshapes enterprise AI\" — industry coverage on the platform launch",
+            priority: "MEDIUM",
+            signalContent: "Agentforce reshapes enterprise AI — Salesforce's platform bet",
+          },
+        ],
+      }),
+      sequenceId: "seq-demo-005",
+      cadenceStepId: "step-seq5-1",
     });
   }
 
@@ -731,6 +966,34 @@ export function generateSequenceData(contacts: ContactRef[]) {
       contactId: parkerHarris.id,
       ruleType: "COMPANY_NEWS",
       reason: "Salesforce launched Agentforce — great conversation starter with Parker",
+      priority: "MEDIUM",
+      status: "DONE",
+      generatedEmail: null,
+      metadata: null,
+      sequenceId: null,
+      cadenceStepId: null,
+    });
+  }
+  if (tedSarandos) {
+    originNudges.push({
+      id: "nudge-origin-seq4",
+      contactId: tedSarandos.id,
+      ruleType: "STALE_CONTACT",
+      reason: "Haven't connected with Ted in 14 days — time for a check-in on content monetization",
+      priority: "MEDIUM",
+      status: "DONE",
+      generatedEmail: null,
+      metadata: null,
+      sequenceId: null,
+      cadenceStepId: null,
+    });
+  }
+  if (marcBenioff) {
+    originNudges.push({
+      id: "nudge-origin-seq5",
+      contactId: marcBenioff.id,
+      ruleType: "COMPANY_NEWS",
+      reason: "Salesforce launched Agentforce — great opportunity to reconnect with Marc on AI strategy",
       priority: "MEDIUM",
       status: "DONE",
       generatedEmail: null,
