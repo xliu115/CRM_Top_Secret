@@ -5,6 +5,7 @@ import { User, Mail, ExternalLink, FileText, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { INSIGHT_TYPE_LABELS } from "@/lib/utils/nudge-summary";
 
 type QuickAction = { label: string; query?: string; href?: string };
 
@@ -85,6 +86,31 @@ function extractQuickActions(text: string): { cleanContent: string; actions: Qui
   }
 }
 
+type SignalLabel = { label: string; url: string | null };
+
+function extractSignalLabels(text: string): { cleanContent: string; labels: SignalLabel[] } {
+  const marker = /<!--SIGNAL_LABELS:([\s\S]*?)-->/;
+  const match = text.match(marker);
+  if (!match) return { cleanContent: text, labels: [] };
+  try {
+    const raw: unknown = JSON.parse(match[1]);
+    const cleanContent = text.replace(marker, "").replace(/\n{3,}/g, "\n\n").trim();
+
+    if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === "object" && raw[0] !== null) {
+      const entries = raw as { type: string; url?: string | null }[];
+      return {
+        cleanContent,
+        labels: entries.map((e) => ({ label: INSIGHT_TYPE_LABELS[e.type] ?? e.type, url: e.url ?? null })),
+      };
+    }
+
+    const types = raw as string[];
+    return { cleanContent, labels: types.map((t) => ({ label: INSIGHT_TYPE_LABELS[t] ?? t, url: null })) };
+  } catch {
+    return { cleanContent: text, labels: [] };
+  }
+}
+
 function isProseAnswer(text: string): boolean {
   if (text.startsWith("Here's what I found:")) return false;
   if (text.includes("**From your CRM:**")) return false;
@@ -109,7 +135,8 @@ export function AssistantReply({
     (s) => s.type === "Web Summary" || s.type === "Web Result"
   );
 
-  const { cleanContent, actions: quickActions } = extractQuickActions(content);
+  const { cleanContent: contentAfterLabels, labels: signalLabels } = extractSignalLabels(content);
+  const { cleanContent, actions: quickActions } = extractQuickActions(contentAfterLabels);
 
   const introEnd = cleanContent.search(
     /\*\*From your CRM|From your CRM|From the web\*\*|From the web/i
@@ -166,6 +193,29 @@ export function AssistantReply({
         </>
       ) : (
         <MarkdownContent content={cleanContent} className={textClass} />
+      )}
+
+      {signalLabels.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {signalLabels.map((sl) => (
+            <span
+              key={sl.label}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground/80"
+            >
+              {sl.label}
+              {sl.url && (
+                <a
+                  href={sl.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground-subtle hover:text-primary transition-colors"
+                >
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              )}
+            </span>
+          ))}
+        </div>
       )}
 
       {!mobile && quickActions.length > 0 && (

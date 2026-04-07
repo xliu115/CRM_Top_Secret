@@ -10,6 +10,7 @@ export type IntentType =
   | "meetings_today"
   | "daily_priorities"
   | "needs_attention"
+  | "nudge_summary"
   | "share_dossier"
   | "general_question";
 
@@ -36,6 +37,7 @@ Intents:
 - "meetings_today": User wants to see their calendar/meetings. Examples: "show my meetings today", "what meetings do I have?", "my calendar this week", "upcoming meetings"
 - "daily_priorities": User wants a summary of their day/priorities. Examples: "what should I focus on today?", "my priorities", "plan my day", "what's on my agenda?"
 - "needs_attention": User asks about at-risk contacts or who needs follow-up. Examples: "who needs attention?", "which contacts are stale?", "who haven't I spoken to?", "at-risk relationships"
+- "nudge_summary": User wants to see the AI evidence/summary for why they should reach out to a contact (from their nudge cards). Examples: "nudge summary for Brad", "show me the evidence for Beth", "why should I reach out to Andrew?", "outreach summary for Chris", "show the summary for Marc Benioff"
 - "share_dossier": User wants to share a contact's dossier. Examples: "share the dossier for Brad", "send the 360 for Beth", "share dossier"
 - "general_question": Any other question that doesn't fit the above. Examples: "what's the latest news about Microsoft?", "how is Nvidia doing?", "who changed jobs recently?"
 

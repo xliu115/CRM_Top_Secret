@@ -90,7 +90,7 @@ function ChatPageContent() {
           )}
         </div>
 
-        <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card">
           <div className="flex-1 overflow-y-auto p-4">
             {isEmpty && !loading ? (
               <div className="flex h-full flex-col items-center justify-center gap-6">

@@ -16,6 +16,8 @@ export function stripMarkdown(s: string): string {
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url) and ![alt](url)
     .replace(/<[^>]+>/g, "")            // HTML tags
     .replace(/https?:\/\/\S+/g, "")     // bare URLs
+    .replace(/\s[-–|]\s+[A-Z][\w\s&,.']+$/gm, "") // strip source attributions (e.g. " - The Motley Fool")
+    .replace(/(?:^|\s)[*\-]\s/g, " ")   // stray list markers as literal characters
     .replace(/\n+/g, " ")              // newlines → spaces
     .replace(/\s{2,}/g, " ")           // collapse whitespace
     .trim();
@@ -23,10 +25,32 @@ export function stripMarkdown(s: string): string {
 
 /** Clean and truncate signal text for use in AI summaries. */
 function cleanSnippet(s: string, maxLen = 120): string {
-  const cleaned = stripMarkdown(s);
+  let cleaned = stripMarkdown(s);
+
+  // Deduplicate repeated phrases (common from scraped title + subtitle)
+  const half = Math.ceil(cleaned.length / 2);
+  for (let len = 20; len <= half; len++) {
+    const prefix = cleaned.slice(0, len);
+    const secondIdx = cleaned.indexOf(prefix, 1);
+    if (secondIdx > 0 && secondIdx <= len + 10) {
+      cleaned = cleaned.slice(0, secondIdx).trimEnd().replace(/[.\s\-–—:,]+$/, "") + " " + cleaned.slice(secondIdx + prefix.length).trimStart();
+      cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+      break;
+    }
+  }
+
   if (cleaned.length <= maxLen) return cleaned;
+
+  // Prefer cutting at a sentence boundary
+  const sentenceEnd = cleaned.slice(0, maxLen).search(/[.!?]\s/);
+  if (sentenceEnd > maxLen * 0.4) {
+    return cleaned.slice(0, sentenceEnd + 1);
+  }
+
   const cut = cleaned.lastIndexOf(" ", maxLen);
-  return cleaned.slice(0, cut > 0 ? cut : maxLen) + "\u2026";
+  let truncated = cleaned.slice(0, cut > 0 ? cut : maxLen);
+  truncated = truncated.replace(/[.,;:\-–—\s]+$/, "");
+  return truncated + "\u2026";
 }
 
 function naturalizeInteractionSummary(s: string): string {
@@ -161,6 +185,17 @@ export function parseArticleCampaignNudgeDisplay(nudge: {
 
   return { articleTitle, contentItemId, matchCount, campaignHref };
 }
+
+export const INSIGHT_TYPE_LABELS: Record<string, string> = {
+  JOB_CHANGE: "Executive Transition",
+  COMPANY_NEWS: "Company News",
+  UPCOMING_EVENT: "Upcoming Event",
+  MEETING_PREP: "Meeting Prep",
+  EVENT_ATTENDED: "Event Follow-Up",
+  EVENT_REGISTERED: "Event Outreach",
+  ARTICLE_READ: "Content Follow-Up",
+  LINKEDIN_ACTIVITY: "LinkedIn Activity",
+};
 
 const TYPE_LABELS: Record<string, string> = {
   STALE_CONTACT: "reconnect",
@@ -493,12 +528,11 @@ export function buildSummaryFragments(
     (a, b) => (CTA_PRIORITY[a.type] ?? 99) - (CTA_PRIORITY[b.type] ?? 99)
   );
 
-  const primaryLine: string[] = [];
   const maxPrimarySignals = 2;
   let signalsRendered = 0;
   for (const sc of signalCandidates) {
     if (signalsRendered >= maxPrimarySignals) break;
-    primaryLine.push(sc.render());
+    topicLines.push([sc.render()]);
     renderedTypes.push(sc.type);
     signalsRendered++;
   }
@@ -507,11 +541,10 @@ export function buildSummaryFragments(
     const snippet = extractInsightSnippet(stale);
     if (snippet) {
       bolds.add(snippet);
-      primaryLine.push(`It\u2019s been ${snippet} since your last conversation.`);
+      topicLines.push([`It\u2019s been ${snippet} since your last conversation.`]);
       renderedTypes.push("STALE_CONTACT");
     }
   }
-  if (primaryLine.length > 0) topicLines.push(primaryLine);
 
   const totalSentences = topicLines.reduce((n, l) => n + l.length, 0);
   if (event && totalSentences < 3) {

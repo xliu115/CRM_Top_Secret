@@ -292,17 +292,17 @@ const RULE_TYPE_LABELS: Record<string, string> = {
 };
 
 const RULE_TYPE_CHAT_ACTION: Record<string, string> = {
-  STALE_CONTACT: "Draft a check-in email to",
-  JOB_CHANGE: "Draft an email about their new role to",
-  COMPANY_NEWS: "Draft an email referencing recent news to",
-  UPCOMING_EVENT: "Draft an event outreach email to",
+  STALE_CONTACT: "Nudge summary for",
+  JOB_CHANGE: "Nudge summary for",
+  COMPANY_NEWS: "Nudge summary for",
+  UPCOMING_EVENT: "Nudge summary for",
   MEETING_PREP: "Prepare me for the meeting with",
-  EVENT_ATTENDED: "Draft an event follow-up email to",
-  EVENT_REGISTERED: "Draft an event outreach email to",
-  ARTICLE_READ: "Draft an email about our content to",
-  LINKEDIN_ACTIVITY: "Draft an email to",
-  FOLLOW_UP: "Draft a follow-up email to",
-  REPLY_NEEDED: "Draft a reply to",
+  EVENT_ATTENDED: "Nudge summary for",
+  EVENT_REGISTERED: "Nudge summary for",
+  ARTICLE_READ: "Nudge summary for",
+  LINKEDIN_ACTIVITY: "Nudge summary for",
+  FOLLOW_UP: "Nudge summary for",
+  REPLY_NEEDED: "Nudge summary for",
 };
 
 function buildChatUrl(params: {
@@ -499,7 +499,7 @@ function StructuredBriefingView({
                 <div key={key} className="group">
                   <div className="flex items-baseline gap-1.5 flex-wrap">
                     <Link
-                      href={`/chat?q=${encodeURIComponent(`Draft an email to ${first.contactName} at ${first.company}`)}`}
+                      href={buildChatUrl({ q: `Nudge summary for ${first.contactName}`, contactId: first.contactId })}
                       className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
                     >
                       {first.contactName}
@@ -615,7 +615,7 @@ function StructuredBriefingView({
               <div key={seq.id}>
                 <div className="flex items-baseline gap-1.5 flex-wrap">
                   <Link
-                    href={`/chat?q=${encodeURIComponent(`Draft a follow-up email to ${seq.contact.name} at ${seq.contact.company.name}`)}`}
+                    href={buildChatUrl({ q: `Nudge summary for ${seq.contact.name}`, contactId: seq.contact.id })}
                     className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
                   >
                     {seq.contact.name}
@@ -1042,7 +1042,7 @@ export default function DashboardPage() {
         {cardPrefs?.aiAssistant !== false && (
         <div className="mx-auto w-full max-w-[80%]">
         <Card
-          className={`shadow-md border-primary/10${briefingReady && !briefingRevealed ? " cursor-pointer ring-1 ring-primary/20 hover:ring-primary/40 transition-all" : ""}`}
+          className={`border-0 shadow-sm${briefingReady && !briefingRevealed ? " cursor-pointer ring-1 ring-primary/20 hover:ring-primary/40 transition-all" : ""}`}
           onClick={() => {
             if (briefingReady && !briefingRevealed) {
               setBriefingRevealed(true);
@@ -1384,7 +1384,7 @@ export default function DashboardPage() {
                                 <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
                                   <div className="flex items-center gap-1.5 mb-2">
                                     <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                                    <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">AI Summary</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Insights</span>
                                   </div>
                                   <div className="text-sm text-foreground/70 leading-relaxed">
                                     <FragmentText fragments={fragments} />
@@ -1453,7 +1453,7 @@ export default function DashboardPage() {
                                 <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
                                   <div className="flex items-center gap-1.5 mb-2.5">
                                     <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                                    <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300">AI Summary</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300">Insights</span>
                                   </div>
                                   <div className="text-sm text-foreground/70 leading-relaxed">
                                     <FragmentText fragments={fragments} />
@@ -1463,13 +1463,13 @@ export default function DashboardPage() {
                                 <div>
                                   <Link
                                     href={buildChatUrl({
-                                      q: `Draft a follow-up email to ${nudge.contact.name}`,
+                                      q: `Nudge summary for ${nudge.contact.name}`,
                                       nudgeId: nudge.id,
                                       contactId: nudge.contact.id,
                                     })}
                                     className="inline-flex items-center text-xs font-medium text-primary hover:underline"
                                   >
-                                    Draft follow-up
+                                    View summary
                                     <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
                                   </Link>
                                 </div>
@@ -1517,7 +1517,7 @@ export default function DashboardPage() {
                                 <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
                                   <div className="flex items-center gap-1.5 mb-2">
                                     <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                    <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">AI Summary</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">Insights</span>
                                   </div>
                                   <div className="text-sm text-foreground/70 leading-relaxed">
                                     <FragmentText fragments={fragments} />
@@ -1565,7 +1565,7 @@ export default function DashboardPage() {
                               <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
                                 <div className="flex items-center gap-1.5 mb-2.5">
                                   <Sparkles className="h-4 w-4 text-primary" />
-                                  <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
+                                  <span className="text-xs font-bold uppercase tracking-wider text-primary">Insights</span>
                                 </div>
                                 <div className="text-sm text-foreground/70 leading-relaxed">
                                   <FragmentText fragments={fragments} />
@@ -1575,7 +1575,7 @@ export default function DashboardPage() {
                               <div>
                                 <Link
                                   href={buildChatUrl({
-                                    q: `${RULE_TYPE_CHAT_ACTION[nudge.ruleType] ?? "Draft an email to"} ${nudge.contact.name}`,
+                                    q: `${RULE_TYPE_CHAT_ACTION[nudge.ruleType] ?? "Nudge summary for"} ${nudge.contact.name}`,
                                     nudgeId: nudge.id,
                                     contactId: nudge.contact.id,
                                   })}

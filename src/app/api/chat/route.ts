@@ -13,6 +13,11 @@ import {
 import { generateCompany360, type Company360Context } from "@/lib/services/llm-company360";
 import { classifyIntent, type IntentType } from "@/lib/services/llm-intent";
 import { parseStructuredBrief, type StructuredBrief } from "@/lib/types/structured-brief";
+import {
+  buildSummaryFragments,
+  type InsightData,
+  type SentenceFragment,
+} from "@/lib/utils/nudge-summary";
 
 const FULL_CONTACT_360_INTENT =
   /\b(full\s+contact\s*360)\b/i;
@@ -32,8 +37,10 @@ const DAILY_PRIORITIES_INTENT =
   /\b(what should I\s+(?:do|focus on|prioritize)|my priorities|today'?s?\s+(?:priorities|plan|agenda)|plan (?:my|for) (?:today|the day))\b/i;
 const NEEDS_ATTENTION_INTENT =
   /\b((?:who|which)\s+(?:contacts?|clients?|people)\s+need\s+(?:attention|outreach|follow.?up)|need(?:s|ing)?\s+attention|at.?risk\s+(?:contacts?|clients?|relationships?))\b/i;
+const NUDGE_SUMMARY_INTENT =
+  /\b(nudge summary|show (?:me )?(?:the )?(?:nudge|evidence|summary) for|why (?:should I |do I need to )?(?:reach out|contact|follow up)|outreach summary)\b/i;
 
-const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT];
+const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT, NUDGE_SUMMARY_INTENT];
 
 function extractNameFromQuery(query: string): string {
   let cleaned = query;
@@ -99,6 +106,7 @@ export async function POST(request: NextRequest) {
       else if (MEETINGS_TODAY_INTENT.test(message)) detectedIntent = "meetings_today";
       else if (DAILY_PRIORITIES_INTENT.test(message)) detectedIntent = "daily_priorities";
       else if (NEEDS_ATTENTION_INTENT.test(message)) detectedIntent = "needs_attention";
+      else if (NUDGE_SUMMARY_INTENT.test(message)) detectedIntent = "nudge_summary";
 
       if (detectedIntent !== "general_question") {
         detectedEntity = extractNameFromQuery(message);
@@ -109,6 +117,7 @@ export async function POST(request: NextRequest) {
     const isMeetingsToday = detectedIntent === "meetings_today";
     const isDailyPriorities = detectedIntent === "daily_priorities";
     const isNeedsAttention = detectedIntent === "needs_attention";
+    const isNudgeSummary = detectedIntent === "nudge_summary";
     const isFullContact360 = detectedIntent === "full_360";
     const isQuick360 = detectedIntent === "quick_360";
     const isCompany360 = detectedIntent === "company_360";
@@ -388,6 +397,90 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ answer: sections.join("\n"), sources: [] });
       } catch (err) {
         console.error("[chat] needs attention intent failed:", err);
+      }
+    }
+
+    // ── Nudge Summary (evidence-first outreach view) ──────────────────
+    if (isNudgeSummary) {
+      try {
+        const nameQuery = detectedEntity || extractNameFromQuery(message);
+
+        let nudges: NudgeWithRelations[] = [];
+        if (ctx_ids.contactId) {
+          nudges = await nudgeRepo.findByContactId(ctx_ids.contactId);
+          nudges = nudges.filter((n) => n.status === "OPEN");
+        } else if (ctx_ids.nudgeId) {
+          const single = await prisma.nudge.findUnique({
+            where: { id: ctx_ids.nudgeId },
+            include: { contact: { include: { company: true } }, signal: true },
+          });
+          if (single) nudges = [single as NudgeWithRelations];
+        }
+
+        if (nudges.length === 0 && nameQuery) {
+          const contacts = await contactRepo.search(nameQuery, partnerId);
+          const contact = contacts[0];
+          if (contact) {
+            nudges = await nudgeRepo.findByContactId(contact.id);
+            nudges = nudges.filter((n) => n.status === "OPEN");
+          }
+        }
+
+        if (nudges.length > 0) {
+          const primary = nudges[0];
+          const contactName = primary.contact.name;
+          const companyName = primary.contact.company?.name ?? "";
+
+          const sections: string[] = [];
+          sections.push(`## Why Reach Out: ${contactName}`);
+          if (primary.contact.title) {
+            sections.push(`**${primary.contact.title}** at ${companyName}`);
+          }
+          sections.push("");
+
+          const SKIP_LABEL_TYPES = new Set(["STALE_CONTACT", "FOLLOW_UP", "REPLY_NEEDED", "CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"]);
+          const seenLabels = new Map<string, string | null>();
+
+          for (const nudge of nudges) {
+            let insights: InsightData[] = [];
+            try {
+              const meta = JSON.parse(nudge.metadata ?? "{}");
+              insights = meta?.insights ?? [];
+            } catch { /* ignore */ }
+
+            const fragments = buildSummaryFragments(nudge, insights);
+            const md = fragmentsToMarkdown(fragments);
+            sections.push(md);
+
+            for (const ins of insights) {
+              if (SKIP_LABEL_TYPES.has(ins.type)) continue;
+              if (!seenLabels.has(ins.type)) {
+                seenLabels.set(ins.type, ins.signalUrl ?? null);
+              } else if (!seenLabels.get(ins.type) && ins.signalUrl) {
+                seenLabels.set(ins.type, ins.signalUrl);
+              }
+            }
+          }
+
+          if (seenLabels.size > 0) {
+            const labelData = [...seenLabels.entries()].map(([type, url]) => ({ type, url }));
+            sections.push(`<!--SIGNAL_LABELS:${JSON.stringify(labelData)}-->`);
+          }
+
+          const quickActions = [
+            { label: "Draft Email", query: `Draft email to ${contactName}` },
+            { label: "Quick 360", query: `Quick 360 for ${contactName}` },
+            { label: "Company 360", query: `Company 360 for ${companyName || contactName}` },
+          ];
+          sections.push(`\n<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`);
+
+          return NextResponse.json({
+            answer: sections.join("\n\n"),
+            sources: [],
+          });
+        }
+      } catch (err) {
+        console.error("[chat] nudge summary intent failed:", err);
       }
     }
 
@@ -759,9 +852,9 @@ function getUsedActions(
 
 function buildQuickActionsMarker(contactName: string, used: Set<ActionKey>, companyName?: string): string {
   const all: { key: ActionKey; label: string; query: string }[] = [
+    { key: "email", label: "Draft Email", query: `Draft email to ${contactName}` },
     { key: "full360", label: "Full Contact 360", query: `Full Contact 360 for ${contactName}` },
     { key: "company360", label: "Company 360", query: `Company 360 for ${companyName || contactName}` },
-    { key: "email", label: "Draft Email", query: `Draft email to ${contactName}` },
     { key: "share", label: "Share Dossier", query: `Share dossier for ${contactName}` },
   ];
   const filtered = all.filter((a) => !used.has(a.key));
@@ -839,4 +932,16 @@ function structuredBriefToMarkdown(brief: StructuredBrief): string {
   }
 
   return sections.join("\n");
+}
+
+function fragmentsToMarkdown(fragments: SentenceFragment[]): string {
+  let md = "";
+  for (const f of fragments) {
+    if (f.lineBreak) {
+      md += "\n\n";
+      continue;
+    }
+    md += f.bold ? `**${f.text}**` : f.text;
+  }
+  return md.trim();
 }

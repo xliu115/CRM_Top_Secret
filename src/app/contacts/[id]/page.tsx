@@ -2451,7 +2451,7 @@ function ContactNudgeCard({
         <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
           <div className="flex items-center gap-1.5 mb-2.5">
             <Sparkles className="h-4 w-4 text-primary" />
-            <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">Insights</span>
           </div>
           <div className="text-sm text-foreground/70 leading-relaxed">
             <FragmentText fragments={fragments} />

@@ -480,7 +480,7 @@ function NudgeCard({
           <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
             <div className="flex items-center gap-1.5 mb-2.5">
               <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">AI Summary</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">Insights</span>
             </div>
             <div className="text-sm text-foreground/70 leading-relaxed">
               <FragmentText fragments={fragments} />
@@ -569,7 +569,7 @@ function NudgeCard({
           <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
             <div className="flex items-center gap-1.5 mb-2.5">
               <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">AI Summary</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Insights</span>
             </div>
             <div className="text-sm text-foreground/70 leading-relaxed">
               <NudgeSummary nudge={nudge} insights={insights} />
@@ -651,7 +651,7 @@ function NudgeCard({
         <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
           <div className="flex items-center gap-1.5 mb-2.5">
             <Sparkles className="h-4 w-4 text-primary" />
-            <span className="text-xs font-bold uppercase tracking-wider text-primary">AI Summary</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">Insights</span>
           </div>
           <div className="text-sm text-foreground/70 leading-relaxed">
             <NudgeSummary nudge={nudge} insights={insights} />
