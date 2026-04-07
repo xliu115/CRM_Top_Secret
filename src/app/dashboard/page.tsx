@@ -460,7 +460,7 @@ function StructuredBriefingView({
               <Clock className="h-3.5 w-3.5 text-orange-600" />
             </div>
             <h3 className="text-sm font-semibold text-foreground">
-              Priority contacts for today
+              Priority contacts to reach out today
             </h3>
           </div>
           <div className="space-y-3 pl-8">
@@ -475,7 +475,7 @@ function StructuredBriefingView({
                 <div key={key} className="group">
                   <div className="flex items-baseline gap-1.5 flex-wrap">
                     <Link
-                      href={`/contacts/${first.contactId}${first.nudgeId ? `?nudge=${first.nudgeId}` : ""}`}
+                      href={`/chat?q=${encodeURIComponent(`Draft an email to ${first.contactName} at ${first.company}`)}`}
                       className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
                     >
                       {first.contactName}
@@ -483,16 +483,6 @@ function StructuredBriefingView({
                     <span className="text-sm text-muted-foreground">
                       at {first.company}
                     </span>
-                    {bestPriority === "URGENT" && (
-                      <Badge variant="outline" className="ml-1 border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400 text-[10px] py-0">
-                        Urgent
-                      </Badge>
-                    )}
-                    {bestPriority === "HIGH" && (
-                      <Badge variant="outline" className="ml-1 border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400 text-[10px] py-0">
-                        High
-                      </Badge>
-                    )}
                   </div>
                   {first.daysSince != null && (
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -519,7 +509,7 @@ function StructuredBriefingView({
               <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
             </div>
             <h3 className="text-sm font-semibold text-foreground">
-              Campaigns pending your approval
+              Review and approve campaigns
             </h3>
           </div>
           <div className="space-y-3 pl-8">
@@ -537,20 +527,6 @@ function StructuredBriefingView({
                     >
                       {camp.campaignName}
                     </Link>
-                    {n.priority === "URGENT" && (
-                      <Badge variant="outline" className="ml-1 border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400 text-[10px] py-0">
-                        Urgent
-                      </Badge>
-                    )}
-                    {n.priority === "HIGH" && (
-                      <Badge variant="outline" className="ml-1 border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400 text-[10px] py-0">
-                        High
-                      </Badge>
-                    )}
-                    <Badge variant="outline" className="ml-1 border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400 text-[10px] py-0">
-                      <ShieldCheck className="h-2.5 w-2.5 mr-0.5" />
-                      Approval
-                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {camp.pendingCount} contact{camp.pendingCount !== 1 ? "s" : ""} pending your review{camp.deadlineLabel ? ` · ${camp.deadlineLabel}` : ""}.
@@ -570,7 +546,7 @@ function StructuredBriefingView({
               <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
             </div>
             <h3 className="text-sm font-semibold text-foreground">
-              New articles to share
+              Share articles with your contacts
             </h3>
           </div>
           <div className="space-y-3 pl-8">
@@ -588,10 +564,6 @@ function StructuredBriefingView({
                     >
                       {art.articleTitle}
                     </Link>
-                    <Badge variant="outline" className="ml-1 border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400 text-[10px] py-0">
-                      <BookOpen className="h-2.5 w-2.5 mr-0.5" />
-                      Article
-                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {art.matchCount} contact{art.matchCount !== 1 ? "s" : ""} matched — review and send.
@@ -611,7 +583,7 @@ function StructuredBriefingView({
               <Forward className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
             </div>
             <h3 className="text-sm font-semibold text-foreground">
-              Active follow-ups
+              Follow up on active outreach
             </h3>
           </div>
           <div className="space-y-3 pl-8">
@@ -619,7 +591,7 @@ function StructuredBriefingView({
               <div key={seq.id}>
                 <div className="flex items-baseline gap-1.5 flex-wrap">
                   <Link
-                    href={`/contacts/${seq.contact.id}`}
+                    href={`/chat?q=${encodeURIComponent(`Draft a follow-up email to ${seq.contact.name} at ${seq.contact.company.name}`)}`}
                     className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
                   >
                     {seq.contact.name}
@@ -645,7 +617,7 @@ function StructuredBriefingView({
               <CalendarDays className="h-3.5 w-3.5 text-indigo-600" />
             </div>
             <h3 className="text-sm font-semibold text-foreground">
-              Upcoming meetings
+              Prepare for upcoming meetings
             </h3>
           </div>
           <div className="space-y-2.5 pl-8">
@@ -653,7 +625,7 @@ function StructuredBriefingView({
               <div key={m.meetingId}>
                 <div className="flex items-baseline gap-1.5 flex-wrap">
                   <Link
-                    href={`/meetings/${m.meetingId}`}
+                    href={`/chat?q=${encodeURIComponent(`Prepare a meeting brief for "${m.title}"${m.attendeeNames.length > 0 ? ` with ${m.attendeeNames.join(", ")}` : ""}`)}`}
                     className="text-sm font-medium text-foreground hover:text-primary hover:underline transition-colors"
                   >
                     &ldquo;{m.title}&rdquo;
@@ -681,7 +653,7 @@ function StructuredBriefingView({
               <Newspaper className="h-3.5 w-3.5 text-blue-600" />
             </div>
             <h3 className="text-sm font-semibold text-foreground">
-              Company news
+              Leverage recent company news
             </h3>
           </div>
           <div className="space-y-3 pl-8">
@@ -812,8 +784,12 @@ export default function DashboardPage() {
   >([]);
   const [structuredData, setStructuredData] = useState<StructuredBriefingData | null>(null);
   const [activeSequences, setActiveSequences] = useState<ActiveSequenceBriefingItem[]>([]);
-  const [briefingView, setBriefingView] = useState<"conversational" | "structured">("conversational");
+  const [briefingView, setBriefingView] = useState<"conversational" | "structured">("structured");
   const [briefingLoading, setBriefingLoading] = useState(true);
+  const [briefingReady, setBriefingReady] = useState(false);
+  const [briefingRevealed, setBriefingRevealed] = useState(() => {
+    try { return sessionStorage.getItem("briefingRevealed") === "1"; } catch { return false; }
+  });
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
   const pendingVoiceRef = useRef<string | null>(null);
@@ -889,7 +865,10 @@ export default function DashboardPage() {
       } catch {
         // Silently fail — the briefing is a nice-to-have
       } finally {
-        if (!cancelled) setBriefingLoading(false);
+        if (!cancelled) {
+          setBriefingReady(true);
+          try { if (sessionStorage.getItem("briefingRevealed") === "1") setBriefingLoading(false); } catch {}
+        }
       }
     }
     fetchAll();
@@ -1037,7 +1016,16 @@ export default function DashboardPage() {
         {/* Conversational Panel — Hero */}
         {cardPrefs?.aiAssistant !== false && (
         <div className="mx-auto w-full max-w-[80%]">
-        <Card className="shadow-md border-primary/10">
+        <Card
+          className={`shadow-md border-primary/10${briefingReady && !briefingRevealed ? " cursor-pointer ring-1 ring-primary/20 hover:ring-primary/40 transition-all" : ""}`}
+          onClick={() => {
+            if (briefingReady && !briefingRevealed) {
+              setBriefingRevealed(true);
+              setBriefingLoading(false);
+              try { sessionStorage.setItem("briefingRevealed", "1"); } catch {}
+            }
+          }}
+        >
           <div className="flex flex-col">
             {/* Briefing area */}
             <div className="p-5">
@@ -1064,19 +1052,6 @@ export default function DashboardPage() {
                     <div className="inline-flex items-center rounded-lg border border-border bg-muted/50 p-0.5">
                       <button
                         type="button"
-                        onClick={() => setBriefingView("conversational")}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[36px] ${
-                          briefingView === "conversational"
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground-subtle hover:text-foreground"
-                        }`}
-                        aria-label="Conversational view"
-                      >
-                        <AlignLeft className="h-3.5 w-3.5" />
-                        Narrative
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setBriefingView("structured")}
                         className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[36px] ${
                           briefingView === "structured"
@@ -1087,6 +1062,19 @@ export default function DashboardPage() {
                       >
                         <List className="h-3.5 w-3.5" />
                         Structured
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBriefingView("conversational")}
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[36px] ${
+                          briefingView === "conversational"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground-subtle hover:text-foreground"
+                        }`}
+                        aria-label="Conversational view"
+                      >
+                        <AlignLeft className="h-3.5 w-3.5" />
+                        Narrative
                       </button>
                     </div>
                   </div>
