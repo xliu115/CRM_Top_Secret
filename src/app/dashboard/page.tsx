@@ -39,7 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
-import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay } from "@/lib/utils/nudge-summary";
+import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay, parseArticleCampaignNudgeDisplay, stripMarkdown } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
 import { useStreamingTranscription } from "@/hooks/use-streaming-transcription";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
@@ -286,6 +286,7 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   ARTICLE_READ: "content engagement",
   LINKEDIN_ACTIVITY: "LinkedIn activity",
   CAMPAIGN_APPROVAL: "campaign approval",
+  ARTICLE_CAMPAIGN: "new article campaign",
 };
 
 const RULE_TYPE_CHAT_ACTION: Record<string, string> = {
@@ -404,9 +405,10 @@ function StructuredBriefingView({
     );
   }
 
-  // Separate campaign approval nudges from contact-centric nudges
+  // Separate special nudge types from contact-centric nudges
   const campaignApprovalNudges = data.nudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
-  const contactNudges = data.nudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL");
+  const articleCampaignNudges = data.nudges.filter((n) => n.ruleType === "ARTICLE_CAMPAIGN");
+  const contactNudges = data.nudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN");
 
   // Group contacts and sort groups by highest priority within
   const contactMap = new Map<string, StructuredBriefingData["nudges"][number][]>();
@@ -551,6 +553,47 @@ function StructuredBriefingView({
         </section>
       )}
 
+      {/* Article Campaigns */}
+      {articleCampaignNudges.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-950/40">
+              <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              New articles to share
+            </h3>
+          </div>
+          <div className="space-y-3 pl-8">
+            {articleCampaignNudges.map((n) => {
+              const art = parseArticleCampaignNudgeDisplay({
+                reason: n.reason,
+                metadata: n.metadata,
+              });
+              return (
+                <div key={`ac-${n.nudgeId}`} className="group">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <Link
+                      href={art.campaignHref}
+                      className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
+                    >
+                      {art.articleTitle}
+                    </Link>
+                    <Badge variant="outline" className="ml-1 border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400 text-[10px] py-0">
+                      <BookOpen className="h-2.5 w-2.5 mr-0.5" />
+                      Article
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {art.matchCount} contact{art.matchCount !== 1 ? "s" : ""} matched — review and send.
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Active follow-ups (outreach sequences) */}
       {activeSequences.length > 0 && (
         <section>
@@ -647,9 +690,7 @@ function StructuredBriefingView({
                   {items.map((item, idx) => (
                     <li key={idx} className="text-xs text-muted-foreground leading-relaxed">
                       <span className="mr-1">•</span>
-                      {item.content.length > 150
-                        ? item.content.slice(0, 147) + "..."
-                        : item.content}
+                      {(() => { const c = stripMarkdown(item.content); return c.length > 150 ? c.slice(0, 147) + "..." : c; })()}
                       {item.url && (
                         <a
                           href={item.url}
@@ -794,10 +835,11 @@ export default function DashboardPage() {
 
         if (nudgesRes.ok) {
           const nudges: Nudge[] = await nudgesRes.json();
-          const campaignApprovals = nudges.filter((n: Nudge) => n.ruleType === "CAMPAIGN_APPROVAL");
-          const others = nudges.filter((n: Nudge) => n.ruleType !== "CAMPAIGN_APPROVAL");
-          const remaining = Math.max(0, 5 - campaignApprovals.length);
-          setTopNudges([...campaignApprovals, ...others.slice(0, remaining)]);
+          const priorityTypes = new Set(["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"]);
+          const priorityNudges = nudges.filter((n: Nudge) => priorityTypes.has(n.ruleType));
+          const others = nudges.filter((n: Nudge) => !priorityTypes.has(n.ruleType));
+          const remaining = Math.max(0, 5 - priorityNudges.length);
+          setTopNudges([...priorityNudges, ...others.slice(0, remaining)]);
         }
       } catch (err) {
         if (cancelled) return;
@@ -899,7 +941,7 @@ export default function DashboardPage() {
         <div className="space-y-8">
           <Skeleton className="h-10 w-64 mx-auto" />
           <Skeleton className="h-80" />
-          <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+          <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
             <Skeleton className="h-[28rem]" />
             <Skeleton className="h-80" />
           </div>
@@ -1157,9 +1199,9 @@ export default function DashboardPage() {
         )}
 
         {/* Data Grid — secondary content */}
-        <div className="mt-12 grid gap-6 lg:grid-cols-[3fr_2fr]">
+        <div className="mt-12 grid gap-6 lg:grid-cols-[2fr_1fr]">
           {/* Left column */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* Today's Top Nudges */}
             {cardPrefs?.topNudges !== false && (
               <Card>
@@ -1184,9 +1226,12 @@ export default function DashboardPage() {
                             .map((a) => a.contact.name)
                             .join(", ");
                           const structuredBrief = parseStructuredBrief(meeting.generatedBrief);
+                          const rawBrief = meeting.generatedBrief
+                            ? meeting.generatedBrief.replace(/^###?\s+\w+\n+/m, "").trim()
+                            : null;
                           const summarySource = structuredBrief
                             ? structuredBrief.meetingGoal.statement
-                            : (meeting.generatedBrief || meeting.purpose);
+                            : (rawBrief || meeting.purpose);
                           const summaryPreview = summarySource
                             ? summarySource.length > 200
                               ? summarySource.slice(0, 200).trimEnd() + "\u2026"
@@ -1325,6 +1370,66 @@ export default function DashboardPage() {
                           );
                         }
 
+                        if (nudge.ruleType === "ARTICLE_CAMPAIGN") {
+                          const art = parseArticleCampaignNudgeDisplay(nudge);
+                          return (
+                            <Card key={nudge.id} className="overflow-hidden border-l-4 border-l-blue-400 dark:border-l-blue-600">
+                              <CardHeader className="pb-3 pt-5">
+                                <div className="flex items-start gap-4">
+                                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/30 ring-2 ring-blue-200/70 dark:ring-blue-800/50">
+                                    <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <CardTitle className="text-lg font-bold">
+                                        <Link href={art.campaignHref} className="hover:text-primary hover:underline transition-colors">
+                                          {art.articleTitle}
+                                        </Link>
+                                      </CardTitle>
+                                      <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                                        {nudge.priority}
+                                      </Badge>
+                                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400">
+                                        <BookOpen className="h-3 w-3 mr-1" />
+                                        Article Campaign
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CardHeader>
+
+                              <CardContent className="space-y-3">
+                                <p className="text-sm font-medium text-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                    {art.matchCount} contact{art.matchCount !== 1 ? "s" : ""} matched
+                                  </span>
+                                </p>
+
+                                <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">AI Summary</span>
+                                  </div>
+                                  <div className="text-sm text-foreground/70 leading-relaxed">
+                                    <FragmentText fragments={fragments} />
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <Link
+                                    href={art.campaignHref}
+                                    className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                  >
+                                    View campaign
+                                    <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                                  </Link>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+
                         return (
                           <Card key={nudge.id} className="overflow-hidden">
                             <CardHeader className="pb-3 pt-5">
@@ -1432,7 +1537,7 @@ export default function DashboardPage() {
                                   </div>
                                 ) : (
                                   <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                                    {meeting.generatedBrief}
+                                    {meeting.generatedBrief.replace(/^###?\s+\w+\n+/m, "").trim()}
                                   </p>
                                 );
                               })()}
@@ -1464,10 +1569,10 @@ export default function DashboardPage() {
           </div>
 
           {/* Right column */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* Client News */}
             {cardPrefs?.clientNews !== false && (
-              <Card>
+              <Card className="overflow-hidden">
                 <CardHeader>
                   <CardTitle>Client News</CardTitle>
                   <CardDescription>
@@ -1511,8 +1616,8 @@ export default function DashboardPage() {
                                         {item.contact.name}
                                       </p>
                                     )}
-                                    <p className="text-xs text-muted-foreground line-clamp-2">
-                                      {item.content}
+                                    <p className="text-xs text-muted-foreground line-clamp-2 break-words">
+                                      {stripMarkdown(item.content)}
                                     </p>
                                     <p className="mt-0.5 text-[11px] text-muted-foreground-subtle">
                                       {format(new Date(item.date), "MMM d")} · {item.type}

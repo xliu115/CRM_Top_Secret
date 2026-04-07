@@ -55,6 +55,7 @@ function ruleTypeLabel(ruleType: string): string {
     EVENT_REGISTERED: "Event Outreach",
     ARTICLE_READ: "Content Follow-Up",
     LINKEDIN_ACTIVITY: "LinkedIn Activity",
+    ARTICLE_CAMPAIGN: "Article Campaign",
   };
   return labels[ruleType] ?? "Nudge";
 }

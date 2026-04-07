@@ -1,4 +1,5 @@
 import { callLLM } from "./llm-core";
+import { stripMarkdown } from "@/lib/utils/nudge-summary";
 
 // ── Dashboard Briefing ──────────────────────────────────────────────
 
@@ -21,7 +22,7 @@ export async function generateDashboardBriefing(
     : "No upcoming meetings.";
 
   const newsBlock = ctx.clientNews.length
-    ? `Recent client news (${ctx.clientNews.length}):\n${ctx.clientNews.slice(0, 5).map((n) => `- ${n.company ? `[${n.company}] ` : ""}${n.content.slice(0, 150)}`).join("\n")}`
+    ? `Recent client news (${ctx.clientNews.length}):\n${ctx.clientNews.slice(0, 5).map((n) => `- ${n.company ? `[${n.company}] ` : ""}${stripMarkdown(n.content).slice(0, 150)}`).join("\n")}`
     : "No recent client news.";
 
   const result = await callLLM(
@@ -100,6 +101,7 @@ Format:
 - Open with ONE bold headline sentence that names the single most important action today and why. If a campaign approval exists, lead with that; otherwise lead with the top-priority contact.
 - Below the headline, use SHORT BULLET SECTIONS grouped by category. Each section has a bold label on its own line, then 1-3 markdown bullet points. Only include sections that have data:
   - **Campaign approvals** — campaign name, pending count, deadline. List first when present.
+  - **Article campaigns** — article title, matched contact count — review and send.
   - **Priority contacts** — who to reach out to, company, days-since, why.
   - **Meetings** — title, time, key attendees, optional prep note.
   - **On the radar** — notable client news worth knowing.
@@ -113,9 +115,10 @@ After the briefing, output a JSON block with exactly 3 top actions in this forma
 ---ACTIONS---
 [{"contactName":"...","company":"...","actionLabel":"...","detail":"..."}]
 
-actionLabel should be a short CTA like "Draft check-in email", "Review meeting brief", "View company news", or "Review campaign" (for CAMPAIGN_APPROVAL nudges).
-detail should be a brief reason like "94 days since last contact", "Meeting tomorrow at 10am", or "5 contacts pending approval, due Apr 10".
-For CAMPAIGN_APPROVAL actions, use the campaign name as "contactName" and set "company" to "Campaign".`;
+actionLabel should be a short CTA like "Draft check-in email", "Review meeting brief", "View company news", "Review campaign" (for CAMPAIGN_APPROVAL nudges), or "Review article campaign" (for ARTICLE_CAMPAIGN nudges).
+detail should be a brief reason like "94 days since last contact", "Meeting tomorrow at 10am", "5 contacts pending approval, due Apr 10", or "8 contacts matched".
+For CAMPAIGN_APPROVAL actions, use the campaign name as "contactName" and set "company" to "Campaign".
+For ARTICLE_CAMPAIGN actions, use the article title as "contactName" and set "company" to "Article Campaign".`;
 
 export async function generateNarrativeBriefing(
   ctx: NarrativeBriefingContext
@@ -129,7 +132,7 @@ export async function generateNarrativeBriefing(
     : "No upcoming meetings.";
 
   const newsBlock = ctx.clientNews.length
-    ? `Recent client news (${ctx.clientNews.length}):\n${ctx.clientNews.slice(0, 5).map((n) => `- ${n.company ? `[${n.company}] ` : ""}${n.content.slice(0, 150)}`).join("\n")}`
+    ? `Recent client news (${ctx.clientNews.length}):\n${ctx.clientNews.slice(0, 5).map((n) => `- ${n.company ? `[${n.company}] ` : ""}${stripMarkdown(n.content).slice(0, 150)}`).join("\n")}`
     : "No recent client news.";
 
   const result = await callLLM(
@@ -185,6 +188,20 @@ function resolveDeeplink(
   company: string,
   ctx: NarrativeBriefingContext
 ): string {
+  if (company === "Article Campaign") {
+    const artNudge = ctx.nudges.find(
+      (n) => n.ruleType === "ARTICLE_CAMPAIGN" &&
+        n.contactName.toLowerCase() === contactName.toLowerCase()
+    ) ?? ctx.nudges.find((n) => n.ruleType === "ARTICLE_CAMPAIGN");
+    if (artNudge?.metadata) {
+      try {
+        const meta = JSON.parse(artNudge.metadata);
+        if (meta.contentItemId) return `/campaigns/draft?contentItemId=${meta.contentItemId}`;
+      } catch { /* fallback */ }
+    }
+    return "/campaigns";
+  }
+
   if (company === "Campaign") {
     const campNudge = ctx.nudges.find(
       (n) => n.ruleType === "CAMPAIGN_APPROVAL"
@@ -206,6 +223,15 @@ function resolveDeeplink(
       try {
         const meta = JSON.parse(nudge.metadata);
         if (meta.campaignId) return `/campaigns/${meta.campaignId}`;
+      } catch { /* fallback */ }
+    }
+    return "/campaigns";
+  }
+  if (nudge?.ruleType === "ARTICLE_CAMPAIGN") {
+    if (nudge.metadata) {
+      try {
+        const meta = JSON.parse(nudge.metadata);
+        if (meta.contentItemId) return `/campaigns/draft?contentItemId=${meta.contentItemId}`;
       } catch { /* fallback */ }
     }
     return "/campaigns";
@@ -238,12 +264,26 @@ function buildFallbackActions(ctx: NarrativeBriefingContext): NarrativeBriefingA
       UPCOMING_EVENT: "Draft pre-event email",
       MEETING_PREP: "Review meeting brief",
       CAMPAIGN_APPROVAL: "Review campaign",
+      ARTICLE_CAMPAIGN: "Review article campaign",
     };
-    const deeplink = n.ruleType === "CAMPAIGN_APPROVAL"
-      ? "/campaigns"
-      : n.contactId
-        ? `/contacts/${n.contactId}${n.nudgeId ? `?nudge=${n.nudgeId}` : ""}`
-        : "/nudges";
+
+    let deeplink: string;
+    if (n.ruleType === "CAMPAIGN_APPROVAL") {
+      deeplink = "/campaigns";
+    } else if (n.ruleType === "ARTICLE_CAMPAIGN" && n.metadata) {
+      try {
+        const meta = JSON.parse(n.metadata);
+        deeplink = meta.contentItemId
+          ? `/campaigns/draft?contentItemId=${meta.contentItemId}`
+          : "/campaigns";
+      } catch {
+        deeplink = "/campaigns";
+      }
+    } else if (n.contactId) {
+      deeplink = `/contacts/${n.contactId}${n.nudgeId ? `?nudge=${n.nudgeId}` : ""}`;
+    } else {
+      deeplink = "/nudges";
+    }
     actions.push({
       contactName: n.contactName,
       company: n.company,
@@ -272,7 +312,8 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
   const firstName = ctx.partnerName.split(" ")[0];
 
   const campaignNudges = ctx.nudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
-  const contactNudges = ctx.nudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL");
+  const articleCampaignNudges = ctx.nudges.filter((n) => n.ruleType === "ARTICLE_CAMPAIGN");
+  const contactNudges = ctx.nudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN");
 
   // Bold headline — campaign approval takes priority, then top contact nudge
   if (campaignNudges.length > 0) {
@@ -280,6 +321,11 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
     const campName = nameMatch?.[1] ?? "a campaign";
     lines.push(
       `**${firstName}, approve **${campName}** today — ${campaignNudges.length === 1 ? "it needs" : "they need"} your sign-off before going out.**`
+    );
+  } else if (articleCampaignNudges.length > 0) {
+    const artTitle = articleCampaignNudges[0].reason.match(/article "([^"]+)"/)?.[1] ?? "a new article";
+    lines.push(
+      `**${firstName}, share **"${artTitle}"** with your contacts — we've matched relevant people for you.**`
     );
   } else if (contactNudges.length > 0) {
     const top = contactNudges[0];
@@ -297,6 +343,22 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
       const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
       const campName = nameMatch?.[1] ?? "A campaign";
       lines.push(`- **${campName}** needs your approval — review and approve so it can go out on your behalf.`);
+    }
+  }
+
+  // Article campaigns section
+  if (articleCampaignNudges.length > 0) {
+    lines.push("");
+    lines.push("**Article campaigns**");
+    for (const n of articleCampaignNudges) {
+      const titleMatch = n.reason.match(/article "([^"]+)"/);
+      const artTitle = titleMatch?.[1] ?? "New article";
+      let matchCount = 0;
+      try {
+        const meta = JSON.parse(n.metadata ?? "{}");
+        matchCount = meta.matchCount ?? 0;
+      } catch { /* ignore */ }
+      lines.push(`- **"${artTitle}"** — ${matchCount} contact${matchCount !== 1 ? "s" : ""} matched. Review and send.`);
     }
   }
 
@@ -337,7 +399,8 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
     lines.push("");
     lines.push("**On the radar**");
     for (const news of ctx.clientNews.slice(0, 2)) {
-      const headline = news.content.slice(0, 120) + (news.content.length > 120 ? "..." : "");
+      const cleaned = stripMarkdown(news.content);
+      const headline = cleaned.slice(0, 120) + (cleaned.length > 120 ? "..." : "");
       lines.push(
         news.company
           ? `- **${news.company}** is in the news — ${headline}`

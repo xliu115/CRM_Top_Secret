@@ -28,9 +28,11 @@ export async function GET(_request: NextRequest) {
     );
 
     const campaignApprovalNudges = sortedNudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
-    const otherNudges = sortedNudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL");
-    const remainingSlots = Math.max(0, 5 - campaignApprovalNudges.length);
-    const mergedNudges = [...campaignApprovalNudges, ...otherNudges.slice(0, remainingSlots)];
+    const articleCampaignNudges = sortedNudges.filter((n) => n.ruleType === "ARTICLE_CAMPAIGN");
+    const otherNudges = sortedNudges.filter((n) => n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN");
+    const priorityNudges = [...campaignApprovalNudges, ...articleCampaignNudges];
+    const remainingSlots = Math.max(0, 5 - priorityNudges.length);
+    const mergedNudges = [...priorityNudges, ...otherNudges.slice(0, remainingSlots)];
 
     const topNudges = mergedNudges.map((n) => {
       const daysSince = n.contact.lastContacted

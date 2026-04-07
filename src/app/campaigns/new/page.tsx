@@ -198,6 +198,7 @@ function NewCampaignPageInner() {
   const searchParams = useSearchParams();
   const contentIdParam = searchParams.get("contentId");
   const editIdParam = searchParams.get("edit");
+  const stepParam = searchParams.get("step");
 
   const [campaignKind, setCampaignKind] = useState<CampaignKind>("article");
   const [name, setName] = useState("");
@@ -358,6 +359,15 @@ function NewCampaignPageInner() {
           .filter((r: { contact: unknown }) => r.contact != null)
           .map((r: { contact: ContactRow }) => r.contact);
         setSelectedContacts(contacts);
+
+        if (stepParam) {
+          const stepNames = hasEvent || hasArticle || contents.length > 0
+            ? ["details", "content", "recipients", "message", "review"]
+            : ["details", "recipients", "message", "review"];
+          const idx = stepNames.indexOf(stepParam.toLowerCase());
+          if (idx >= 0) setStepIndex(idx);
+        }
+
         setEditHydrated(true);
         setEditLoading(false);
       })

@@ -1,5 +1,6 @@
 import { callLLM, callLLMJson } from "./llm-core";
-import { parseStructuredBrief } from "@/lib/types/structured-brief";
+import { parseStructuredBrief, type StructuredBrief } from "@/lib/types/structured-brief";
+import { stripMarkdown } from "@/lib/utils/nudge-summary";
 
 export interface MeetingBriefContext {
   meetingTitle: string;
@@ -119,47 +120,143 @@ export async function generateMeetingBrief(
 }
 
 function generateBriefTemplate(ctx: MeetingBriefContext): string {
-  const attendeeSection = ctx.attendees
-    .map((a) => {
-      const interactions = a.recentInteractions.length
-        ? a.recentInteractions.slice(0, 2).map((i) => `  - ${i}`).join("\n")
-        : "  - No recent interactions";
-      const signals = a.signals.length
-        ? a.signals.slice(0, 2).map((s) => `  - ${s}`).join("\n")
-        : "  - No recent signals";
-      return `### ${a.name} – ${a.title}, ${a.company}\n**Recent Interactions:**\n${interactions}\n**Signals:**\n${signals}`;
-    })
-    .join("\n\n");
+  const primary = ctx.attendees[0];
+  const primaryName = primary?.name ?? "Attendee";
+  const primaryCompany = primary?.company ?? "Company";
 
-  return `# Meeting Brief: ${ctx.meetingTitle}
+  const bullets: StructuredBrief["primaryContactProfile"]["bullets"] = [];
+  if (primary) {
+    if (primary.title) {
+      bullets.push({
+        label: "Current Role",
+        detail: `${primary.name} serves as ${primary.title} at ${primary.company}.`,
+      });
+    }
 
-## Meeting Context
-${ctx.meetingPurpose || "General relationship meeting."}
+    const jobSignal = primary.signals.find((s) => s.toLowerCase().includes("job_change") || s.toLowerCase().includes("new role") || s.toLowerCase().includes("promoted") || s.toLowerCase().includes("transitioned"));
+    if (jobSignal) {
+      bullets.push({
+        label: "Recent Move",
+        detail: stripMarkdown(jobSignal.replace(/^[A-Z_]+:\s*/, "")),
+      });
+    }
 
-## Attendee Insights
-${attendeeSection}
+    const linkedInSignal = primary.signals.find((s) => s.toLowerCase().includes("linkedin"));
+    if (linkedInSignal && bullets.length < 3) {
+      bullets.push({
+        label: "Active Voice",
+        detail: stripMarkdown(linkedInSignal.replace(/^[A-Z_]+:\s*/, "")),
+      });
+    }
 
-## Recommended Agenda
-1. Open with relationship check-in and recent developments
-2. Discuss strategic priorities and how we can add value
-3. Review any open action items from previous meetings
-4. Explore new collaboration opportunities
-5. Agree on next steps and follow-up timeline
+    if (primary.recentInteractions.length > 0 && bullets.length < 3) {
+      const latest = primary.recentInteractions[0];
+      const clean = stripMarkdown(latest.replace(/^[A-Z_]+\s*(\([^)]*\))?\s*:?\s*/, ""));
+      bullets.push({
+        label: "Last Touchpoint",
+        detail: clean || latest,
+      });
+    }
+  }
 
-## Suggested Questions
-1. What are your top strategic priorities for the next quarter?
-2. How is the team adapting to recent organizational changes?
-3. Where do you see the biggest opportunities for us to partner?
-4. Are there any challenges where we could provide additional support?
-5. What would make this relationship even more valuable to you?
+  const newsInsights: StructuredBrief["newsInsights"] = [];
+  for (const a of ctx.attendees) {
+    for (const s of a.signals) {
+      if (s.toLowerCase().includes("company_news") || s.toLowerCase().includes("news")) {
+        const cleaned = stripMarkdown(s.replace(/^[A-Z_]+:\s*/, ""));
+        if (cleaned.length > 20 && newsInsights.length < 3) {
+          const headline = cleaned.slice(0, 50).toUpperCase();
+          newsInsights.push({
+            headline: headline.length < cleaned.length ? headline + "..." : headline,
+            body: cleaned,
+          });
+        }
+      }
+    }
+  }
 
-## Risks & Watch-outs
-- Be mindful of any recent negative sentiment in past interactions
-- Watch for signs of competitive pressure or budget constraints
-- Note any organizational changes that may affect decision-making
+  const recentMoves: StructuredBrief["executiveProfile"]["recentMoves"] = [];
+  if (primary) {
+    for (const s of primary.signals) {
+      if (s.toLowerCase().includes("job_change") || s.toLowerCase().includes("new role")) {
+        recentMoves.push({
+          date: "Recent",
+          description: stripMarkdown(s.replace(/^[A-Z_]+:\s*/, "")),
+        });
+      }
+    }
+  }
 
-## Preparation Checklist
-- [ ] Review all attendee profiles and recent interactions
-- [ ] Prepare 1-2 relevant insights or case studies to share
-- [ ] Have follow-up materials ready to send post-meeting`;
+  let temperature: StructuredBrief["relationshipHistory"]["temperature"] = "COOL";
+  let relSummary = "Limited engagement history available.";
+  const engagements: StructuredBrief["relationshipHistory"]["engagements"] = [];
+
+  if (primary && primary.recentInteractions.length > 0) {
+    const count = primary.recentInteractions.length;
+    if (count >= 4) temperature = "HOT";
+    else if (count >= 2) temperature = "WARM";
+    else temperature = "COOL";
+
+    relSummary = `${count} recent interaction${count !== 1 ? "s" : ""} on record with ${primary.name}.`;
+    for (const i of primary.recentInteractions.slice(0, 3)) {
+      const dateMatch = i.match(/\((\d{4}-\d{2}-\d{2})\)/);
+      engagements.push({
+        period: dateMatch?.[1] ?? "Recent",
+        description: stripMarkdown(i.replace(/^[A-Z_]+\s*(\([^)]*\))?\s*:?\s*/, "")),
+      });
+    }
+  }
+
+  const attendees: StructuredBrief["attendees"] = ctx.attendees.map((a) => {
+    const parts = a.name.split(" ");
+    const initials = parts.length >= 2
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : a.name.slice(0, 2).toUpperCase();
+    const abbrevTitle = a.title.length > 40 ? a.title.slice(0, 37) + "..." : a.title;
+    return { name: a.name, title: abbrevTitle, initials };
+  });
+
+  const brief: StructuredBrief = {
+    version: 1,
+    meetingGoal: {
+      statement: `${ctx.meetingPurpose || "Strengthen the relationship and explore collaboration opportunities"} with ${primaryName} at ${primaryCompany}.`,
+      successCriteria: `Success = Clear next steps agreed and relationship momentum maintained.`,
+    },
+    primaryContactProfile: {
+      name: primaryName,
+      bullets,
+      emptyReason: bullets.length === 0 ? `Limited public information available for ${primaryName}.` : undefined,
+    },
+    conversationStarters: [
+      {
+        question: `What are your top strategic priorities for the next quarter at ${primaryCompany}?`,
+        tacticalNote: "Opens with their agenda, not yours — builds trust.",
+      },
+      {
+        question: `How is ${primaryCompany} thinking about the opportunities in AI and digital transformation?`,
+        tacticalNote: "Positions you as a thought partner on trending topics.",
+      },
+      {
+        question: `Where do you see the biggest opportunities for us to partner more deeply?`,
+        tacticalNote: "Directly surfaces unmet needs you can fill.",
+      },
+    ],
+    newsInsights,
+    newsEmptyReason: newsInsights.length === 0 ? `No recent notable news found for ${primaryCompany}.` : undefined,
+    executiveProfile: {
+      bioSummary: primary
+        ? `${primary.name} is ${primary.title} at ${primary.company}.`
+        : "No executive profile data available.",
+      recentMoves,
+      patternCallout: recentMoves.length > 0 ? undefined : undefined,
+    },
+    relationshipHistory: {
+      temperature,
+      summary: relSummary,
+      engagements,
+    },
+    attendees,
+  };
+
+  return JSON.stringify(brief);
 }

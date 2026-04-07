@@ -402,6 +402,7 @@ model NudgeRuleConfig {
   eventRegisteredEnabled Boolean @default(true) @map("event_registered_enabled")
   articleReadEnabled     Boolean @default(true) @map("article_read_enabled")
   linkedinActivityEnabled Boolean @default(true) @map("linkedin_activity_enabled")
+  articleCampaignEnabled  Boolean @default(true) @map("article_campaign_enabled")
 
   staleDaysCritical Int @default(30) @map("stale_days_critical")
   staleDaysHigh     Int @default(45) @map("stale_days_high")

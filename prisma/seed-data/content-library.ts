@@ -171,6 +171,45 @@ export function generateContentLibrary(): {
       practice: "AI",
       publishedAt: new Date("2026-03-01T08:00:00Z"),
     },
+    {
+      id: "ci-art-013",
+      type: "ARTICLE",
+      title: "How AI is transforming the technology sector",
+      description:
+        "An in-depth look at how artificial intelligence is reshaping software development, cloud infrastructure, and enterprise operations across the technology industry.",
+      url: `https://www.mckinsey.com/capabilities/mckinsey-digital/our-insights/${slugify(
+        "How AI is transforming the technology sector"
+      )}`,
+      imageUrl: "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=300&h=300&fit=crop",
+      practice: "Technology",
+      publishedAt: new Date("2026-04-01T09:00:00Z"),
+    },
+    {
+      id: "ci-art-014",
+      type: "ARTICLE",
+      title: "The future of digital banking: From disruption to reinvention",
+      description:
+        "How banks can leverage digital capabilities, embedded finance, and AI-driven personalization to redefine customer experiences and operational models.",
+      url: `https://www.mckinsey.com/industries/financial-services/our-insights/${slugify(
+        "The future of digital banking from disruption to reinvention"
+      )}`,
+      imageUrl: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&h=300&fit=crop",
+      practice: "Financial Services",
+      publishedAt: new Date("2026-04-02T11:00:00Z"),
+    },
+    {
+      id: "ci-art-015",
+      type: "ARTICLE",
+      title: "Next-generation consumer engagement strategies",
+      description:
+        "Exploring how leading consumer brands use data, personalization, and omnichannel strategies to deepen customer loyalty and drive growth.",
+      url: `https://www.mckinsey.com/industries/consumer-packaged-goods/our-insights/${slugify(
+        "Next generation consumer engagement strategies"
+      )}`,
+      imageUrl: "https://images.unsplash.com/photo-1556742111-a301076d9d18?w=300&h=300&fit=crop",
+      practice: "Consumer & Retail",
+      publishedAt: new Date("2026-04-04T14:00:00Z"),
+    },
   ];
 
   const events: ContentItemCreate[] = [

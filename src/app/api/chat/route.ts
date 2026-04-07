@@ -12,6 +12,7 @@ import {
 } from "@/lib/services/llm-contact360";
 import { generateCompany360, type Company360Context } from "@/lib/services/llm-company360";
 import { classifyIntent, type IntentType } from "@/lib/services/llm-intent";
+import { parseStructuredBrief, type StructuredBrief } from "@/lib/types/structured-brief";
 
 const FULL_CONTACT_360_INTENT =
   /\b(full\s+contact\s*360)\b/i;
@@ -158,17 +159,22 @@ export async function POST(request: NextRequest) {
             };
           });
 
-          const brief = await generateMeetingBrief({
+          const briefRaw = await generateMeetingBrief({
             meetingTitle: match.title,
             meetingPurpose: match.purpose ?? "",
             attendees,
           });
 
+          const structured = parseStructuredBrief(briefRaw);
+          const briefBody = structured
+            ? structuredBriefToMarkdown(structured)
+            : briefRaw;
+
           const md = [
             `## Meeting Prep: ${match.title}`,
             `*${new Date(match.startTime).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}*`,
             "",
-            brief,
+            briefBody,
             "",
             `---`,
             ...match.attendees.map((a) =>
@@ -756,4 +762,76 @@ function buildQuickActionsMarker(contactName: string, used: Set<ActionKey>, comp
   const filtered = all.filter((a) => !used.has(a.key));
   if (filtered.length === 0) return "";
   return `<!--QUICK_ACTIONS:${JSON.stringify(filtered.map(({ label, query }) => ({ label, query })))}-->`;
+}
+
+function structuredBriefToMarkdown(brief: StructuredBrief): string {
+  const sections: string[] = [];
+
+  sections.push(`### Meeting Goal`);
+  sections.push(brief.meetingGoal.statement);
+  if (brief.meetingGoal.successCriteria) {
+    sections.push(`\n*${brief.meetingGoal.successCriteria}*`);
+  }
+
+  if (brief.primaryContactProfile.bullets.length > 0) {
+    sections.push(`\n### ${brief.primaryContactProfile.name}`);
+    for (const b of brief.primaryContactProfile.bullets) {
+      sections.push(`- **${b.label}:** ${b.detail}`);
+    }
+  }
+  if (brief.primaryContactProfile.emptyReason) {
+    sections.push(`\n*${brief.primaryContactProfile.emptyReason}*`);
+  }
+
+  if (brief.conversationStarters.length > 0) {
+    sections.push(`\n### Conversation Starters`);
+    for (let i = 0; i < brief.conversationStarters.length; i++) {
+      const s = brief.conversationStarters[i];
+      sections.push(`${i + 1}. *"${s.question}"*`);
+      if (s.tacticalNote) sections.push(`   ${s.tacticalNote}`);
+    }
+  }
+
+  if (brief.newsInsights.length > 0) {
+    sections.push(`\n### News & Insights`);
+    for (const n of brief.newsInsights) {
+      sections.push(`**${n.headline}**`);
+      sections.push(n.body);
+    }
+  } else if (brief.newsEmptyReason) {
+    sections.push(`\n### News & Insights`);
+    sections.push(`*${brief.newsEmptyReason}*`);
+  }
+
+  if (brief.executiveProfile.bioSummary) {
+    sections.push(`\n### Executive Profile`);
+    sections.push(brief.executiveProfile.bioSummary);
+    if (brief.executiveProfile.recentMoves.length > 0) {
+      sections.push(`\n**Recent Moves:**`);
+      for (const m of brief.executiveProfile.recentMoves) {
+        sections.push(`- ${m.date}: ${m.description}`);
+      }
+    }
+    if (brief.executiveProfile.patternCallout) {
+      sections.push(`\n*${brief.executiveProfile.patternCallout}*`);
+    }
+  }
+
+  const tempEmoji: Record<string, string> = { COLD: "Cold", COOL: "Cool", WARM: "Warm", HOT: "Hot" };
+  sections.push(`\n### Relationship: ${tempEmoji[brief.relationshipHistory.temperature] ?? brief.relationshipHistory.temperature}`);
+  sections.push(brief.relationshipHistory.summary);
+  if (brief.relationshipHistory.engagements.length > 0) {
+    for (const e of brief.relationshipHistory.engagements) {
+      sections.push(`- **${e.period}:** ${e.description}`);
+    }
+  }
+
+  if (brief.attendees.length > 0) {
+    sections.push(`\n### Attendees`);
+    for (const a of brief.attendees) {
+      sections.push(`- **${a.name}** — ${a.title}`);
+    }
+  }
+
+  return sections.join("\n");
 }

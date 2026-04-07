@@ -1,5 +1,34 @@
 import { format } from "date-fns";
 
+/** Strip markdown syntax and collapse whitespace so signal content renders as clean plain text. */
+export function stripMarkdown(s: string): string {
+  return s
+    .replace(/^#{1,6}\s+/gm, "")       // headings at line start
+    .replace(/\s*—\s*#{1,6}\s+/g, " — ") // inline headings after em-dash (scraped news)
+    .replace(/\*\*([^*]+)\*\*/g, "$1")  // **bold**
+    .replace(/\*([^*]+)\*/g, "$1")      // *italic*
+    .replace(/__([^_]+)__/g, "$1")      // __bold__
+    .replace(/_([^_]+)_/g, "$1")        // _italic_
+    .replace(/~~([^~]+)~~/g, "$1")      // ~~strike~~
+    .replace(/`([^`]+)`/g, "$1")        // `code`
+    .replace(/^\s*[-*+]\s+/gm, "")      // unordered list markers
+    .replace(/^\s*\d+\.\s+/gm, "")      // ordered list markers
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url) and ![alt](url)
+    .replace(/<[^>]+>/g, "")            // HTML tags
+    .replace(/https?:\/\/\S+/g, "")     // bare URLs
+    .replace(/\n+/g, " ")              // newlines → spaces
+    .replace(/\s{2,}/g, " ")           // collapse whitespace
+    .trim();
+}
+
+/** Clean and truncate signal text for use in AI summaries. */
+function cleanSnippet(s: string, maxLen = 120): string {
+  const cleaned = stripMarkdown(s);
+  if (cleaned.length <= maxLen) return cleaned;
+  const cut = cleaned.lastIndexOf(" ", maxLen);
+  return cleaned.slice(0, cut > 0 ? cut : maxLen) + "\u2026";
+}
+
 function naturalizeInteractionSummary(s: string): string {
   if (!s) return s;
   return s[0].toLowerCase() + s.slice(1);
@@ -28,6 +57,7 @@ export type InsightData = {
 export type NudgeForSummary = {
   ruleType: string;
   reason: string;
+  metadata?: string | null;
   contact: {
     name: string;
     company: { name: string };
@@ -89,6 +119,49 @@ export function parseCampaignApprovalNudgeDisplay(nudge: {
   return { campaignName, pendingCount, deadlineLabel, campaignHref };
 }
 
+export type ArticleCampaignNudgeDisplay = {
+  articleTitle: string;
+  contentItemId: string | null;
+  matchCount: number;
+  campaignHref: string;
+};
+
+export function parseArticleCampaignNudgeDisplay(nudge: {
+  reason: string;
+  metadata?: string | null;
+}): ArticleCampaignNudgeDisplay {
+  let contentItemId: string | null = null;
+  let matchCount = 0;
+  let articleTitle = "Article";
+  try {
+    const m = JSON.parse(nudge.metadata ?? "{}") as {
+      contentItemId?: string;
+      matchCount?: number;
+      articleTitle?: string;
+    };
+    if (typeof m.contentItemId === "string") contentItemId = m.contentItemId;
+    if (typeof m.matchCount === "number") matchCount = m.matchCount;
+    if (typeof m.articleTitle === "string") articleTitle = m.articleTitle;
+  } catch {
+    /* ignore */
+  }
+
+  if (articleTitle === "Article") {
+    const titleMatch = nudge.reason.match(/article "([^"]+)"/);
+    if (titleMatch) articleTitle = titleMatch[1];
+  }
+  if (matchCount === 0) {
+    const countMatch = nudge.reason.match(/(\d+) contacts?/);
+    if (countMatch) matchCount = parseInt(countMatch[1], 10);
+  }
+
+  const campaignHref = contentItemId
+    ? `/campaigns/draft?contentItemId=${contentItemId}`
+    : "/campaigns";
+
+  return { articleTitle, contentItemId, matchCount, campaignHref };
+}
+
 const TYPE_LABELS: Record<string, string> = {
   STALE_CONTACT: "reconnect",
   JOB_CHANGE: "executive transition",
@@ -102,6 +175,7 @@ const TYPE_LABELS: Record<string, string> = {
   FOLLOW_UP: "follow-up",
   REPLY_NEEDED: "reply",
   CAMPAIGN_APPROVAL: "campaign approval",
+  ARTICLE_CAMPAIGN: "article campaign",
 };
 
 function getLabel(ruleType: string): string {
@@ -147,16 +221,18 @@ export function extractInsightSnippet(insight: InsightData): string | null {
       return m ? `${m[1]} days` : null;
     }
     case "JOB_CHANGE": {
+      if (insight.signalContent) return cleanSnippet(insight.signalContent);
       const m = r.match(/"([^"]+)"/);
       return m ? m[1] : "a recent role change";
     }
     case "COMPANY_NEWS": {
-      if (insight.signalContent) return insight.signalContent;
+      if (insight.signalContent) return cleanSnippet(insight.signalContent);
       const m = r.match(/"([^"]+)"/);
       return m ? m[1] : "recent company news";
     }
     case "UPCOMING_EVENT": {
-      return insight.signalContent ?? r.replace(/\. Opportunity.*/, "");
+      if (insight.signalContent) return cleanSnippet(insight.signalContent);
+      return cleanSnippet(r.replace(/\. Opportunity.*/, ""));
     }
     case "MEETING_PREP": {
       const m = r.match(/"([^"]+)"/);
@@ -171,6 +247,7 @@ export function extractInsightSnippet(insight: InsightData): string | null {
       return m ? m[1] : "an upcoming event";
     }
     case "LINKEDIN_ACTIVITY": {
+      if (insight.signalContent) return cleanSnippet(insight.signalContent);
       const m = r.match(/"([^"]+)"/);
       return m ? m[1] : "recent LinkedIn activity";
     }
@@ -180,12 +257,16 @@ export function extractInsightSnippet(insight: InsightData): string | null {
       return m ? `${m[1]}${views ? ` (${views[1]}x)` : ""}` : "your thought leadership content";
     }
     case "FOLLOW_UP":
-      return insight.lastEmailSubject ?? null;
+      return insight.lastEmailSubject ? cleanSnippet(insight.lastEmailSubject) : null;
     case "REPLY_NEEDED":
-      return insight.inboundSummary ?? null;
+      return insight.inboundSummary ? cleanSnippet(insight.inboundSummary) : null;
     case "CAMPAIGN_APPROVAL": {
       const m = insight.reason.match(/"([^"]+)"/);
       return m ? m[1] : "a campaign needing review";
+    }
+    case "ARTICLE_CAMPAIGN": {
+      const m = insight.reason.match(/"([^"]+)"/);
+      return m ? m[1] : "a new article to share";
     }
     default:
       return null;
@@ -196,7 +277,7 @@ export function buildSummaryFragments(
   nudge: NudgeForSummary,
   insights: InsightData[]
 ): SentenceFragment[] {
-  if (insights.length === 0) return [{ text: nudge.reason }];
+  if (insights.length === 0) return [{ text: stripMarkdown(nudge.reason) }];
 
   const campaignApproval = insights.find((i) => i.type === "CAMPAIGN_APPROVAL");
   if (campaignApproval) {
@@ -209,8 +290,60 @@ export function buildSummaryFragments(
     const fragments: SentenceFragment[] = [
       { text: "Campaign " },
       { text: campaignName, bold: true },
-      { text: ` has ${count} contact${count !== 1 ? "s" : ""} pending your approval${deadlineStr}. Review and approve so the campaign can go out on your behalf.` },
+      { text: ` has ${count} contact${count !== 1 ? "s" : ""} pending your approval${deadlineStr}.` },
+      { text: "", lineBreak: true },
+      { text: "Review and approve so the campaign can go out on your behalf." },
     ];
+    return fragments;
+  }
+
+  const articleCampaign = insights.find((i) => i.type === "ARTICLE_CAMPAIGN");
+  if (articleCampaign) {
+    let articleTitle = "a new article";
+    let articleDescription = "";
+    let articlePractice = "";
+    let matchCount = 0;
+    try {
+      const m = JSON.parse(nudge.metadata ?? "{}") as {
+        articleTitle?: string;
+        articleDescription?: string;
+        articlePractice?: string;
+        matchCount?: number;
+      };
+      if (m.articleTitle) articleTitle = m.articleTitle;
+      if (m.articleDescription) articleDescription = m.articleDescription;
+      if (m.articlePractice) articlePractice = m.articlePractice;
+      if (typeof m.matchCount === "number") matchCount = m.matchCount;
+    } catch { /* fallback to reason parsing */ }
+
+    if (!articleDescription) {
+      const titleMatch = articleCampaign.reason.match(/article "([^"]+)"/);
+      if (titleMatch) articleTitle = titleMatch[1];
+    }
+
+    const fragments: SentenceFragment[] = [];
+    const practiceLabel = articlePractice || "Our";
+    fragments.push({ text: `${practiceLabel} Practice just published ` });
+    fragments.push({ text: articleTitle, bold: true });
+    fragments.push({ text: ". " });
+
+    if (articleDescription) {
+      const desc = cleanSnippet(articleDescription, 140);
+      fragments.push({ text: desc });
+    }
+
+    fragments.push({ text: "", lineBreak: true });
+
+    if (matchCount > 0) {
+      fragments.push({
+        text: `We\u2019ve identified ${matchCount} contact${matchCount !== 1 ? "s" : ""} who would find this relevant`,
+        bold: true,
+      });
+      fragments.push({ text: " \u2014 review and send the pre-drafted campaign." });
+    } else {
+      fragments.push({ text: "Review the pre-drafted campaign and choose who to share it with." });
+    }
+
     return fragments;
   }
 
@@ -230,22 +363,23 @@ export function buildSummaryFragments(
 
     const outreachLine: string[] = [];
     if (followUp.lastEmailSubject) {
-      const boldSubject = followUp.lastEmailSubject;
+      const boldSubject = stripMarkdown(followUp.lastEmailSubject);
       bolds.add(boldSubject);
       outreachLine.push(`You sent ${firstName} an email about ${boldSubject}${days ? ` ${dayLabel} ago` : ""} and haven\u2019t heard back.`);
     } else {
       outreachLine.push(`You reached out to ${firstName} ${dayLabel} ago and haven\u2019t heard back yet.`);
     }
     if (followUp.lastEmailSnippet) {
-      outreachLine.push(`Your message discussed ${followUp.lastEmailSnippet.slice(0, 160)}${followUp.lastEmailSnippet.length > 160 ? "..." : ""}.`);
+      const snippet = cleanSnippet(followUp.lastEmailSnippet, 160);
+      outreachLine.push(`Your message discussed ${snippet}.`);
     }
     topicLines.push(outreachLine);
 
     if (followUp.lastInteraction) {
       const li = followUp.lastInteraction;
       const interactionLabel = li.type === "CALL" ? "call" : li.type === "MEETING" ? "meeting" : "conversation";
-      const summaryText = naturalizeInteractionSummary(li.summary).slice(0, 160);
-      topicLines.push([`Your last ${interactionLabel} covered ${summaryText}${li.summary.length > 160 ? "..." : ""}.`]);
+      const summaryText = cleanSnippet(naturalizeInteractionSummary(li.summary), 160);
+      topicLines.push([`Your last ${interactionLabel} covered ${summaryText}.`]);
     }
 
     const signalLine: string[] = [];
@@ -264,9 +398,9 @@ export function buildSummaryFragments(
 
     const inboundLine: string[] = [];
     if (replyNeeded.inboundSummary) {
-      const boldSummary = replyNeeded.inboundSummary.slice(0, 160);
+      const boldSummary = cleanSnippet(replyNeeded.inboundSummary, 160);
       bolds.add(boldSummary);
-      inboundLine.push(`${firstName} emailed you ${dayLabel} ago: ${boldSummary}${replyNeeded.inboundSummary.length > 160 ? "..." : ""}.`);
+      inboundLine.push(`${firstName} emailed you ${dayLabel} ago: ${boldSummary}.`);
     } else {
       inboundLine.push(`${firstName} sent you an email ${dayLabel} ago that\u2019s waiting for a reply.`);
     }
@@ -275,8 +409,8 @@ export function buildSummaryFragments(
     if (replyNeeded.lastInteraction) {
       const li = replyNeeded.lastInteraction;
       const interactionLabel = li.type === "CALL" ? "call" : li.type === "MEETING" ? "meeting" : "conversation";
-      const summaryText = naturalizeInteractionSummary(li.summary).slice(0, 160);
-      topicLines.push([`Your last ${interactionLabel} covered ${summaryText}${li.summary.length > 160 ? "..." : ""}.`]);
+      const summaryText = cleanSnippet(naturalizeInteractionSummary(li.summary), 160);
+      topicLines.push([`Your last ${interactionLabel} covered ${summaryText}.`]);
     }
 
     const signalLine: string[] = [];

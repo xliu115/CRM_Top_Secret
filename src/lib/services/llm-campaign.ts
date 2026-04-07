@@ -60,13 +60,60 @@ function campaignTemplateFallback(params: {
 
   return {
     subject: "McKinsey insights to share",
-    body: `Hi,
-
-I'd like to share a few McKinsey pieces that may be relevant to you and your team:
+    body: `I'd like to share a few McKinsey pieces that may be relevant to you and your team:
 
 ${list}
 
 Happy to discuss any of these if helpful.
+
+Best regards,
+${first}`,
+  };
+}
+
+export async function generateArticleCampaignEmail(params: {
+  articleTitle: string;
+  articleDescription: string;
+  articleUrl: string;
+  articlePractice: string;
+  partnerName: string;
+}): Promise<{ subject: string; body: string }> {
+  const result = await callLLM(
+    "You are drafting a personal email from a senior consulting Partner sharing a McKinsey article with a client. Tone: warm, personal, professional — as if forwarding something you genuinely found relevant. NOT a newsletter blast.",
+    `Draft a campaign email from ${params.partnerName} sharing this McKinsey article:
+
+Title: ${params.articleTitle}
+Description: ${params.articleDescription}
+Practice area: ${params.articlePractice}
+URL: ${params.articleUrl}
+
+The email should:
+- Have a compelling, personal subject line (not generic)
+- Do NOT include a greeting line (e.g. "Hi," or "Dear...") — the greeting is added separately
+- Open directly with a natural reason for sharing ("I came across this piece..." or "Our team just published...")
+- Summarize the key insight in 1-2 sentences
+- Include a clear call-to-action to read the article
+- Close with an offer to discuss and a sign-off
+- Be 80-120 words total
+
+Return valid JSON with "subject" and "body" keys only: {"subject": "...", "body": "..."}`
+  );
+
+  if (result) {
+    const parsed = parseJsonSubjectBody(result);
+    if (parsed) return parsed;
+  }
+
+  const first = params.partnerName.split(" ")[0];
+  return {
+    subject: `Thought you'd find this relevant: ${params.articleTitle}`,
+    body: `I wanted to share a recent piece from our team that I thought would resonate with you:
+
+"${params.articleTitle}" — ${params.articleDescription}
+
+You can read the full article here: ${params.articleUrl}
+
+I'd love to hear your thoughts, and happy to discuss how these insights might apply to your organization.
 
 Best regards,
 ${first}`,
@@ -100,7 +147,8 @@ ${interactionBlock}`
     return result.trim();
   }
 
-  return `Hi ${params.contactName},`;
+  const firstName = params.contactName.split(" ")[0];
+  return `Hi ${firstName},`;
 }
 
 export async function generateCampaignFollowUp(params: {
