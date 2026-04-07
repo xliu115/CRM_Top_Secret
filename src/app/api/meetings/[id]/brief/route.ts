@@ -9,22 +9,28 @@ import {
 import { generateMeetingBrief } from "@/lib/services/llm-service";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const partnerId = await requirePartnerId();
     const { id } = await params;
+    const force = request.nextUrl.searchParams.get("force") === "true";
 
-    const meeting = await meetingRepo.findById(id, partnerId);
+    const [meeting, partner] = await Promise.all([
+      meetingRepo.findById(id, partnerId),
+      partnerRepo.findById(partnerId),
+    ]);
 
     if (!meeting) {
       return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
     }
-
-    const partner = await partnerRepo.findById(partnerId);
     if (!partner) {
       return NextResponse.json({ error: "Partner not found" }, { status: 404 });
+    }
+
+    if (!force && meeting.generatedBrief) {
+      return NextResponse.json({ brief: meeting.generatedBrief, cached: true });
     }
 
     const attendeeIds = meeting.attendees.map((a) => a.contactId);

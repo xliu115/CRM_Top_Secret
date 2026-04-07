@@ -89,7 +89,7 @@ export function generateContentLibrary(): {
       url: `https://www.mckinsey.com/capabilities/operations/our-insights/${slugify(
         "Building resilient supply chains in a volatile world"
       )}`,
-      imageUrl: "https://images.unsplash.com/photo-1494412574643-ff11b0a5eb19?w=300&h=300&fit=crop",
+      imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=300&h=300&fit=crop",
       practice: "Operations",
       publishedAt: new Date("2025-04-22T13:30:00Z"),
     },
@@ -141,7 +141,7 @@ export function generateContentLibrary(): {
       url: `https://www.mckinsey.com/capabilities/risk-and-resilience/our-insights/${slugify(
         "Cybersecurity in the age of generative AI"
       )}`,
-      imageUrl: "https://images.unsplash.com/photo-1563986768609-322da13575f2?w=300&h=300&fit=crop",
+      imageUrl: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=300&h=300&fit=crop",
       practice: "Risk & Resilience",
       publishedAt: new Date("2025-10-08T12:00:00Z"),
     },
@@ -223,7 +223,7 @@ export function generateContentLibrary(): {
       eventDate: new Date("2026-05-15T13:00:00Z"),
       eventLocation: "New York",
       eventType: "In-person",
-      imageUrl: "https://images.unsplash.com/photo-1531746790095-e5995f1a299d?w=300&h=300&fit=crop",
+      imageUrl: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=300&h=300&fit=crop",
       url: "https://www.mckinsey.com/events/ai-analytics-summit-2026",
     },
     {
@@ -236,7 +236,7 @@ export function generateContentLibrary(): {
       eventDate: new Date("2026-06-10T14:00:00Z"),
       eventLocation: "Chicago",
       eventType: "In-person",
-      imageUrl: "https://images.unsplash.com/photo-1431540015159-0f8516a57cd0?w=300&h=300&fit=crop",
+      imageUrl: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=300&h=300&fit=crop",
       url: "https://www.mckinsey.com/events/transformation-summit-2026",
     },
     {

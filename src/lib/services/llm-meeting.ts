@@ -1,4 +1,4 @@
-import { callLLM, callLLMJson } from "./llm-core";
+import { callLLMJson } from "./llm-core";
 import { parseStructuredBrief, type StructuredBrief } from "@/lib/types/structured-brief";
 import { stripMarkdown } from "@/lib/utils/nudge-summary";
 
@@ -91,28 +91,23 @@ export async function generateMeetingBrief(
 ): Promise<string> {
   const userPrompt = buildUserPrompt(ctx);
 
-  // Attempt 1: JSON mode (response_format: json_object)
   const jsonResult = await callLLMJson<Record<string, unknown>>(
     STRUCTURED_BRIEF_SYSTEM_PROMPT,
     userPrompt,
     { maxTokens: 4000, temperature: 0.7 }
   );
+
   const validated = validateAndStringify(jsonResult);
   if (validated) return validated;
 
-  // Attempt 2: plain text call with fence stripping (fallback for API issues)
-  const textResult = await callLLM(
-    STRUCTURED_BRIEF_SYSTEM_PROMPT,
-    `Your response must be ONLY a valid JSON object matching the schema. No markdown, no explanation.\n\n${userPrompt}`
-  );
-  if (textResult) {
-    const cleaned = textResult.replace(/```json\n?|\n?```/g, "").trim();
+  if (jsonResult && typeof jsonResult === "object") {
     try {
-      const parsed = JSON.parse(cleaned);
-      const retryValidated = validateAndStringify(parsed);
-      if (retryValidated) return retryValidated;
+      const raw = JSON.stringify(jsonResult);
+      const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
+      const repaired = validateAndStringify(JSON.parse(cleaned));
+      if (repaired) return repaired;
     } catch {
-      // Fall through to template
+      // Local repair failed — fall through to template
     }
   }
 

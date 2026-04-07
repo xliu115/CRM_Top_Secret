@@ -331,7 +331,7 @@ export class PrismaCampaignRepository implements ICampaignRepository {
     page = 1,
     pageSize = 20
   ) {
-    const where: Prisma.ContentItemWhereInput = {
+    const baseWhere: Prisma.ContentItemWhereInput = {
       ...(filters?.type ? { type: filters.type } : {}),
       ...(filters?.practice ? { practice: filters.practice } : {}),
       ...(filters?.search
@@ -346,16 +346,71 @@ export class PrismaCampaignRepository implements ICampaignRepository {
 
     const skip = Math.max(0, (page - 1) * pageSize);
 
+    if (filters?.type === "EVENT") {
+      return this.findEventItems(baseWhere, skip, pageSize);
+    }
+
+    const orderBy: Prisma.ContentItemOrderByWithRelationInput[] =
+      filters?.type === "ARTICLE"
+        ? [{ publishedAt: "desc" }, { createdAt: "desc" }]
+        : [{ updatedAt: "desc" }];
+
     const [items, total] = await Promise.all([
-      prisma.contentItem.findMany({
-        where,
-        orderBy: [{ updatedAt: "desc" }],
-        skip,
-        take: pageSize,
-      }),
-      prisma.contentItem.count({ where }),
+      prisma.contentItem.findMany({ where: baseWhere, orderBy, skip, take: pageSize }),
+      prisma.contentItem.count({ where: baseWhere }),
     ]);
 
     return { items, total };
+  }
+
+  private async findEventItems(
+    baseWhere: Prisma.ContentItemWhereInput,
+    skip: number,
+    pageSize: number
+  ) {
+    const now = new Date();
+
+    const upcomingWhere: Prisma.ContentItemWhereInput = {
+      AND: [baseWhere, { eventDate: { gte: now } }],
+    };
+    const pastWhere: Prisma.ContentItemWhereInput = {
+      AND: [baseWhere, { OR: [{ eventDate: { lt: now } }, { eventDate: null }] }],
+    };
+
+    const [upcomingCount, pastCount] = await Promise.all([
+      prisma.contentItem.count({ where: upcomingWhere }),
+      prisma.contentItem.count({ where: pastWhere }),
+    ]);
+    const total = upcomingCount + pastCount;
+
+    if (skip >= upcomingCount) {
+      const pastSkip = skip - upcomingCount;
+      const pastItems = await prisma.contentItem.findMany({
+        where: pastWhere,
+        orderBy: [{ eventDate: "desc" }],
+        skip: pastSkip,
+        take: pageSize,
+      });
+      return { items: pastItems, total };
+    }
+
+    const upcomingItems = await prisma.contentItem.findMany({
+      where: upcomingWhere,
+      orderBy: [{ eventDate: "asc" }],
+      skip,
+      take: pageSize,
+    });
+
+    const remaining = pageSize - upcomingItems.length;
+    if (remaining > 0) {
+      const pastItems = await prisma.contentItem.findMany({
+        where: pastWhere,
+        orderBy: [{ eventDate: "desc" }],
+        take: remaining,
+      });
+      return { items: [...upcomingItems, ...pastItems], total };
+    }
+
+    return { items: upcomingItems, total };
   }
 }

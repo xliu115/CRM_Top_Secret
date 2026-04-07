@@ -1456,7 +1456,7 @@ function CompanyMeetingCard({
   async function handleGenerateBrief() {
     setGeneratingBrief(true);
     try {
-      const res = await fetch(`/api/meetings/${meeting.id}/brief`, {
+      const res = await fetch(`/api/meetings/${meeting.id}/brief?force=true`, {
         method: "POST",
       });
       if (!res.ok) throw new Error("Failed to generate brief");

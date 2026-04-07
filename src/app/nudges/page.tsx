@@ -328,11 +328,12 @@ function MeetingBriefPanel({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const fetchBrief = useCallback(async () => {
+  const fetchBrief = useCallback(async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/nudges/${nudge.id}/meeting-brief`, { method: "POST" });
+      const qs = force ? "?force=true" : "";
+      const res = await fetch(`/api/nudges/${nudge.id}/meeting-brief${qs}`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to generate brief");
       setData(await res.json());
     } catch (err) {
@@ -408,7 +409,7 @@ function MeetingBriefPanel({
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? "Copied!" : "Copy Brief"}
             </Button>
-            <Button variant="outline" size="sm" onClick={fetchBrief} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={() => fetchBrief(true)} disabled={loading}>
               <RotateCcw className="h-3.5 w-3.5" />
               Regenerate
             </Button>

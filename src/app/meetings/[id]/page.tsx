@@ -93,7 +93,7 @@ export default function MeetingDetailPage() {
     setGeneratingBrief(true);
     setBriefError(null);
     try {
-      const res = await fetch(`/api/meetings/${id}/brief`, {
+      const res = await fetch(`/api/meetings/${id}/brief?force=true`, {
         method: "POST",
       });
       const data = await res.json().catch(() => ({}));

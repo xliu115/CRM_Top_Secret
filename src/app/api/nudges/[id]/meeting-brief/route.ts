@@ -5,12 +5,13 @@ import { generateMeetingBrief } from "@/lib/services/llm-service";
 import { interactionRepo } from "@/lib/repositories";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const partnerId = await requirePartnerId();
     const { id } = await params;
+    const force = request.nextUrl.searchParams.get("force") === "true";
 
     const nudge = await prisma.nudge.findFirst({
       where: { id, contact: { partnerId }, ruleType: "MEETING_PREP" },
@@ -37,6 +38,16 @@ export async function POST(
       },
       orderBy: { startTime: "desc" },
     });
+
+    if (!force && meeting?.generatedBrief) {
+      return NextResponse.json({
+        meetingTitle,
+        meetingTime: meeting.startTime ?? null,
+        attendeeCount: meeting.attendees.length,
+        brief: meeting.generatedBrief,
+        cached: true,
+      });
+    }
 
     const attendeeContacts = meeting
       ? meeting.attendees.map((a) => a.contact)

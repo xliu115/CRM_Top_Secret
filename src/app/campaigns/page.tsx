@@ -25,6 +25,8 @@ type CampaignRow = {
   status: string;
   source: string;
   sentAt: string | null;
+  sendStartedAt: string | null;
+  updatedAt: string;
   importedFrom: string | null;
   _count: { recipients: number };
   contents: Array<{
@@ -34,6 +36,42 @@ type CampaignRow = {
   pendingApprovalCount?: number;
   approvalDeadline?: string | null;
 };
+
+const STATUS_PRIORITY: Record<string, number> = {
+  PENDING_APPROVAL: 0,
+  DRAFT: 1,
+  IN_PROGRESS: 2,
+  SENT: 3,
+};
+
+function sortCampaigns(list: CampaignRow[]): CampaignRow[] {
+  return [...list].sort((a, b) => {
+    const pa = STATUS_PRIORITY[a.status] ?? 99;
+    const pb = STATUS_PRIORITY[b.status] ?? 99;
+    if (pa !== pb) return pa - pb;
+
+    const dateA = secondarySortKey(a);
+    const dateB = secondarySortKey(b);
+
+    if (a.status === "PENDING_APPROVAL") return dateA - dateB;
+    return dateB - dateA;
+  });
+}
+
+function secondarySortKey(c: CampaignRow): number {
+  switch (c.status) {
+    case "PENDING_APPROVAL":
+      return c.approvalDeadline ? new Date(c.approvalDeadline).getTime() : Infinity;
+    case "DRAFT":
+      return new Date(c.updatedAt).getTime();
+    case "IN_PROGRESS":
+      return c.sendStartedAt ? new Date(c.sendStartedAt).getTime() : new Date(c.updatedAt).getTime();
+    case "SENT":
+      return c.sentAt ? new Date(c.sentAt).getTime() : new Date(c.updatedAt).getTime();
+    default:
+      return new Date(c.updatedAt).getTime();
+  }
+}
 
 type ContentItemRow = {
   id: string;
@@ -188,7 +226,7 @@ function MyCampaignsTab() {
       const url = qs ? `/api/campaigns?${qs}` : "/api/campaigns";
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed");
-      setCampaigns(await res.json());
+      setCampaigns(sortCampaigns(await res.json()));
     } catch {
       setCampaigns([]);
     } finally {
@@ -368,6 +406,35 @@ function MyCampaignsTab() {
   );
 }
 
+function ContentThumbnail({ imageUrl, type }: { imageUrl: string | null; type: string }) {
+  const [failed, setFailed] = useState(false);
+
+  const fallback = (
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-700">
+      {type === "EVENT" ? (
+        <Calendar className="h-8 w-8 text-muted-foreground/30" aria-hidden />
+      ) : (
+        <FileText className="h-8 w-8 text-muted-foreground/30" aria-hidden />
+      )}
+    </div>
+  );
+
+  return (
+    <div className="m-4 h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-28 sm:w-28">
+      {imageUrl && !failed ? (
+        <img
+          src={imageUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        fallback
+      )}
+    </div>
+  );
+}
+
 function ContentLibraryTab({
   type,
   actionLabel,
@@ -534,23 +601,7 @@ function ContentLibraryTab({
                 key={item.id}
                 className="group flex items-start overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md hover:border-primary/40 dark:bg-card"
               >
-                <div className="m-4 h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-28 sm:w-28">
-                  {item.imageUrl ? (
-                    <img
-                      src={item.imageUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-700">
-                      {item.type === "EVENT" ? (
-                        <Calendar className="h-8 w-8 text-muted-foreground/30" aria-hidden />
-                      ) : (
-                        <FileText className="h-8 w-8 text-muted-foreground/30" aria-hidden />
-                      )}
-                    </div>
-                  )}
-                </div>
+                <ContentThumbnail imageUrl={item.imageUrl} type={item.type} />
 
                 <div className="flex flex-1 flex-col py-4 pr-4 min-w-0">
                   <div className="flex flex-wrap items-start gap-2 mb-1.5">
