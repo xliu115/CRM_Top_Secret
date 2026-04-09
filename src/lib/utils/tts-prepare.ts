@@ -11,19 +11,36 @@ type TopAction = {
 
 const MAX_WORDS = 300;
 
+export type PrepareBriefingForTTSOptions = {
+  /** Podcast-style intro; when set, skips redundant "priorities" lead-in for listeners */
+  spokenOpening?: string;
+};
+
 export function prepareBriefingForTTS(
   narrative: string,
   topActions: TopAction[],
+  options?: PrepareBriefingForTTSOptions,
 ): string {
   const parts: string[] = [];
+  const opening = options?.spokenOpening?.trim();
+  const hasOpening = Boolean(opening);
+
+  if (opening) {
+    parts.push(opening);
+  }
 
   const plainNarrative = stripMarkdownToPlainText(narrative).trim();
   if (plainNarrative) {
+    if (hasOpening) {
+      parts.push("Here's the full briefing.");
+    }
     parts.push(plainNarrative);
   }
 
   if (topActions.length > 0) {
-    parts.push("Here are your priorities for today.");
+    if (!hasOpening) {
+      parts.push("Here are your priorities for today.");
+    }
 
     topActions.forEach((action, i) => {
       const ordinal =

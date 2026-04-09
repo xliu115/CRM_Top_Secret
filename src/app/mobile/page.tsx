@@ -11,6 +11,7 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useChatSession, type ChatMessage } from "@/hooks/use-chat-session";
 import { useBriefingAudio } from "@/hooks/use-briefing-audio";
 import { BriefingAudioControls } from "@/components/voice/briefing-audio-controls";
+import { buildBriefingSpokenOpening } from "@/lib/utils/briefing-spoken-opening";
 import { prepareBriefingForTTS } from "@/lib/utils/tts-prepare";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 
@@ -20,6 +21,7 @@ type BriefingData = {
   structured: {
     nudges: { contactName: string; company: string; contactId: string; ruleType?: string }[];
     meetings: { title: string; startTime: string; meetingId: string }[];
+    news?: { content: string; contactName?: string; company?: string }[];
   };
 };
 
@@ -129,14 +131,25 @@ export default function MobilePage() {
 
   const briefingAudio = useBriefingAudio();
 
+  const partnerName = session?.user?.name?.split(" ")[0] ?? "there";
+
+  const briefingSpokenOpening = useMemo(
+    () =>
+      briefingData ? buildBriefingSpokenOpening(briefingData, partnerName) : null,
+    [briefingData, partnerName],
+  );
+
   const handlePlayBriefing = useCallback(() => {
     if (!briefingData) return;
     const ttsText = prepareBriefingForTTS(
       briefingData.briefing,
       briefingData.topActions,
+      briefingSpokenOpening
+        ? { spokenOpening: briefingSpokenOpening }
+        : undefined,
     );
     briefingAudio.play(ttsText);
-  }, [briefingData, briefingAudio]);
+  }, [briefingData, briefingAudio, briefingSpokenOpening]);
 
   useEffect(() => {
     if (briefingLoadedRef.current) return;
@@ -185,7 +198,6 @@ export default function MobilePage() {
     return deduplicateActions(combined, usedQueries).slice(0, 5);
   }, [messages, briefingData, usedQueries]);
 
-  const partnerName = session?.user?.name?.split(" ")[0] ?? "there";
   const hasMessages = messages.length > 0;
 
   return (
@@ -254,6 +266,16 @@ export default function MobilePage() {
                     {msg.role === "assistant" ? (
                       msg.id.startsWith("briefing-") ? (
                         <div>
+                          {briefingSpokenOpening && (
+                            <div className="mb-3 rounded-xl border border-primary/15 bg-primary/5 px-3.5 py-3">
+                              <p className="text-[11px] font-medium uppercase tracking-wider text-primary/80">
+                                At a glance · great for listening
+                              </p>
+                              <p className="mt-2 text-[15px] leading-relaxed text-foreground">
+                                {briefingSpokenOpening}
+                              </p>
+                            </div>
+                          )}
                           <MarkdownContent
                             content={msg.content}
                             className="text-[15px] leading-relaxed text-foreground"
