@@ -41,11 +41,25 @@ This fragmentation compounds across every relationship activity — meeting prep
 
 ## 4. Design Principles
 
-1. **Zero-effort value.** If the Partner has to do work to get value, adoption dies. Every interaction must deliver more than it asks. The morning briefing email is the proof: open it, read it, tap send. Done.
-2. **Push beats pull.** The existing CRM failed because it waited for Partners to come to it. Activate goes to the Partner. Email first, notification second, app third.
-3. **Insights over data.** Partners don't want a table of interactions. They want a story: "Sarah hasn't heard from you in 3 weeks, she just got promoted, and she usually responds on Tuesday mornings. Here's a draft congratulations note." Context, not columns.
-4. **One contact, one truth.** Contact 360 is the canonical view. Every surface (dashboard, chat, email, mobile) draws from the same intelligence graph. No conflicting information across tools.
-5. **The system thinks, the Partner decides.** Activate recommends actions, drafts outreach, sequences follow-ups, and surfaces signals. The Partner retains full control: review, edit, send, dismiss. No black-box automation. All AI-generated content (emails, talking points, summaries) is presented as a draft for human review. When AI confidence is low or data is sparse, the system says so explicitly rather than fabricating detail.
+1. **Zero-effort by default**  
+   If the Partner has to do work to get value, adoption dies. Every interaction must deliver more than it asks. The morning briefing email is the proof: open it, read it, tap send. Done. The system should do the heavy lifting in the background—auto-capturing signals, pre-filling suggestions, and minimizing manual logging wherever possible.
+
+2. **Value-first interactions**  
+   Partners don't want a table of interactions. They want a story: "Sarah hasn't heard from you in 3 weeks, she just got promoted, and she usually responds on Tuesday mornings. Here's a draft congratulations note." Context, not columns. The experience should lead with timely, actionable insight—not raw activity, records, or admin tasks.
+
+3. **Personalized & cross-cutting**  
+   The experience should work the way Partners work: across relationships, clients, CSTs, and practices—not inside one bounded account view. It should create value for the individual immediately, even before full team adoption.
+
+4. **One contact, one truth**  
+   Contact 360 is the canonical view. Every surface—dashboard, chat, email, mobile—draws from the same intelligence graph. No conflicting information across tools.
+
+5. **In the flow of work**  
+   The existing CRM failed because it waited for Partners to come to it. Activate goes to the Partner. Push beats pull. Email first, notification second, app third. The app is one surface, not the center of gravity. The experience should show up in the channels where Partners already work—email, calendar, chat, mobile, and quick actions around meetings.
+
+6. **Autonomy with managed visibility**  
+   The system thinks, the Partner decides. Activate recommends actions, drafts outreach, sequences follow-ups, and surfaces signals. The Partner retains full control: review, edit, send, dismiss. No black-box automation. All AI-generated content—emails, talking points, summaries—is presented as a draft for human review. When AI confidence is low or data is sparse, the system says so explicitly rather than fabricating detail. The same principle applies to collaboration: users should have control over what interactions, notes, and relationship details are visible to others.
+
+_Supersedes the March 2026 five-bullet framing; substance retained and reorganized into the six principles above._
 
 ## 5. Core Value Proposition
 
