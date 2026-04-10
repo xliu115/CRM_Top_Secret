@@ -9,7 +9,11 @@ import {
 import { generateMini360, type Contact360Context } from "@/lib/services/llm-contact360";
 import { buildBriefingHtml, buildMini360Html } from "@/lib/services/email-service";
 import { searchWeb } from "@/lib/services/rag-service";
-import { addDays, isBefore, format, differenceInDays } from "date-fns";
+import { addDays, isBefore, format } from "date-fns";
+import {
+  buildTopNudgePayloads,
+  mapLatestInteractionSummaryByContact,
+} from "@/lib/services/briefing-nudge-payload";
 import { createHmac } from "crypto";
 
 const resend = process.env.RESEND_API_KEY
@@ -187,9 +191,11 @@ export async function sendMorningBriefing(
     if (top3Contacts.length > 0) {
       const snippets = await Promise.allSettled(
         top3Contacts.map(async (nudge) => {
+          const contactId = nudge.contactId;
+          if (!contactId) return "";
           const [interactions, contactSignals, webNews] = await Promise.allSettled([
-            interactionRepo.findByContactId(nudge.contactId),
-            signalRepo.findByContactId(nudge.contactId),
+            interactionRepo.findByContactId(contactId),
+            signalRepo.findByContactId(contactId),
             searchWeb(`${nudge.contactName} ${nudge.company} news`, 3),
           ]);
 
@@ -219,7 +225,13 @@ export async function sendMorningBriefing(
                 url: s.url ?? null,
               })),
             meetings: [],
-            nudges: [{ ruleType: nudge.ruleType, reason: nudge.reason, priority: nudge.priority }],
+            nudges: [
+              {
+                ruleType: nudge.ruleType ?? "UNKNOWN",
+                reason: nudge.reason,
+                priority: nudge.priority,
+              },
+            ],
             sequences: [],
             firmRelationships: [],
             webBackground: [],
@@ -230,7 +242,7 @@ export async function sendMorningBriefing(
           };
 
           const result = await generateMini360(ctx);
-          const contactUrl = `${appUrl}/contacts/${nudge.contactId}`;
+          const contactUrl = `${appUrl}/contacts/${contactId}`;
           return buildMini360Html(result.sections, nudge.contactName, contactUrl);
         })
       );

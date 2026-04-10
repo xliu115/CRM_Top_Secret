@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Email draft — preview</title>
+  <link rel="stylesheet" href="./mds-email.css" />
+  <style>
+    .draft-shell { max-width: 600px; margin: 0 auto; }
+    .draft-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .draft-toolbar a.back {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--mds-blue);
+      text-decoration: none;
+    }
+    .draft-toolbar a.back:hover { text-decoration: underline; }
+    .draft-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--mds-text-light);
+      margin-bottom: 6px;
+    }
+    .draft-field {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: var(--mds-font-sans);
+      border: 1px solid var(--mds-border);
+      border-radius: 3px;
+      background: var(--mds-white);
+      color: var(--mds-text);
+      margin-bottom: 16px;
+    }
+    .draft-body {
+      min-height: 220px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+    }
+    .draft-page-title {
+      font-family: var(--mds-font-serif);
+      font-size: 20px;
+      color: var(--mds-deep-blue);
+      font-weight: 700;
+      margin: 0 0 4px;
+    }
+    .draft-page-sub {
+      font-size: 13px;
+      color: var(--mds-text-light);
+      margin: 0 0 20px;
+    }
+    button.mds-btn-primary {
+      font-family: inherit;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body class="mds-preview-page">
+  <p class="mds-preview-note">
+    <strong>Static preview</strong> — Shared draft page for all “Draft …” buttons. Replace with a real editor + API later.
+  </p>
+
+  <div class="mds-email-outer draft-shell">
+    <header class="mds-email-header" style="padding: 22px 28px;">
+      <div class="mds-email-kicker">Activate</div>
+      <h1 class="mds-email-title" style="font-size: 20px;">Email draft</h1>
+      <p class="mds-email-subtitle">Preview · Not sent</p>
+    </header>
+
+    <div class="mds-email-body">
+      <div class="draft-toolbar">
+        <div>
+          <p class="draft-page-title" style="margin-bottom: 0;">Compose</p>
+          <p class="draft-page-sub">Sample content — same for every mockup link from the digest.</p>
+        </div>
+        <a class="back" href="./index.html">&larr; Back to mockups</a>
+      </div>
+
+      <div class="draft-label">To</div>
+      <div class="draft-field">Thomas Kurian &lt;thomas.kurian@example.com&gt;</div>
+
+      <div class="draft-label">Subject</div>
+      <div class="draft-field">Checking in — Google</div>
+
+      <div class="draft-label">Body</div>
+      <div class="draft-field draft-body">Hi Thomas,
+
+It’s been a while since we last connected, and I wanted to check in on how things are going at Google.
+
+I came across The state of AI: How organizations are rewiring to capture value and thought of the cloud and AI work you’re leading — here’s the link if a few takeaways are useful for your team:
+https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai-how-organizations-are-rewiring-to-capture-value
+
+If you’re open to it, I’d love to find 20–30 minutes to catch up. No pressure if the timing isn’t right.
+
+Best,
+Ava</div>
+
+      <p style="font-size: 12px; color: var(--mds-text-light); margin: 0;">
+        In production this screen would load the draft for the contact you clicked from the digest.
+      </p>
+    </div>
+
+    <div class="mds-email-footer-cta">
+      <button type="button" class="mds-btn-primary" disabled style="opacity: 0.55; cursor: not-allowed; border: none;">Send (disabled in mockup)</button>
+    </div>
+
+    <div class="mds-email-footer">
+      <a href="./index.html">All outreach mockups</a>
+    </div>
+  </div>
+</body>
+</html>

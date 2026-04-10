@@ -1,0 +1,355 @@
+/**
+ * MDS email design system — aligns with `const MDS` and digest patterns in
+ * src/lib/services/email-service.ts
+ */
+
+:root {
+  --mds-deep-blue: #051c2c;
+  --mds-blue: #0070ad;
+  --mds-electric-blue: #2251ff;
+  --mds-text: #2d2d2d;
+  --mds-text-light: #64748b;
+  --mds-bg-light: #f5f5f5;
+  --mds-white: #ffffff;
+  --mds-border: #e0e0e0;
+  --mds-muted-line: #94a3b8;
+  --mds-urgent: #dc2626;
+  --mds-high: #d97706;
+  --mds-email-max-width: 600px;
+  --mds-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mds-font-serif: Georgia, "Times New Roman", serif;
+}
+
+.mds-preview-page {
+  margin: 0;
+  min-height: 100vh;
+  padding: 24px 16px 48px;
+  background: var(--mds-bg-light);
+  font-family: var(--mds-font-sans);
+  color: var(--mds-text);
+  line-height: 1.5;
+}
+
+.mds-preview-note {
+  max-width: var(--mds-email-max-width);
+  margin: 0 auto 16px;
+  padding: 12px 16px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 3px;
+  font-size: 13px;
+  color: var(--mds-text);
+}
+
+.mds-preview-note code {
+  font-size: 12px;
+  color: var(--mds-deep-blue);
+}
+
+.mds-email-outer {
+  max-width: var(--mds-email-max-width);
+  margin: 0 auto;
+  background: var(--mds-white);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(5, 28, 44, 0.08);
+}
+
+.mds-email-header {
+  background: var(--mds-deep-blue);
+  padding: 28px 28px 30px;
+}
+
+.mds-email-kicker {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mds-electric-blue);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.mds-email-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--mds-white);
+  letter-spacing: -0.3px;
+  font-family: var(--mds-font-serif);
+  line-height: 1.25;
+  margin: 0;
+}
+
+.mds-email-subtitle {
+  font-size: 13px;
+  color: var(--mds-muted-line);
+  margin: 8px 0 0;
+}
+
+.mds-email-greeting {
+  padding: 22px 28px;
+  border-bottom: 1px solid var(--mds-border);
+  font-size: 15px;
+  color: var(--mds-text);
+  line-height: 1.6;
+}
+
+.mds-email-greeting .mds-stat {
+  color: var(--mds-deep-blue);
+  font-weight: 600;
+}
+
+.mds-section-block {
+  padding: 8px 0 0;
+}
+
+.mds-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mds-text-light);
+  padding: 20px 28px 12px;
+  margin: 0;
+}
+
+.mds-nudge-card {
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--mds-border);
+}
+
+.mds-nudge-head {
+  margin-bottom: 6px;
+}
+
+.mds-nudge-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--mds-deep-blue);
+}
+
+.mds-nudge-meta {
+  font-size: 12px;
+  color: var(--mds-text-light);
+  margin-bottom: 10px;
+}
+
+/* Reserved for future priority pills */
+.mds-priority-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 8px;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.mds-ai-summary {
+  background: var(--mds-bg-light);
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.mds-ai-summary-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mds-electric-blue);
+  margin-bottom: 6px;
+}
+
+.mds-ai-summary-body {
+  font-size: 13px;
+  color: var(--mds-text);
+  line-height: 1.55;
+}
+
+.mds-ai-summary-body strong {
+  color: var(--mds-deep-blue);
+  font-weight: 600;
+}
+
+.mds-share-articles {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: var(--mds-white);
+  border: 1px solid var(--mds-border);
+  border-radius: 4px;
+}
+
+.mds-share-articles-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mds-deep-blue);
+  margin-bottom: 8px;
+}
+
+.mds-share-articles-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mds-share-articles-list li {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--mds-border);
+  font-size: 13px;
+}
+
+.mds-share-articles-list li:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.mds-share-articles-list a {
+  color: var(--mds-blue);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.mds-share-articles-list a:hover {
+  text-decoration: underline;
+}
+
+.mds-share-articles-why {
+  display: block;
+  font-size: 12px;
+  color: var(--mds-text-light);
+  margin-top: 4px;
+  line-height: 1.45;
+  font-weight: 400;
+}
+
+.mds-btn-electric {
+  display: inline-block;
+  padding: 7px 20px;
+  background: var(--mds-electric-blue);
+  color: var(--mds-white) !important;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 3px;
+  letter-spacing: 0.2px;
+}
+
+.mds-btn-electric:hover {
+  opacity: 0.92;
+}
+
+.mds-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--mds-text-light);
+  margin-top: 6px;
+  font-weight: 400;
+}
+
+.mds-email-footer-cta {
+  padding: 24px 28px;
+  text-align: center;
+  border-top: 1px solid var(--mds-border);
+}
+
+.mds-btn-primary {
+  display: inline-block;
+  padding: 12px 32px;
+  background: var(--mds-deep-blue);
+  color: var(--mds-white) !important;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 3px;
+  letter-spacing: -0.1px;
+}
+
+.mds-btn-primary:hover {
+  opacity: 0.95;
+}
+
+.mds-email-footer {
+  padding: 18px 28px 22px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--mds-muted-line);
+  line-height: 1.6;
+}
+
+.mds-email-footer a {
+  color: var(--mds-blue);
+  text-decoration: none;
+}
+
+.mds-callout-quiet {
+  max-width: var(--mds-email-max-width);
+  margin: 16px auto 0;
+  padding: 16px 20px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--mds-text-light);
+  border: 1px dashed var(--mds-border);
+  border-radius: 3px;
+  background: var(--mds-white);
+}
+
+.mds-email-body {
+  padding: 20px 28px 28px;
+  font-size: 15px;
+  color: var(--mds-text);
+  line-height: 1.6;
+}
+
+.mds-email-card-simple {
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--mds-white);
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(5, 28, 44, 0.08);
+  overflow: hidden;
+  font-size: 15px;
+  color: var(--mds-text);
+  line-height: 1.65;
+}
+
+.mds-email-card-simple .mds-email-header {
+  padding: 20px 28px 22px;
+}
+
+.mds-email-card-simple .mds-email-title {
+  font-size: 18px;
+}
+
+.mds-email-card-simple .mds-email-body {
+  padding: 20px 28px 28px;
+}
+
+.mds-email-card-simple .mds-email-meta {
+  padding: 0 0 18px;
+  margin: 0 0 18px;
+  border-bottom: 1px solid var(--mds-border);
+  font-size: 13px;
+  color: var(--mds-text-light);
+  line-height: 1.55;
+}
+
+.mds-email-card-simple .mds-email-meta strong {
+  color: var(--mds-deep-blue);
+  font-weight: 600;
+}
+
+.mds-email-card-simple a {
+  color: var(--mds-blue);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.mds-email-card-simple a:hover {
+  text-decoration: underline;
+}
