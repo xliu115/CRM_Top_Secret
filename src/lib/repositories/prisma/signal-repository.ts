@@ -25,7 +25,9 @@ export class PrismaSignalRepository implements ISignalRepository {
         ],
       },
       include: {
-        contact: { include: { company: { select: { name: true } } } },
+        contact: {
+          include: { company: { select: { id: true, name: true } } },
+        },
         company: true,
       },
       orderBy: { date: "desc" },
@@ -63,7 +65,9 @@ export class PrismaSignalRepository implements ISignalRepository {
         ],
       },
       include: {
-        contact: { include: { company: { select: { name: true } } } },
+        contact: {
+          include: { company: { select: { id: true, name: true } } },
+        },
         company: true,
       },
       orderBy: { date: "desc" },
