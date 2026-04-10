@@ -1,22 +1,23 @@
 "use client";
 
-import { Play, Pause, Square, Loader2, Volume2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Play, Pause, Loader2 } from "lucide-react";
 
 type BriefingAudioControlsProps = {
   isPlaying: boolean;
   isPaused: boolean;
   isLoading: boolean;
   elapsed: number;
+  duration: number;
   onPlay: () => void;
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
 };
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+function formatMmSs(totalSec: number): string {
+  if (!Number.isFinite(totalSec) || totalSec < 0) return "0:00";
+  const s = Math.floor(totalSec % 60);
+  const m = Math.floor(totalSec / 60);
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
@@ -25,82 +26,56 @@ export function BriefingAudioControls({
   isPaused,
   isLoading,
   elapsed,
+  duration,
   onPlay,
   onPause,
   onResume,
   onStop,
 }: BriefingAudioControlsProps) {
-  if (isLoading) {
-    return (
-      <div className="mt-3 flex items-center gap-2">
-        <Button variant="ghost" size="sm" disabled className="h-8 gap-1.5 px-3">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          <span className="text-xs">Loading...</span>
-        </Button>
-      </div>
-    );
-  }
+  const active = isPlaying || isPaused || isLoading;
+  const Icon = isLoading ? Loader2 : isPlaying ? Pause : Play;
 
-  if (isPlaying) {
-    return (
-      <div className="mt-3 flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onPause}
-          className="h-8 gap-1.5 px-3 text-primary"
-        >
-          <Pause className="h-3.5 w-3.5" />
-          <span className="text-xs font-mono tabular-nums">{formatTime(elapsed)}</span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onStop}
-          className="h-8 w-8 p-0 text-muted-foreground"
-        >
-          <Square className="h-3 w-3" />
-        </Button>
-      </div>
-    );
-  }
+  const progressPct =
+    active && duration > 0
+      ? Math.min(100, (elapsed / duration) * 100)
+      : 0;
 
-  if (isPaused) {
-    return (
-      <div className="mt-3 flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onResume}
-          className="h-8 gap-1.5 px-3 text-primary"
-        >
-          <Play className="h-3.5 w-3.5" />
-          <span className="text-xs">Resume</span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onStop}
-          className="h-8 w-8 p-0 text-muted-foreground"
-        >
-          <Square className="h-3 w-3" />
-        </Button>
-      </div>
-    );
-  }
+  const handleToggle = () => {
+    if (isLoading) return;
+    if (isPlaying) return onPause();
+    if (isPaused) return onResume();
+    onPlay();
+  };
 
   return (
-    <div className="mt-3 flex items-center gap-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onPlay}
-        className="h-8 gap-1.5 px-3 text-muted-foreground hover:text-primary"
-      >
-        <Volume2 className="h-3.5 w-3.5" />
-        <span className="text-xs">Listen</span>
-      </Button>
-      <span className="text-[10px] text-muted-foreground/60">AI voice</span>
+    <div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={isLoading}
+          aria-label={isPlaying ? "Pause briefing" : "Play briefing"}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm active:scale-[0.97] disabled:opacity-60"
+        >
+          <Icon className={`h-5 w-5 ${!isPlaying ? "pl-0.5" : ""} ${isLoading ? "animate-spin" : ""}`} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            {isLoading ? (
+              <div className="h-full w-full animate-pulse rounded-full bg-primary/40" />
+            ) : (
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-200"
+                style={{ width: `${progressPct}%` }}
+              />
+            )}
+          </div>
+          <div className="mt-1 flex justify-between text-xs tabular-nums text-muted-foreground-subtle">
+            <span>{formatMmSs(elapsed)}</span>
+            <span>{active && !isLoading ? formatMmSs(duration) : "AI voice"}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

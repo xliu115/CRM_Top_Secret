@@ -218,8 +218,12 @@ export function useBriefingTts(segments: VoiceOutlineSegment[]) {
     [startMs, endMs, currentMs]
   );
 
-  const supported =
-    typeof window !== "undefined" && typeof window.speechSynthesis !== "undefined";
+  const [supported, setSupported] = useState(false);
+  useEffect(() => {
+    setSupported(
+      typeof window !== "undefined" && typeof window.speechSynthesis !== "undefined"
+    );
+  }, []);
 
   return {
     playing,

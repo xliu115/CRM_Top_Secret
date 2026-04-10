@@ -9,7 +9,7 @@ import {
 import { generateMini360, type Contact360Context } from "@/lib/services/llm-contact360";
 import { buildBriefingHtml, buildMini360Html } from "@/lib/services/email-service";
 import { searchWeb } from "@/lib/services/rag-service";
-import { addDays, isBefore, format } from "date-fns";
+import { addDays, isBefore, format, differenceInDays } from "date-fns";
 import {
   buildTopNudgePayloads,
   mapLatestInteractionSummaryByContact,

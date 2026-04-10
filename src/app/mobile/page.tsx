@@ -8,14 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AssistantReply } from "@/components/chat/assistant-reply";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import { useChatSession } from "@/hooks/use-chat-session";
-import type { VoiceOutlineSegment } from "@/components/voice-memo/voice-memo-client-briefing";
-import { MobileBriefingListen } from "@/components/mobile/mobile-briefing-listen";
-import {
-  getDemoStructuredBriefing,
-  getDemoVoiceOutline,
-} from "@/lib/constants/mobile-demo-briefing";
-import type { ApiStructuredBriefing } from "@/lib/services/structured-briefing";
+import { useChatSession, type ChatMessage } from "@/hooks/use-chat-session";
 import { useBriefingAudio } from "@/hooks/use-briefing-audio";
 import { BriefingAudioControls } from "@/components/voice/briefing-audio-controls";
 import { buildBriefingSpokenOpening } from "@/lib/utils/briefing-spoken-opening";
@@ -25,20 +18,11 @@ import { LiveTranscriptPreview } from "@/components/voice/live-transcript-previe
 type BriefingData = {
   briefing: string;
   topActions: { contactName: string; company: string; actionLabel: string; detail: string; deeplink: string; contactId?: string }[];
-  voiceMemo: {
-    audioUrl: string;
-    durationMs: number;
-    segments: Array<{
-      id: string;
-      headline: string;
-      startMs: number;
-      endMs: number;
-      deeplink?: string;
-    }>;
-  } | null;
-  voiceOutline: VoiceOutlineSegment[];
-  dataDrivenSummary?: string;
-  structured: ApiStructuredBriefing;
+  structured: {
+    nudges: { contactName: string; company: string; contactId: string; ruleType?: string }[];
+    meetings: { title: string; startTime: string; meetingId: string }[];
+    news?: { content: string; contactName?: string; company?: string }[];
+  };
 };
 
 function extractContactNames(data: BriefingData): string[] {
@@ -142,6 +126,7 @@ export default function MobilePage() {
     voiceAudioLevel,
     startListening,
     stopListening,
+    prependMessage,
   } = useChatSession();
 
   const briefingAudio = useBriefingAudio();
@@ -172,31 +157,26 @@ export default function MobilePage() {
 
     (async () => {
       try {
-        const res = await fetch("/api/dashboard/briefing", {
-          credentials: "same-origin",
-        });
+        const res = await fetch("/api/dashboard/briefing");
         if (!res.ok) throw new Error("Failed to load briefing");
-        const raw = (await res.json()) as Record<string, unknown>;
-        const st = raw.structured as ApiStructuredBriefing | undefined;
-        const data: BriefingData = {
-          ...(raw as unknown as BriefingData),
-          voiceOutline: Array.isArray(raw.voiceOutline)
-            ? (raw.voiceOutline as VoiceOutlineSegment[])
-            : [],
-          structured: {
-            nudges: Array.isArray(st?.nudges) ? st!.nudges : [],
-            meetings: Array.isArray(st?.meetings) ? st!.meetings : [],
-            news: Array.isArray(st?.news) ? st!.news : [],
-          },
-        };
+        const data: BriefingData = await res.json();
         setBriefingData(data);
-      } catch (e) {
-        console.error("[mobile] briefing fetch failed:", e);
+
+        if (data.briefing) {
+          const briefingMsg: ChatMessage = {
+            id: "briefing-" + crypto.randomUUID(),
+            role: "assistant",
+            content: data.briefing,
+          };
+          prependMessage(briefingMsg);
+        }
+      } catch {
+        // Briefing failed, chat still works
       } finally {
         setBriefingLoading(false);
       }
     })();
-  }, []);
+  }, [prependMessage]);
 
   const usedQueries = useMemo(() => {
     const set = new Set<string>();
@@ -218,31 +198,7 @@ export default function MobilePage() {
     return deduplicateActions(combined, usedQueries).slice(0, 5);
   }, [messages, briefingData, usedQueries]);
 
-  const partnerDisplayName = session?.user?.name ?? "Partner";
   const hasMessages = messages.length > 0;
-
-  const hasStructuredData = useMemo(() => {
-    const s = briefingData?.structured;
-    if (!s) return false;
-    return (
-      (s.nudges?.length ?? 0) > 0 ||
-      (s.meetings?.length ?? 0) > 0 ||
-      (s.news?.length ?? 0) > 0
-    );
-  }, [briefingData]);
-
-  const displayStructured = useMemo((): ApiStructuredBriefing => {
-    if (hasStructuredData && briefingData?.structured) return briefingData.structured;
-    return getDemoStructuredBriefing();
-  }, [hasStructuredData, briefingData]);
-
-  const isLiveSummary = Boolean(briefingData) && hasStructuredData;
-
-  const voiceOutline = useMemo((): VoiceOutlineSegment[] => {
-    if (briefingData?.voiceOutline?.length) return briefingData.voiceOutline;
-    if (!hasStructuredData) return getDemoVoiceOutline(partnerName);
-    return [];
-  }, [briefingData?.voiceOutline, hasStructuredData, partnerName]);
 
   return (
     <MobileShell>
@@ -250,34 +206,39 @@ export default function MobilePage() {
         {/* Scrollable feed */}
         <div className="flex-1 overflow-y-auto">
           <div className="space-y-5 px-4 py-4">
-            <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground-subtle">
-                  Today&apos;s summary
-                </p>
-                {!isLiveSummary && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    Sample
+            {briefingLoading && !hasMessages && (
+              <div className="flex gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex items-center gap-2 pt-2.5">
+                  <div className="flex gap-1">
+                    <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                  <span className="text-[15px] text-muted-foreground-subtle">
+                    Preparing your briefing...
                   </span>
-                )}
-                {briefingLoading && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <Sparkles className="h-3 w-3 animate-pulse text-primary" />
-                    Updating with your data…
-                  </span>
-                )}
+                </div>
               </div>
-              <p className="mb-3 text-[13px] text-muted-foreground leading-snug">
-                One briefing audio — use the text sections to jump to that moment.
-              </p>
-              <MobileBriefingListen
-                partnerDisplayName={partnerDisplayName}
-                structured={displayStructured}
-                voiceOutline={voiceOutline}
-                voiceMemo={briefingData?.voiceMemo ?? null}
-                isPlaceholder={!isLiveSummary}
-              />
-            </section>
+            )}
+
+            {!briefingLoading && !hasMessages && (
+              <div className="flex flex-col items-center justify-center gap-4 pt-12">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-2xl">
+                  🐦
+                </div>
+                <div className="text-center">
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Hi {partnerName}
+                  </h2>
+                  <p className="mt-1.5 max-w-xs text-[15px] leading-relaxed text-muted-foreground">
+                    Ask me anything about your clients, meetings, or contacts.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Messages */}
             {messages.map((msg) => (
@@ -324,6 +285,7 @@ export default function MobilePage() {
                             isPaused={briefingAudio.isPaused}
                             isLoading={briefingAudio.isLoading}
                             elapsed={briefingAudio.elapsed}
+                            duration={briefingAudio.duration}
                             onPlay={handlePlayBriefing}
                             onPause={briefingAudio.pause}
                             onResume={briefingAudio.resume}

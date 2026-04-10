@@ -12,6 +12,7 @@ type UseBriefingAudioReturn = {
   isLoading: boolean;
   error: string | null;
   elapsed: number;
+  duration: number;
 };
 
 function supportsMediaSource(): boolean {
@@ -26,6 +27,7 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
@@ -33,6 +35,7 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
   const synthUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const usingFallbackRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const estimatedDurationRef = useRef(0);
 
   const cleanup = useCallback(() => {
     if (abortRef.current) {
@@ -60,15 +63,27 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
     setIsPlaying(false);
     setIsPaused(false);
     setElapsed(0);
+    setDuration(0);
   }, []);
 
   useEffect(() => cleanup, [cleanup]);
 
   const startTimer = useCallback(() => {
     const start = Date.now();
+    if (estimatedDurationRef.current > 0) {
+      setDuration(estimatedDurationRef.current);
+    }
     timerRef.current = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - start) / 1000));
-    }, 1000);
+      const audio = audioRef.current;
+      if (audio && Number.isFinite(audio.currentTime) && audio.currentTime > 0) {
+        setElapsed(Math.floor(audio.currentTime));
+        if (Number.isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+          setDuration(Math.floor(audio.duration));
+        }
+      } else {
+        setElapsed(Math.floor((Date.now() - start) / 1000));
+      }
+    }, 250);
   }, []);
 
   const playWithSpeechSynthesis = useCallback(
@@ -150,15 +165,19 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
               const { done, value } = await reader.read();
 
               if (done) {
-                if (mediaSource.readyState === "open") {
-                  sourceBuffer.addEventListener("updateend", () => {
-                    if (mediaSource.readyState === "open") {
-                      mediaSource.endOfStream();
-                    }
-                  }, { once: true });
-
-                  if (!sourceBuffer.updating) {
+                const finalize = () => {
+                  if (mediaSource.readyState === "open") {
                     mediaSource.endOfStream();
+                  }
+                  if (Number.isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+                    setDuration(Math.floor(audio.duration));
+                  }
+                };
+                if (mediaSource.readyState === "open") {
+                  if (sourceBuffer.updating) {
+                    sourceBuffer.addEventListener("updateend", finalize, { once: true });
+                  } else {
+                    finalize();
                   }
                 }
                 resolve();
@@ -222,6 +241,12 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
       const audio = new Audio(url);
       audioRef.current = audio;
 
+      audio.onloadedmetadata = () => {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          setDuration(Math.floor(audio.duration));
+        }
+      };
+
       audio.oncanplay = () => {
         setIsLoading(false);
         setIsPlaying(true);
@@ -245,6 +270,11 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
       cleanup();
       setError(null);
       setIsLoading(true);
+
+      // ~150 words/min for TTS, ~4.7 chars/word → ~705 chars/min → ~11.75 chars/sec
+      const estimatedSec = Math.round(text.length / 11.75);
+      estimatedDurationRef.current = estimatedSec;
+      setDuration(estimatedSec);
 
       const abort = new AbortController();
       abortRef.current = abort;
@@ -300,5 +330,6 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
     isLoading,
     error,
     elapsed,
+    duration,
   };
 }
