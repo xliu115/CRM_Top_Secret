@@ -10,8 +10,8 @@ Already have Node.js and Git installed? Copy this entire block into your Termina
 
 ```bash
 cd ~/Desktop && \
-git clone https://github.com/xliu115/CRM_Top_Secret.git && \
-cd CRM_Top_Secret && \
+git clone https://github.com/McK-Internal/CRM_Experimentation.git && \
+cd CRM_Experimentation && \
 npm install && \
 cp .env.example .env && \
 echo "✅ Dependencies installed. Now edit .env with your OpenAI API key, then run the commands below."
@@ -20,7 +20,7 @@ echo "✅ Dependencies installed. Now edit .env with your OpenAI API key, then r
 After you've added your API key to the `.env` file, copy and run this:
 
 ```bash
-cd ~/Desktop/CRM_Top_Secret && \
+cd ~/Desktop/CRM_Experimentation && \
 npx prisma migrate dev --name init && \
 npx prisma db seed && \
 npm run dev
@@ -36,10 +36,10 @@ Then open **http://localhost:3000** in your browser. That's it!
 
 | Task | Copy this command |
 |------|-------------------|
-| **Start the app** | `cd ~/Desktop/CRM_Top_Secret && npm run dev` |
+| **Start the app** | `cd ~/Desktop/CRM_Experimentation && npm run dev` |
 | **Stop the app** | Press `Ctrl + C` in Terminal |
-| **Get latest updates** | `cd ~/Desktop/CRM_Top_Secret && git pull && npm install && npm run dev` |
-| **Reset the database** | `cd ~/Desktop/CRM_Top_Secret && npx prisma migrate dev && npx prisma db seed` |
+| **Get latest updates** | `cd ~/Desktop/CRM_Experimentation && git pull && npm install && npm run dev` |
+| **Reset the database** | `cd ~/Desktop/CRM_Experimentation && npx prisma migrate dev && npx prisma db seed` |
 
 ---
 
@@ -93,11 +93,11 @@ Open Terminal (or Command Prompt) and run these commands one at a time. Each lin
 
 ```
 cd ~/Desktop
-git clone https://github.com/xliu115/CRM_Top_Secret.git
-cd CRM_Top_Secret
+git clone https://github.com/McK-Internal/CRM_Experimentation.git
+cd CRM_Experimentation
 ```
 
-This downloads the project to your Desktop in a folder called `CRM_Top_Secret`.
+This downloads the project to your Desktop in a folder called `CRM_Experimentation`.
 
 > **If you see "git: command not found"**: Install Git from https://git-scm.com/downloads, then try again.
 
@@ -127,7 +127,7 @@ Run this command:
 cp .env.example .env
 ```
 
-Now open the project in your code editor. In Cursor or VS Code, go to **File > Open Folder** and select the `CRM_Top_Secret` folder on your Desktop.
+Now open the project in your code editor. In Cursor or VS Code, go to **File > Open Folder** and select the `CRM_Experimentation` folder on your Desktop.
 
 Find the file called `.env` in the root of the project (not `.env.example`) and open it. You'll see something like this:
 
@@ -193,7 +193,7 @@ You'll see a login screen with a list of demo partners. Pick any name to sign in
 Every time you want to use the app, open Terminal, navigate to the project folder, and start it:
 
 ```
-cd ~/Desktop/CRM_Top_Secret
+cd ~/Desktop/CRM_Experimentation
 npm run dev
 ```
 
@@ -208,7 +208,7 @@ In the Terminal window where the app is running, press **Ctrl + C** to stop it.
 When Xinyu pushes new changes, you can pull them down:
 
 ```
-cd ~/Desktop/CRM_Top_Secret
+cd ~/Desktop/CRM_Experimentation
 git pull
 npm install
 npm run dev
