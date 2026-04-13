@@ -144,7 +144,7 @@ export function useBriefingTts(segments: VoiceOutlineSegment[]) {
           run(idx + 1);
         };
         u.onerror = (ev) => {
-          const code = ev.error;
+          const code = ev.error as string;
           if (code === "canceled" || code === "cancelled" || code === "interrupted") return;
           if (generation !== chainGenerationRef.current) return;
           setError(

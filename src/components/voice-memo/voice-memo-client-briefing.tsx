@@ -148,7 +148,7 @@ export function VoiceMemoClientBriefing({
         u.onstart = () => setTtsError(null);
         u.onend = () => run(idx + 1);
         u.onerror = (ev) => {
-          const code = ev.error;
+          const code = ev.error as string;
           if (
             code === "canceled" ||
             code === "cancelled" ||

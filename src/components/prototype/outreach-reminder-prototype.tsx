@@ -397,7 +397,7 @@ function BriefingEmailView({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex gap-3">
-                  <Avatar fallback={r.avatarInitials} className="size-10 shrink-0 text-xs" />
+                  <Avatar name={r.contactName} className="size-10 shrink-0 text-xs" />
                   <div>
                     <p className="font-semibold text-foreground">{r.contactName}</p>
                     <p className="text-xs text-muted-foreground-subtle">
