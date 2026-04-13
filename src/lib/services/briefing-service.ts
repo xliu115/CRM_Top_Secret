@@ -101,11 +101,20 @@ export async function sendMorningBriefing(
     ]);
 
     const priorityOrder: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-    const sortedNudges = [...openNudges].sort(
-      (a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4)
-    );
+    const typeOrder: Record<string, number> = {
+      MEETING_PREP: 0, REPLY_NEEDED: 1, JOB_CHANGE: 2, STALE_CONTACT: 3,
+      FOLLOW_UP: 4, CAMPAIGN_APPROVAL: 5, ARTICLE_CAMPAIGN: 6,
+      LINKEDIN_ACTIVITY: 7, EVENT_ATTENDED: 8, EVENT_REGISTERED: 9,
+      ARTICLE_READ: 10, UPCOMING_EVENT: 11, COMPANY_NEWS: 12,
+    };
+    const sortedNudges = [...openNudges].sort((a, b) => {
+      const pa = priorityOrder[a.priority] ?? 4;
+      const pb = priorityOrder[b.priority] ?? 4;
+      if (pa !== pb) return pa - pb;
+      return (typeOrder[a.ruleType] ?? 99) - (typeOrder[b.ruleType] ?? 99);
+    });
 
-    const reservedTypes = new Set(["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN", "FOLLOW_UP"]);
+    const reservedTypes = new Set(["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN", "FOLLOW_UP", "REPLY_NEEDED"]);
     const reserved = sortedNudges.filter((n) => reservedTypes.has(n.ruleType));
     const otherNudges = sortedNudges.filter((n) => !reservedTypes.has(n.ruleType));
     const seen = new Set<string>();

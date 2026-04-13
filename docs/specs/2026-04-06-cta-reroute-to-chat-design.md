@@ -40,17 +40,22 @@ Dashboard CTAs navigate to `/chat` with query params:
 
 | CTA | `q` | Extra params |
 |-----|-----|--------------|
-| Nudge "Take action" | `"Draft a {action} to {name} at {company}"` | `nudgeId`, `contactId` |
+| Nudge "Take action" | `"Nudge summary for {name}"` | `nudgeId`, `contactId` |
 | Meeting "View more" | `"Prep me for my {title} meeting"` | `meetingId` |
 | Briefing action (contact) | `"{actionLabel} for {contactName} at {company}"` | `nudgeId`, `contactId` |
 | Briefing action (meeting) | `"Prep me for {meetingTitle}"` | `meetingId` |
 
-The `q` message maps nudge `ruleType` to a natural action phrase:
-- `STALE_CONTACT` → "Draft a check-in email to"
+Dashboard CTAs route to the **nudge summary** first (not directly to a draft). The nudge summary response includes a quick-action button that maps the nudge `ruleType` to a natural draft action:
+
+- `MEETING_PREP` → "Review meeting brief for"
+- `REPLY_NEEDED` → "Draft a reply to"
 - `JOB_CHANGE` → "Draft a congratulations email to"
+- `STALE_CONTACT` → "Draft a check-in email to"
+- `FOLLOW_UP` → "Continue follow-up with"
+- `CAMPAIGN_APPROVAL` → "Review campaign"
+- `ARTICLE_CAMPAIGN` → "View campaign"
 - `COMPANY_NEWS` → "Draft a news follow-up email to"
 - `UPCOMING_EVENT` → "Draft a pre-event email to"
-- `MEETING_PREP` → "Review meeting brief for"
 - `EVENT_ATTENDED` → "Draft an event follow-up email to"
 - `EVENT_REGISTERED` → "Draft an event outreach email to"
 - `ARTICLE_READ` → "Draft a content follow-up email to"

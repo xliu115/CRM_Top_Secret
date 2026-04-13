@@ -25,6 +25,8 @@ import {
   Forward,
   ShieldCheck,
   Users,
+  Reply,
+  Mail,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
@@ -39,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
-import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay, parseArticleCampaignNudgeDisplay, stripMarkdown } from "@/lib/utils/nudge-summary";
+import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay, parseArticleCampaignNudgeDisplay, stripMarkdown, extractInsightSnippet } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
 import { useStreamingTranscription } from "@/hooks/use-streaming-transcription";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
@@ -138,6 +140,34 @@ function parseInsights(metadata?: string | null): InsightData[] {
   } catch { return []; }
 }
 
+const NUDGE_PRIORITY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+const NUDGE_TYPE_RANK: Record<string, number> = {
+  MEETING_PREP: 0, REPLY_NEEDED: 1, JOB_CHANGE: 2, STALE_CONTACT: 3,
+  FOLLOW_UP: 4, CAMPAIGN_APPROVAL: 5, ARTICLE_CAMPAIGN: 6,
+  LINKEDIN_ACTIVITY: 7, EVENT_ATTENDED: 8, EVENT_REGISTERED: 9,
+  ARTICLE_READ: 10, UPCOMING_EVENT: 11, COMPANY_NEWS: 12,
+};
+const RESERVED_NUDGE_TYPES = new Set(["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN", "FOLLOW_UP", "REPLY_NEEDED"]);
+
+function selectTopNudges(nudges: Nudge[]): Nudge[] {
+  const sorted = [...nudges].sort((a, b) => {
+    const pa = NUDGE_PRIORITY_RANK[a.priority] ?? 4;
+    const pb = NUDGE_PRIORITY_RANK[b.priority] ?? 4;
+    if (pa !== pb) return pa - pb;
+    return (NUDGE_TYPE_RANK[a.ruleType] ?? 99) - (NUDGE_TYPE_RANK[b.ruleType] ?? 99);
+  });
+  const reserved = sorted.filter((n) => RESERVED_NUDGE_TYPES.has(n.ruleType));
+  const others = sorted.filter((n) => !RESERVED_NUDGE_TYPES.has(n.ruleType));
+  const seen = new Set<string>();
+  const deduped = reserved.filter((n) => {
+    if (seen.has(n.ruleType)) return false;
+    seen.add(n.ruleType);
+    return true;
+  });
+  const remaining = Math.max(0, 5 - deduped.length);
+  return [...deduped, ...others.slice(0, remaining)];
+}
+
 function getPriorityClassName(priority: string): string {
   switch (priority) {
     case "URGENT":
@@ -189,9 +219,7 @@ const IMPORTANCE_RANK: Record<string, number> = {
   CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3,
 };
 
-const PRIORITY_RANK: Record<string, number> = {
-  URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3,
-};
+const PRIORITY_RANK = NUDGE_PRIORITY_RANK;
 
 type FeedNudgeItem = { kind: "nudge"; priority: string; nudge: Nudge };
 type FeedMeetingItem = { kind: "meeting"; priority: string; meeting: DashboardData["upcomingMeetings"][number] };
@@ -292,17 +320,19 @@ const RULE_TYPE_LABELS: Record<string, string> = {
 };
 
 const RULE_TYPE_CHAT_ACTION: Record<string, string> = {
-  STALE_CONTACT: "Nudge summary for",
+  MEETING_PREP: "Nudge summary for",
+  REPLY_NEEDED: "Nudge summary for",
   JOB_CHANGE: "Nudge summary for",
+  STALE_CONTACT: "Nudge summary for",
+  FOLLOW_UP: "Nudge summary for",
+  CAMPAIGN_APPROVAL: "Nudge summary for",
+  ARTICLE_CAMPAIGN: "Nudge summary for",
   COMPANY_NEWS: "Nudge summary for",
   UPCOMING_EVENT: "Nudge summary for",
-  MEETING_PREP: "Prepare me for the meeting with",
   EVENT_ATTENDED: "Nudge summary for",
   EVENT_REGISTERED: "Nudge summary for",
   ARTICLE_READ: "Nudge summary for",
   LINKEDIN_ACTIVITY: "Nudge summary for",
-  FOLLOW_UP: "Nudge summary for",
-  REPLY_NEEDED: "Nudge summary for",
 };
 
 function buildChatUrl(params: {
@@ -362,6 +392,35 @@ function summarizeNudgeReasons(nudges: StructuredBriefingData["nudges"], contact
   const count = unique.length;
   if (count <= 3) return unique.join(", ");
   return unique.slice(0, 2).join(", ") + `, and ${count - 2} more`;
+}
+
+const HIGHLIGHT_PREFIX: Record<string, string> = {
+  JOB_CHANGE: "New role",
+  COMPANY_NEWS: "In the news",
+  MEETING_PREP: "Upcoming meeting",
+  REPLY_NEEDED: "Awaiting your reply",
+  FOLLOW_UP: "Follow-up pending",
+  UPCOMING_EVENT: "Event coming up",
+  EVENT_ATTENDED: "Recently attended",
+  EVENT_REGISTERED: "Registered for",
+  LINKEDIN_ACTIVITY: "LinkedIn",
+  ARTICLE_READ: "Read your article",
+};
+
+function pickContactHighlight(nudges: StructuredBriefingData["nudges"]): string | null {
+  const skipForHighlight = new Set(["STALE_CONTACT", "CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"]);
+  for (const n of nudges) {
+    if (skipForHighlight.has(n.ruleType)) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const insights: any[] = n.metadata ? (() => { try { return JSON.parse(n.metadata!).insights ?? []; } catch { return []; } })() : [];
+    const relevant = insights.find((i: { type: string }) => !skipForHighlight.has(i.type));
+    if (!relevant) continue;
+    const snippet = extractInsightSnippet(relevant);
+    if (!snippet) continue;
+    const prefix = HIGHLIGHT_PREFIX[relevant.type];
+    return prefix ? `${prefix}: ${snippet}` : snippet;
+  }
+  return null;
 }
 
 type BriefingAction = {
@@ -495,6 +554,7 @@ function StructuredBriefingView({
                 nudges[0].priority,
               );
               const reasonsSummary = summarizeNudgeReasons(data.nudges, first.contactName, first.company);
+              const highlight = pickContactHighlight(nudges);
               return (
                 <div key={key} className="group">
                   <div className="flex items-baseline gap-1.5 flex-wrap">
@@ -508,9 +568,15 @@ function StructuredBriefingView({
                       at {first.company}
                     </span>
                   </div>
+                  {highlight && (
+                    <p className="text-xs text-foreground/80 mt-0.5 flex items-center gap-1.5">
+                      <Sparkles className="h-3 w-3 text-amber-500 shrink-0" />
+                      <span className="italic">{highlight}</span>
+                    </p>
+                  )}
                   {first.daysSince != null && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      It&apos;s been {first.daysSince} days since your last conversation.
+                      {first.daysSince} days since your last conversation.
                     </p>
                   )}
                   {nudges.length > 0 && (
@@ -649,7 +715,7 @@ function StructuredBriefingView({
               <div key={m.meetingId}>
                 <div className="flex items-baseline gap-1.5 flex-wrap">
                   <Link
-                    href={`/chat?q=${encodeURIComponent(`Prepare a meeting brief for "${m.title}"${m.attendeeNames.length > 0 ? ` with ${m.attendeeNames.join(", ")}` : ""}`)}`}
+                    href={buildChatUrl({ q: `Prepare a meeting brief for "${m.title}"${m.attendeeNames.length > 0 ? ` with ${m.attendeeNames.join(", ")}` : ""}`, meetingId: m.meetingId })}
                     className="text-sm font-medium text-foreground hover:text-primary hover:underline transition-colors"
                   >
                     &ldquo;{m.title}&rdquo;
@@ -844,17 +910,7 @@ export default function DashboardPage() {
 
         if (nudgesRes.ok) {
           const nudges: Nudge[] = await nudgesRes.json();
-          const reservedTypes = new Set(["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN", "FOLLOW_UP"]);
-          const reserved = nudges.filter((n: Nudge) => reservedTypes.has(n.ruleType));
-          const others = nudges.filter((n: Nudge) => !reservedTypes.has(n.ruleType));
-          const seen = new Set<string>();
-          const deduped = reserved.filter((n) => {
-            if (seen.has(n.ruleType)) return false;
-            seen.add(n.ruleType);
-            return true;
-          });
-          const remaining = Math.max(0, 5 - deduped.length);
-          setTopNudges([...deduped, ...others.slice(0, remaining)]);
+          setTopNudges(selectTopNudges(nudges));
         }
       } catch (err) {
         if (cancelled) return;
@@ -865,7 +921,9 @@ export default function DashboardPage() {
         if (!cancelled) setLoading(false);
       }
 
-      // Fetch briefing + active sequences after dashboard data is loaded
+      // Fetch briefing + active sequences after dashboard data is loaded.
+      // The briefing endpoint refreshes nudges (delete + recreate), so we
+      // re-fetch nudges afterwards so the cards match the briefing.
       try {
         const [briefingRes, sequencesRes] = await Promise.all([
           fetch("/api/dashboard/briefing"),
@@ -884,6 +942,19 @@ export default function DashboardPage() {
           const sequences = await sequencesRes.json();
           if (!cancelled && Array.isArray(sequences)) {
             setActiveSequences(sequences as ActiveSequenceBriefingItem[]);
+          }
+        }
+
+        // Re-fetch nudges after briefing refresh so cards reflect the same data
+        if (!cancelled) {
+          try {
+            const freshNudgesRes = await fetch("/api/nudges?status=OPEN");
+            if (!cancelled && freshNudgesRes.ok) {
+              const freshNudges: Nudge[] = await freshNudgesRes.json();
+              setTopNudges(selectTopNudges(freshNudges));
+            }
+          } catch {
+            // Keep the initial nudges if refresh-fetch fails
           }
         }
       } catch {
@@ -994,7 +1065,14 @@ export default function DashboardPage() {
     ...topNudges.map((n): FeedItem => ({
       kind: "nudge", priority: n.priority, nudge: n,
     })),
-  ].sort((a, b) => (PRIORITY_RANK[a.priority] ?? 99) - (PRIORITY_RANK[b.priority] ?? 99));
+  ].sort((a, b) => {
+    const pa = NUDGE_PRIORITY_RANK[a.priority] ?? 4;
+    const pb = NUDGE_PRIORITY_RANK[b.priority] ?? 4;
+    if (pa !== pb) return pa - pb;
+    const ta = a.kind === "nudge" ? (NUDGE_TYPE_RANK[a.nudge.ruleType] ?? 99) : -1;
+    const tb = b.kind === "nudge" ? (NUDGE_TYPE_RANK[b.nudge.ruleType] ?? 99) : -1;
+    return ta - tb;
+  });
 
   const newsGroups = dashboardData?.clientNews?.length
     ? groupNewsByClient(dashboardData.clientNews)
@@ -1454,6 +1532,79 @@ export default function DashboardPage() {
                                   <div className="flex items-center gap-1.5 mb-2.5">
                                     <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                                     <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300">Insights</span>
+                                  </div>
+                                  <div className="text-sm text-foreground/70 leading-relaxed">
+                                    <FragmentText fragments={fragments} />
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <Link
+                                    href={buildChatUrl({
+                                      q: `Nudge summary for ${nudge.contact.name}`,
+                                      nudgeId: nudge.id,
+                                      contactId: nudge.contact.id,
+                                    })}
+                                    className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+                                  >
+                                    View summary
+                                    <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                                  </Link>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+
+                        if (nudge.ruleType === "REPLY_NEEDED") {
+                          let lastSubject = "";
+                          let waitDays = 0;
+                          try {
+                            const meta = JSON.parse(nudge.metadata ?? "{}");
+                            const rnInsight = meta.insights?.find((i: { type: string }) => i.type === "REPLY_NEEDED");
+                            waitDays = rnInsight?.waitingDays ?? 0;
+                            lastSubject = rnInsight?.lastEmailSubject ?? "";
+                          } catch { /* ignore */ }
+                          return (
+                            <Card key={nudge.id} className="overflow-hidden border-l-4 border-l-red-400 dark:border-l-red-600">
+                              <CardHeader className="pb-3 pt-5">
+                                <div className="flex items-start gap-4">
+                                  <Avatar name={nudge.contact.name} size="lg" className="shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <CardTitle className="text-lg font-bold">
+                                        <Link href={`/contacts/${nudge.contact.id}`} className="hover:text-primary hover:underline transition-colors">
+                                          {nudge.contact.name}
+                                        </Link>
+                                      </CardTitle>
+                                      <Badge variant="outline" className={getPriorityClassName(nudge.priority)}>
+                                        {nudge.priority}
+                                      </Badge>
+                                      <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+                                        <Reply className="h-3 w-3 mr-1" />
+                                        Reply Needed
+                                      </Badge>
+                                    </div>
+                                    <CardDescription className="mt-0.5">
+                                      {nudge.contact.title} at {nudge.contact.company.name}
+                                      {waitDays > 0 && ` · Waiting ${waitDays} days`}
+                                    </CardDescription>
+                                  </div>
+                                </div>
+                              </CardHeader>
+
+                              <CardContent className="space-y-3">
+                                {lastSubject && (
+                                  <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                                    <Mail className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                    Re: &ldquo;{lastSubject}&rdquo;
+                                  </p>
+                                )}
+
+                                <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                                  <div className="flex items-center gap-1.5 mb-2.5">
+                                    <Sparkles className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-300">Insights</span>
                                   </div>
                                   <div className="text-sm text-foreground/70 leading-relaxed">
                                     <FragmentText fragments={fragments} />

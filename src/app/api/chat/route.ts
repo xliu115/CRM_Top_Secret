@@ -467,8 +467,24 @@ export async function POST(request: NextRequest) {
             sections.push(`<!--SIGNAL_LABELS:${JSON.stringify(labelData)}-->`);
           }
 
+          const NUDGE_TYPE_QUICK_ACTION: Record<string, { label: string; queryPrefix: string }> = {
+            MEETING_PREP: { label: "Review Meeting Brief", queryPrefix: "Review meeting brief for" },
+            REPLY_NEEDED: { label: "Draft Reply", queryPrefix: "Draft a reply to" },
+            JOB_CHANGE: { label: "Draft Congratulations", queryPrefix: "Draft a congratulations email to" },
+            STALE_CONTACT: { label: "Draft Check-in", queryPrefix: "Draft a check-in email to" },
+            FOLLOW_UP: { label: "Continue Follow-up", queryPrefix: "Continue follow-up with" },
+            COMPANY_NEWS: { label: "Draft News Email", queryPrefix: "Draft a news follow-up email to" },
+            UPCOMING_EVENT: { label: "Draft Pre-Event Email", queryPrefix: "Draft a pre-event email to" },
+            EVENT_ATTENDED: { label: "Draft Follow-Up", queryPrefix: "Draft an event follow-up email to" },
+            EVENT_REGISTERED: { label: "Draft Outreach", queryPrefix: "Draft an event outreach email to" },
+            ARTICLE_READ: { label: "Draft Content Email", queryPrefix: "Draft a content follow-up email to" },
+            LINKEDIN_ACTIVITY: { label: "Draft LinkedIn Email", queryPrefix: "Draft a LinkedIn follow-up email to" },
+          };
+          const primaryType = primary.ruleType;
+          const typeAction = NUDGE_TYPE_QUICK_ACTION[primaryType] ?? { label: "Draft Email", queryPrefix: "Draft email to" };
+
           const quickActions = [
-            { label: "Draft Email", query: `Draft email to ${contactName}` },
+            { label: typeAction.label, query: `${typeAction.queryPrefix} ${contactName}` },
             { label: "Quick 360", query: `Quick 360 for ${contactName}` },
             { label: "Company 360", query: `Company 360 for ${companyName || contactName}` },
           ];

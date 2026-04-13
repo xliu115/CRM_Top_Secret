@@ -219,14 +219,18 @@ function getLabel(ruleType: string): string {
 
 const CTA_PRIORITY: Record<string, number> = {
   MEETING_PREP: 0,
-  JOB_CHANGE: 1,
-  EVENT_ATTENDED: 2,
-  EVENT_REGISTERED: 3,
-  UPCOMING_EVENT: 4,
-  COMPANY_NEWS: 5,
-  LINKEDIN_ACTIVITY: 6,
-  ARTICLE_READ: 7,
-  STALE_CONTACT: 8,
+  REPLY_NEEDED: 1,
+  JOB_CHANGE: 2,
+  STALE_CONTACT: 3,
+  FOLLOW_UP: 4,
+  CAMPAIGN_APPROVAL: 5,
+  ARTICLE_CAMPAIGN: 6,
+  EVENT_ATTENDED: 7,
+  EVENT_REGISTERED: 8,
+  UPCOMING_EVENT: 9,
+  COMPANY_NEWS: 10,
+  LINKEDIN_ACTIVITY: 11,
+  ARTICLE_READ: 12,
 };
 
 function isOwnJobChange(insight: InsightData, contactName: string): boolean {

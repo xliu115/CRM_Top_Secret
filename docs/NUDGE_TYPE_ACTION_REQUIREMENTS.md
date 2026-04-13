@@ -34,14 +34,18 @@ The engine now produces **one nudge per contact** with all insights merged into 
 **Priority ranking** determines which insight type becomes the card's primary `ruleType`:
 
 1. MEETING_PREP (highest)
-2. STALE_CONTACT
+2. REPLY_NEEDED
 3. JOB_CHANGE
-4. LINKEDIN_ACTIVITY
-5. EVENT_ATTENDED
-6. EVENT_REGISTERED
-7. ARTICLE_READ
-8. UPCOMING_EVENT
-9. COMPANY_NEWS (lowest)
+4. STALE_CONTACT
+5. FOLLOW_UP
+6. CAMPAIGN_APPROVAL
+7. ARTICLE_CAMPAIGN
+8. LINKEDIN_ACTIVITY
+9. EVENT_ATTENDED
+10. EVENT_REGISTERED
+11. ARTICLE_READ
+12. UPCOMING_EVENT
+13. COMPANY_NEWS (lowest)
 
 **Signal caps** prevent any single type from dominating:
 
