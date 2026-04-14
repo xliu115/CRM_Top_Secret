@@ -60,6 +60,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownPreview } from "@/components/ui/markdown-preview";
 import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay, parseArticleCampaignNudgeDisplay } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
+import { StrategicInsightBlock } from "@/components/nudges/strategic-insight-block";
+import { SuggestedActionButton } from "@/components/nudges/suggested-action-button";
 import { getTierColors } from "@/lib/utils/tier-colors";
 import { importanceDisplayLabel } from "@/lib/utils/importance-labels";
 import {
@@ -247,10 +249,28 @@ type InsightData = {
   personName?: string;
 };
 
+type StrategicInsightData = {
+  narrative: string;
+  oneLiner: string;
+  suggestedAction: {
+    label: string;
+    context: string;
+    emailAngle: string;
+  };
+  evidenceCitations: {
+    claim: string;
+    insightTypes: string[];
+    signalIds: string[];
+    sourceUrls: string[];
+  }[];
+  generatedAt: string;
+};
+
 type NudgeMetadata = {
   insights?: InsightData[];
   relatedPartners?: { partnerId: string; partnerName: string }[];
   personName?: string;
+  strategicInsight?: StrategicInsightData;
 };
 
 function parseMetadata(metadata?: string | null): NudgeMetadata | null {
@@ -2454,11 +2474,15 @@ function ContactNudgeCard({
             <span className="text-xs font-bold uppercase tracking-wider text-primary">Insights</span>
           </div>
           <div className="text-sm text-foreground/70 leading-relaxed">
-            <FragmentText fragments={fragments} />
+            <StrategicInsightBlock
+              strategicInsight={meta?.strategicInsight}
+              insights={insights}
+              nudge={nudge}
+            />
           </div>
         </div>
 
-        {seen.size > 0 && (
+        {!meta?.strategicInsight && seen.size > 0 && (
           <div className="flex flex-wrap gap-2">
             {[...seen.entries()].map(([type, url]) => {
               const iCfg = getTypeConfig(type);
@@ -2505,10 +2529,13 @@ function ContactNudgeCard({
               </Link>
             </Button>
           ) : (
-            <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} onClick={() => setShowDraft(!showDraft)}>
-              <CtaIcon className="h-4 w-4" />
-              {hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
-            </Button>
+            <SuggestedActionButton
+              suggestedAction={meta?.strategicInsight?.suggestedAction}
+              fallbackLabel={hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
+              fallbackIcon={CtaIcon}
+              variant={hasMeetingPrep ? "outline" : "default"}
+              onClick={() => setShowDraft(!showDraft)}
+            />
           )}
 
           {nudge.status === "OPEN" && (

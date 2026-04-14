@@ -50,7 +50,14 @@ export async function POST(
     }
 
     const typeContext = RULE_TYPE_CONTEXT[nudge.ruleType] ?? "";
-    const nudgeReason = `${typeContext}\n\nSpecific context: ${nudge.reason}`;
+    let nudgeReason = `${typeContext}\n\nSpecific context: ${nudge.reason}`;
+
+    try {
+      const meta = JSON.parse(nudge.metadata ?? "{}");
+      if (meta.strategicInsight?.suggestedAction?.context) {
+        nudgeReason = `${typeContext}\n\nStrategic context: ${meta.strategicInsight.suggestedAction.context}`;
+      }
+    } catch { /* use fallback nudgeReason */ }
 
     const draft = await generateEmail({
       partnerName: nudge.contact.partner.name,

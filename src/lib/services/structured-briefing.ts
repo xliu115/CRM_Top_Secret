@@ -100,15 +100,25 @@ export function buildDataDrivenSummaryMarkdown(ctx: NarrativeBriefingContext): s
           ? `\n  - Latest note: ${noteRaw.length > 160 ? `${noteRaw.slice(0, 157)}…` : noteRaw}`
           : "";
 
-      const reasonRaw = (n.reason ?? "").trim();
-      const reasonShort =
-        reasonRaw.length > 120 ? `${reasonRaw.slice(0, 117)}…` : reasonRaw;
-      const whyLine =
-        reasonShort.length > 0
-          ? `\n  - Why this surfaced: ${reasonShort}`
-          : "";
+      let whyText = "";
+      let actionHint = "";
+      try {
+        const meta = JSON.parse(n.metadata ?? "{}");
+        if (meta?.strategicInsight?.oneLiner) {
+          whyText = meta.strategicInsight.oneLiner;
+        }
+        if (meta?.strategicInsight?.suggestedAction?.label) {
+          actionHint = meta.strategicInsight.suggestedAction.label;
+        }
+      } catch { /* ignore */ }
+      if (!whyText) {
+        const reasonRaw = (n.reason ?? "").trim();
+        whyText = reasonRaw.length > 120 ? `${reasonRaw.slice(0, 117)}…` : reasonRaw;
+      }
+      const whyLine = whyText ? `\n  - Why this surfaced: ${whyText}` : "";
+      const actionLine = actionHint ? `\n  - Suggested: ${actionHint}` : "";
 
-      return `${header}${noteLine}${whyLine}`;
+      return `${header}${noteLine}${whyLine}${actionLine}`;
     });
     blocks.push("**Who to contact:**\n\n" + bullets.join("\n\n"));
   }

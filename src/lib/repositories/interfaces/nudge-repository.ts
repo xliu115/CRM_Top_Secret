@@ -26,4 +26,5 @@ export interface INudgeRepository {
     }[]
   ): Promise<number>;
   deleteOpenByPartnerId(partnerId: string): Promise<number>;
+  updateMetadata(id: string, metadata: string): Promise<void>;
 }

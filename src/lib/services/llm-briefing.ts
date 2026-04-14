@@ -123,6 +123,17 @@ detail should be a brief reason like "94 days since last contact", "Meeting tomo
 For CAMPAIGN_APPROVAL actions, use the campaign name as "contactName" and set "company" to "Campaign".
 For ARTICLE_CAMPAIGN actions, use the article title as "contactName" and set "company" to "Article Campaign".`;
 
+function parseNudgeStrategicInsight(metadata?: string) {
+  if (!metadata) return null;
+  try {
+    const meta = JSON.parse(metadata);
+    return meta?.strategicInsight as {
+      narrative: string;
+      suggestedAction?: { label: string };
+    } | undefined ?? null;
+  } catch { return null; }
+}
+
 function formatNudgeBlockForPrompt(ctx: NarrativeBriefingContext): string {
   if (!ctx.nudges.length) return "No open nudges today.";
   return `Open nudges (${ctx.nudges.length}):\n${ctx.nudges
@@ -136,7 +147,14 @@ function formatNudgeBlockForPrompt(ctx: NarrativeBriefingContext): string {
         n.lastInteractionSummary && n.lastInteractionSummary.trim()
           ? ` [last interaction note: ${n.lastInteractionSummary.slice(0, 200)}]`
           : "";
-      return `- [${n.priority}] ${n.contactName} (${n.company}): ${n.reason}${touch}${note}${n.ruleType ? ` [type: ${n.ruleType}]` : ""}`;
+      const strategic = parseNudgeStrategicInsight(n.metadata);
+      const reasonText = strategic?.narrative
+        ? strategic.narrative.slice(0, 300)
+        : n.reason;
+      const suggested = strategic?.suggestedAction?.label
+        ? ` [suggested: ${strategic.suggestedAction.label}]`
+        : "";
+      return `- [${n.priority}] ${n.contactName} (${n.company}): ${reasonText}${touch}${note}${suggested}${n.ruleType ? ` [type: ${n.ruleType}]` : ""}`;
     })
     .join("\n")}`;
 }

@@ -12,3 +12,4 @@ export * from "./llm-meeting";
 export * from "./llm-sequence";
 export * from "./llm-contact360";
 export * from "./llm-company360";
+export * from "./llm-insight";

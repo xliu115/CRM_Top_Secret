@@ -1,9 +1,10 @@
-import { contactRepo, interactionRepo, signalRepo, nudgeRepo, meetingRepo, engagementRepo, nudgeRuleConfigRepo, sequenceRepo } from "@/lib/repositories";
+import { contactRepo, interactionRepo, signalRepo, nudgeRepo, meetingRepo, engagementRepo, nudgeRuleConfigRepo, sequenceRepo, partnerRepo } from "@/lib/repositories";
 import { differenceInDays, subDays } from "date-fns";
 import { formatDateForLLM } from "@/lib/utils/format-date";
 import { prisma } from "@/lib/db/prisma";
 import { getWaitingDays, buildSequenceNudgeReason, buildReplyNeededReason } from "./cadence-engine";
 import { scoreContactsForArticle } from "./article-relevance";
+import { generateStrategicInsight, ELIGIBLE_INSIGHT_TYPES } from "./llm-insight";
 
 interface Insight {
   type: string;
@@ -611,5 +612,45 @@ export async function refreshNudgesForPartner(partnerId: string) {
     await nudgeRepo.createMany(candidates);
   }
 
+  // Fire-and-forget: enrich nudges with strategic insights in the background
+  // so the refresh returns immediately and doesn't block briefing generation
+  enrichNudgesWithInsights(partnerId).catch((err) =>
+    console.error("[nudge-engine] Strategic insight generation failed:", err instanceof Error ? err.message : err),
+  );
+
   return candidates.length;
+}
+
+async function enrichNudgesWithInsights(partnerId: string) {
+  const createdNudges = await nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" });
+  const eligible = createdNudges.filter((n) => ELIGIBLE_INSIGHT_TYPES.has(n.ruleType));
+  if (eligible.length === 0) return;
+
+  const partner = await partnerRepo.findById(partnerId);
+  const partnerName = partner?.name ?? "Partner";
+
+  // Process in batches of 3 to avoid overwhelming the LLM API
+  const BATCH_SIZE = 3;
+  let enriched = 0;
+  let skipped = 0;
+  for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
+    const batch = eligible.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map(async (nudge) => {
+        try {
+          const meta = JSON.parse(nudge.metadata ?? "{}");
+          if (meta.strategicInsight) { skipped++; return; }
+          const insight = await generateStrategicInsight(nudge, meta.insights ?? [], partnerName);
+          if (insight) {
+            meta.strategicInsight = insight;
+            await nudgeRepo.updateMetadata(nudge.id, JSON.stringify(meta));
+            enriched++;
+          }
+        } catch {
+          // Individual insight failure should not affect other nudges
+        }
+      }),
+    );
+  }
+  console.log(`[nudge-engine] Strategic insights: ${enriched} enriched, ${skipped} already had insights, ${eligible.length} eligible`);
 }

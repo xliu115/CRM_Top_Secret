@@ -616,16 +616,27 @@ export async function POST(request: NextRequest) {
           const SKIP_LABEL_TYPES = new Set(["STALE_CONTACT", "FOLLOW_UP", "REPLY_NEEDED", "CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"]);
           const seenLabels = new Map<string, string | null>();
 
+          let allInsights: InsightData[] = [];
+          let hasStrategicNarrative = false;
+
           for (const nudge of nudges) {
             let insights: InsightData[] = [];
+            let strategicNarrative: string | null = null;
             try {
               const meta = JSON.parse(nudge.metadata ?? "{}");
               insights = meta?.insights ?? [];
+              strategicNarrative = meta?.strategicInsight?.narrative ?? null;
             } catch { /* ignore */ }
+            allInsights = allInsights.concat(insights);
 
-            const fragments = buildSummaryFragments(nudge, insights);
-            const md = fragmentsToMarkdown(fragments);
-            sections.push(md);
+            if (strategicNarrative) {
+              hasStrategicNarrative = true;
+              sections.push(strategicNarrative);
+            } else {
+              const fragments = buildSummaryFragments(nudge, insights);
+              const md = fragmentsToMarkdown(fragments);
+              sections.push(md);
+            }
 
             for (const ins of insights) {
               if (SKIP_LABEL_TYPES.has(ins.type)) continue;
@@ -658,8 +669,19 @@ export async function POST(request: NextRequest) {
           const primaryType = primary.ruleType;
           const typeAction = NUDGE_TYPE_QUICK_ACTION[primaryType] ?? { label: "Draft Email", queryPrefix: "Draft email to" };
 
+          // Use the suggestedAction label if available
+          let primaryActionLabel = typeAction.label;
+          let primaryActionQuery = `${typeAction.queryPrefix} ${contactName}`;
+          try {
+            const primaryMeta = JSON.parse(primary.metadata ?? "{}");
+            if (primaryMeta?.strategicInsight?.suggestedAction?.label) {
+              primaryActionLabel = primaryMeta.strategicInsight.suggestedAction.label;
+              primaryActionQuery = `${primaryMeta.strategicInsight.suggestedAction.label} for ${contactName}`;
+            }
+          } catch { /* ignore */ }
+
           const quickActions = [
-            { label: typeAction.label, query: `${typeAction.queryPrefix} ${contactName}` },
+            { label: primaryActionLabel, query: primaryActionQuery },
             { label: "Quick 360", query: `Quick 360 for ${contactName}` },
             { label: "Company 360", query: `Company 360 for ${companyName || contactName}` },
           ];
@@ -686,7 +708,7 @@ export async function POST(request: NextRequest) {
             {
               type: "action_bar",
               data: {
-                primary: { label: typeAction.label, query: `${typeAction.queryPrefix} ${contactName}`, icon: primaryIconMap[primaryType] ?? "mail" },
+                primary: { label: primaryActionLabel, query: primaryActionQuery, icon: primaryIconMap[primaryType] ?? "mail" },
                 secondary: [
                   { label: "Quick 360", query: `Quick 360 for ${contactName}`, icon: "search" },
                   { label: "Company 360", query: `Company 360 for ${companyName || contactName}`, icon: "briefcase" },
@@ -694,6 +716,21 @@ export async function POST(request: NextRequest) {
               },
             },
           ];
+
+          if (hasStrategicNarrative && allInsights.length > 0) {
+            blocks.push({
+              type: "nudge_evidence",
+              data: {
+                contactName,
+                insights: allInsights.map((ins) => ({
+                  type: ins.type,
+                  reason: ins.reason,
+                  signalContent: ins.signalContent,
+                  signalUrl: ins.signalUrl ?? undefined,
+                })),
+              },
+            } as ChatBlock);
+          }
 
           const fullMarkdown = sections.join("\n");
           const cleanAnswer = stripMarkers(fullMarkdown);

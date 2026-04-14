@@ -43,6 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
 import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay, parseArticleCampaignNudgeDisplay, stripMarkdown, extractInsightSnippet } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
+import { StrategicInsightBlock } from "@/components/nudges/strategic-insight-block";
 import { useStreamingTranscription } from "@/hooks/use-streaming-transcription";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -138,6 +139,20 @@ function parseInsights(metadata?: string | null): InsightData[] {
     const parsed = JSON.parse(metadata);
     return parsed?.insights ?? [];
   } catch { return []; }
+}
+
+function parseStrategicInsight(metadata?: string | null) {
+  if (!metadata) return undefined;
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed?.strategicInsight as {
+      narrative: string;
+      oneLiner: string;
+      suggestedAction: { label: string; context: string; emailAngle: string };
+      evidenceCitations: { claim: string; insightTypes: string[]; signalIds: string[]; sourceUrls: string[] }[];
+      generatedAt: string;
+    } | undefined;
+  } catch { return undefined; }
 }
 
 const NUDGE_PRIORITY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
@@ -952,6 +967,29 @@ export default function DashboardPage() {
             if (!cancelled && freshNudgesRes.ok) {
               const freshNudges: Nudge[] = await freshNudgesRes.json();
               setTopNudges(selectTopNudges(freshNudges));
+
+              // Auto-backfill strategic insights for any eligible nudges missing them
+              const ELIGIBLE = new Set([
+                "STALE_CONTACT", "JOB_CHANGE", "COMPANY_NEWS", "LINKEDIN_ACTIVITY",
+                "UPCOMING_EVENT", "EVENT_ATTENDED", "EVENT_REGISTERED", "ARTICLE_READ", "MEETING_PREP",
+              ]);
+              const needsBackfill = freshNudges.some((n: Nudge) => {
+                if (!ELIGIBLE.has(n.ruleType)) return false;
+                try { return !JSON.parse(n.metadata ?? "{}").strategicInsight; }
+                catch { return true; }
+              });
+              if (needsBackfill && !cancelled) {
+                fetch("/api/nudges/backfill-insights", { method: "POST" })
+                  .then(async () => {
+                    if (cancelled) return;
+                    const updatedRes = await fetch("/api/nudges?status=OPEN");
+                    if (updatedRes.ok) {
+                      const updated: Nudge[] = await updatedRes.json();
+                      if (!cancelled) setTopNudges(selectTopNudges(updated));
+                    }
+                  })
+                  .catch(() => {});
+              }
             }
           } catch {
             // Keep the initial nudges if refresh-fetch fails
@@ -1419,6 +1457,7 @@ export default function DashboardPage() {
                         const nudge = item.nudge;
                         const insights = parseInsights(nudge.metadata);
                         const fragments = buildSummaryFragments(nudge, insights);
+                        const strategic = parseStrategicInsight(nudge.metadata);
 
                         if (nudge.ruleType === "CAMPAIGN_APPROVAL") {
                           const camp = parseCampaignApprovalNudgeDisplay(nudge);
@@ -1534,20 +1573,22 @@ export default function DashboardPage() {
                                     <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300">Insights</span>
                                   </div>
                                   <div className="text-sm text-foreground/70 leading-relaxed">
-                                    <FragmentText fragments={fragments} />
+                                    <StrategicInsightBlock strategicInsight={strategic} insights={insights} nudge={nudge} />
                                   </div>
                                 </div>
 
                                 <div>
                                   <Link
                                     href={buildChatUrl({
-                                      q: `Nudge summary for ${nudge.contact.name}`,
+                                      q: strategic?.suggestedAction?.label
+                                        ? `${strategic.suggestedAction.label} for ${nudge.contact.name}`
+                                        : `Nudge summary for ${nudge.contact.name}`,
                                       nudgeId: nudge.id,
                                       contactId: nudge.contact.id,
                                     })}
                                     className="inline-flex items-center text-xs font-medium text-primary hover:underline"
                                   >
-                                    View summary
+                                    {strategic?.suggestedAction?.label ?? "View summary"}
                                     <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
                                   </Link>
                                 </div>
@@ -1607,20 +1648,22 @@ export default function DashboardPage() {
                                     <span className="text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-300">Insights</span>
                                   </div>
                                   <div className="text-sm text-foreground/70 leading-relaxed">
-                                    <FragmentText fragments={fragments} />
+                                    <StrategicInsightBlock strategicInsight={strategic} insights={insights} nudge={nudge} />
                                   </div>
                                 </div>
 
                                 <div>
                                   <Link
                                     href={buildChatUrl({
-                                      q: `Nudge summary for ${nudge.contact.name}`,
+                                      q: strategic?.suggestedAction?.label
+                                        ? `${strategic.suggestedAction.label} for ${nudge.contact.name}`
+                                        : `Nudge summary for ${nudge.contact.name}`,
                                       nudgeId: nudge.id,
                                       contactId: nudge.contact.id,
                                     })}
                                     className="inline-flex items-center text-xs font-medium text-primary hover:underline"
                                   >
-                                    View summary
+                                    {strategic?.suggestedAction?.label ?? "View summary"}
                                     <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
                                   </Link>
                                 </div>
@@ -1719,20 +1762,26 @@ export default function DashboardPage() {
                                   <span className="text-xs font-bold uppercase tracking-wider text-primary">Insights</span>
                                 </div>
                                 <div className="text-sm text-foreground/70 leading-relaxed">
-                                  <FragmentText fragments={fragments} />
+                                  <StrategicInsightBlock
+                                    strategicInsight={strategic}
+                                    insights={insights}
+                                    nudge={nudge}
+                                  />
                                 </div>
                               </div>
 
                               <div>
                                 <Link
                                   href={buildChatUrl({
-                                    q: `${RULE_TYPE_CHAT_ACTION[nudge.ruleType] ?? "Nudge summary for"} ${nudge.contact.name}`,
+                                    q: strategic?.suggestedAction?.label
+                                      ? `${strategic.suggestedAction.label} for ${nudge.contact.name}`
+                                      : `${RULE_TYPE_CHAT_ACTION[nudge.ruleType] ?? "Nudge summary for"} ${nudge.contact.name}`,
                                     nudgeId: nudge.id,
                                     contactId: nudge.contact.id,
                                   })}
                                   className="inline-flex items-center text-xs font-medium text-primary hover:underline"
                                 >
-                                  Take action
+                                  {strategic?.suggestedAction?.label ?? "Take action"}
                                   <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
                                 </Link>
                               </div>

@@ -78,4 +78,11 @@ export class PrismaNudgeRepository implements INudgeRepository {
     });
     return result.count;
   }
+
+  async updateMetadata(id: string, metadata: string) {
+    await prisma.nudge.update({
+      where: { id },
+      data: { metadata },
+    });
+  }
 }

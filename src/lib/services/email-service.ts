@@ -86,6 +86,15 @@ function parseInsights(nudge: NudgeWithRelations): InsightData[] {
 }
 
 function buildSummaryHtml(nudge: NudgeWithRelations): string {
+  try {
+    const meta = JSON.parse(nudge.metadata ?? "{}");
+    if (meta?.strategicInsight?.narrative) {
+      return meta.strategicInsight.narrative
+        .replace(/\*\*([^*]+)\*\*/g, `<strong style="color: ${MDS.deepBlue};">$1</strong>`)
+        .replace(/\n/g, "<br/>");
+    }
+  } catch { /* fall through to original logic */ }
+
   const insights = parseInsights(nudge);
   const fragments = buildSummaryFragments(
     { ruleType: nudge.ruleType, reason: nudge.reason, contact: nudge.contact },
@@ -105,10 +114,24 @@ function buildSummaryHtml(nudge: NudgeWithRelations): string {
 function buildNudgeRow(nudge: NudgeWithRelations, appUrl: string, isLast: boolean): string {
   const ps = priorityStyle(nudge.priority);
   const typeLabel = ruleTypeLabel(nudge.ruleType);
-  const ctaLabel = ruleTypeCta(nudge.ruleType);
-  const nudgesUrl = `${appUrl}/nudges`;
+  let ctaLabel = ruleTypeCta(nudge.ruleType);
   const borderBottom = isLast ? "" : `border-bottom: 1px solid ${MDS.border};`;
   const summaryText = buildSummaryHtml(nudge);
+
+  // Use suggestedAction.label for the CTA and deep-link to chat
+  let ctaHref = `${appUrl}/nudges`;
+  try {
+    const meta = JSON.parse(nudge.metadata ?? "{}");
+    if (meta?.strategicInsight?.suggestedAction?.label) {
+      ctaLabel = meta.strategicInsight.suggestedAction.label;
+      const sp = new URLSearchParams({
+        q: ctaLabel,
+        nudgeId: nudge.id,
+        contactId: nudge.contactId,
+      });
+      ctaHref = `${appUrl}/chat?${sp.toString()}`;
+    }
+  } catch { /* ignore */ }
 
   return `
     <tr>
@@ -127,7 +150,7 @@ function buildNudgeRow(nudge: NudgeWithRelations, appUrl: string, isLast: boolea
                 <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${MDS.electricBlue}; margin-bottom: 6px;">&#10024; AI Summary</div>
                 <div style="font-size: 13px; color: ${MDS.text}; line-height: 1.55;">${summaryText}</div>
               </div>
-              <a href="${nudgesUrl}" style="display: inline-block; padding: 7px 20px; background: ${MDS.electricBlue}; color: ${MDS.white}; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 3px; letter-spacing: 0.2px;">${ctaLabel}</a>
+              <a href="${ctaHref}" style="display: inline-block; padding: 7px 20px; background: ${MDS.electricBlue}; color: ${MDS.white}; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 3px; letter-spacing: 0.2px;">${escHtml(ctaLabel)}</a>
             </td>
           </tr>
         </table>

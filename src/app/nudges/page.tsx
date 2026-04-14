@@ -11,6 +11,8 @@ import {
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { buildSummaryFragments, parseCampaignApprovalNudgeDisplay, parseArticleCampaignNudgeDisplay } from "@/lib/utils/nudge-summary";
 import { FragmentText } from "@/components/ui/fragment-text";
+import { StrategicInsightBlock } from "@/components/nudges/strategic-insight-block";
+import { SuggestedActionButton } from "@/components/nudges/suggested-action-button";
 import { Button } from "@/components/ui/button";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -54,10 +56,28 @@ type InsightData = {
   personName?: string;
 };
 
+type StrategicInsightData = {
+  narrative: string;
+  oneLiner: string;
+  suggestedAction: {
+    label: string;
+    context: string;
+    emailAngle: string;
+  };
+  evidenceCitations: {
+    claim: string;
+    insightTypes: string[];
+    signalIds: string[];
+    sourceUrls: string[];
+  }[];
+  generatedAt: string;
+};
+
 type NudgeMetadata = {
   insights?: InsightData[];
   relatedPartners?: { partnerId: string; partnerName: string }[];
   personName?: string;
+  strategicInsight?: StrategicInsightData;
 };
 
 function parseMetadata(metadata?: string | null): NudgeMetadata | null {
@@ -654,11 +674,15 @@ function NudgeCard({
             <span className="text-xs font-bold uppercase tracking-wider text-primary">Insights</span>
           </div>
           <div className="text-sm text-foreground/70 leading-relaxed">
-            <NudgeSummary nudge={nudge} insights={insights} />
+            <StrategicInsightBlock
+              strategicInsight={meta?.strategicInsight}
+              insights={insights}
+              nudge={nudge}
+            />
           </div>
         </div>
 
-        {insights.length > 0 && (() => {
+        {!meta?.strategicInsight && insights.length > 0 && (() => {
           const seen = new Map<string, string | null>();
           for (const ins of insights) {
             if (ins.type === "STALE_CONTACT") continue;
@@ -717,10 +741,13 @@ function NudgeCard({
               </Link>
             </Button>
           ) : (
-            <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} onClick={() => setOpenPanel(openPanel === "email" ? null : "email")}>
-              <CtaIcon className="h-4 w-4" />
-              {hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
-            </Button>
+            <SuggestedActionButton
+              suggestedAction={meta?.strategicInsight?.suggestedAction}
+              fallbackLabel={hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
+              fallbackIcon={CtaIcon}
+              variant={hasMeetingPrep ? "outline" : "default"}
+              onClick={() => setOpenPanel(openPanel === "email" ? null : "email")}
+            />
           )}
 
           {nudge.status === "OPEN" && (
@@ -764,7 +791,10 @@ export default function NudgesPage() {
   const [nudges, setNudges] = useState<Nudge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const backfillTriggeredRef = useRef(false);
 
   const fetchNudges = useCallback(async () => {
     setLoading(true);
@@ -777,14 +807,39 @@ export default function NudgesPage() {
       if (!res.ok) throw new Error("Failed to fetch nudges");
       const data = await res.json();
       setNudges(data);
+      return data as Nudge[];
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
+      return [] as Nudge[];
     } finally {
       setLoading(false);
     }
   }, [statusFilter, priorityFilter]);
 
-  useEffect(() => { fetchNudges(); }, [fetchNudges]);
+  useEffect(() => {
+    fetchNudges().then((loaded) => {
+      if (backfillTriggeredRef.current) return;
+      const ELIGIBLE = new Set([
+        "STALE_CONTACT", "JOB_CHANGE", "COMPANY_NEWS", "LINKEDIN_ACTIVITY",
+        "UPCOMING_EVENT", "EVENT_ATTENDED", "EVENT_REGISTERED", "ARTICLE_READ", "MEETING_PREP",
+      ]);
+      const needsBackfill = loaded.some((n: Nudge) => {
+        if (!ELIGIBLE.has(n.ruleType)) return false;
+        try {
+          const meta = JSON.parse(n.metadata ?? "{}");
+          return !meta.strategicInsight;
+        } catch { return true; }
+      });
+      if (needsBackfill) {
+        backfillTriggeredRef.current = true;
+        setBackfilling(true);
+        fetch("/api/nudges/backfill-insights", { method: "POST" })
+          .then(() => fetchNudges())
+          .catch(() => {})
+          .finally(() => setBackfilling(false));
+      }
+    });
+  }, [fetchNudges]);
 
   async function handleRefreshNudges() {
     setRefreshing(true);
@@ -796,6 +851,19 @@ export default function NudgesPage() {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function handleBackfillInsights() {
+    setBackfilling(true);
+    try {
+      const res = await fetch("/api/nudges/backfill-insights", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to generate insights");
+      await fetchNudges();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setBackfilling(false);
     }
   }
 
@@ -959,10 +1027,14 @@ export default function NudgesPage() {
                 </div>
               )}
 
-              <div className="border-t border-border pt-3">
-                <Button variant="ghost" size="sm" onClick={handleRefreshNudges} disabled={refreshing} className="text-muted-foreground-subtle">
+              <div className="border-t border-border pt-3 flex flex-wrap gap-2">
+                <Button variant="ghost" size="sm" onClick={handleRefreshNudges} disabled={refreshing || backfilling} className="text-muted-foreground-subtle">
                   <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
                   {refreshing ? "Refreshing..." : "Refresh nudges now"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleBackfillInsights} disabled={backfilling || refreshing} className="text-muted-foreground-subtle">
+                  <Sparkles className={`h-3.5 w-3.5 ${backfilling ? "animate-pulse" : ""}`} />
+                  {backfilling ? "Generating insights..." : "Generate AI insights"}
                 </Button>
               </div>
             </div>
@@ -1004,6 +1076,13 @@ export default function NudgesPage() {
             </div>
           )}
         </div>
+
+        {backfilling && (
+          <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm text-primary">
+            <Sparkles className="h-4 w-4 animate-pulse" />
+            Generating AI insights for your nudges&hellip; Cards will update automatically.
+          </div>
+        )}
 
         {/* Nudge list */}
         <div className="space-y-4">

@@ -54,10 +54,25 @@ function buildDigestSms(
   for (const n of displayed) {
     const dot = PRIORITY_LABEL[n.priority] ?? "⚪";
     const tag = RULE_TYPE_LABEL[n.ruleType] ?? "Nudge";
-    const reason =
-      n.reason.length > 80 ? n.reason.slice(0, 77) + "..." : n.reason;
+
+    let reasonText = n.reason;
+    let actionHint = "";
+    try {
+      const meta = JSON.parse(n.metadata ?? "{}");
+      if (meta?.strategicInsight?.oneLiner) {
+        reasonText = meta.strategicInsight.oneLiner;
+      }
+      if (meta?.strategicInsight?.suggestedAction?.emailAngle) {
+        actionHint = meta.strategicInsight.suggestedAction.emailAngle;
+      }
+    } catch { /* ignore */ }
+
+    const reason = reasonText.length > 80 ? reasonText.slice(0, 77) + "..." : reasonText;
     lines.push(`${dot} ${n.contact.name} (${tag})`);
     lines.push(`   ${reason}`);
+    if (actionHint) {
+      lines.push(`   → ${actionHint}`);
+    }
   }
 
   if (remaining > 0) {

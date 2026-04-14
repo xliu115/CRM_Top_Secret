@@ -10,6 +10,14 @@ import { prisma } from "@/lib/db/prisma";
 import { formatDateForLLM } from "@/lib/utils/format-date";
 import { tavily } from "@tavily/core";
 
+function getNudgeNarrative(metadata: string | null | undefined): string | null {
+  if (!metadata) return null;
+  try {
+    const meta = JSON.parse(metadata);
+    return meta?.strategicInsight?.narrative ?? null;
+  } catch { return null; }
+}
+
 export interface RetrievedDoc {
   type: string;
   content: string;
@@ -97,9 +105,10 @@ export async function retrieveContext(
       n.ruleType === "STALE_CONTACT"
     );
     for (const n of (staleNudges.length > 0 ? staleNudges : allNudges).slice(0, 8)) {
+      const narrative = getNudgeNarrative(n.metadata);
       docs.push({
         type: "Nudge",
-        content: `${n.contact.name} (${n.contact.company.name}): ${n.reason}`,
+        content: `${n.contact.name} (${n.contact.company.name}): ${narrative ?? n.reason}`,
         date: formatDateForLLM(new Date(n.createdAt)),
         id: n.id,
         contactId: n.contact.id,
@@ -167,9 +176,10 @@ export async function retrieveContext(
       )
     );
     for (const n of relevantNudges.slice(0, 3)) {
+      const narrative = getNudgeNarrative(n.metadata);
       docs.push({
         type: "Nudge",
-        content: `${n.contact.name} (${n.contact.company.name}): ${n.reason}`,
+        content: `${n.contact.name} (${n.contact.company.name}): ${narrative ?? n.reason}`,
         date: formatDateForLLM(new Date(n.createdAt)),
         id: n.id,
         contactId: n.contact.id,
