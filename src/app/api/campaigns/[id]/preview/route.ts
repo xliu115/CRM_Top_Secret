@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { campaignRepo, interactionRepo } from "@/lib/repositories";
 import { personalizeCampaignEmail } from "@/lib/services/llm-campaign";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 import { buildCampaignEmailHtml } from "@/lib/services/email-service";
 
 export async function POST(
@@ -49,7 +50,7 @@ export async function POST(
           .slice(0, 5)
           .map(
             (i) =>
-              `${i.type} (${i.date.toISOString().split("T")[0]}): ${i.summary}`
+              `${i.type} (${formatDateForLLM(i.date)}): ${i.summary}`
           );
       }
 

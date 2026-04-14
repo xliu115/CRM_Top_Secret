@@ -7,6 +7,7 @@ import {
   partnerRepo,
 } from "@/lib/repositories";
 import { generateMeetingBrief } from "@/lib/services/llm-service";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 
 export async function POST(
   request: NextRequest,
@@ -47,7 +48,7 @@ export async function POST(
         .slice(0, 3)
         .map(
           (i) =>
-            `${i.type} (${i.date.toISOString().split("T")[0]}): ${i.summary}`
+            `${i.type} (${formatDateForLLM(i.date)}): ${i.summary}`
         );
       const signals = signalsByContact
         .filter((s) => s.contactId === contact.id)

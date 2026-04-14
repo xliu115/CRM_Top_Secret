@@ -3,6 +3,7 @@ import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { prisma } from "@/lib/db/prisma";
 import { generateEmail } from "@/lib/services/llm-service";
 import { interactionRepo } from "@/lib/repositories";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 
 const RULE_TYPE_CONTEXT: Record<string, string> = {
   STALE_CONTACT: "This is a check-in email to reconnect with a contact you haven't spoken to in a while.",
@@ -40,7 +41,7 @@ export async function POST(
 
     const interactions = await interactionRepo.findByContactId(nudge.contactId);
     const recentInteractions = interactions.slice(0, 5).map(
-      (i) => `${i.type} on ${new Date(i.date).toLocaleDateString()}: ${i.summary}`
+      (i) => `${i.type} on ${formatDateForLLM(new Date(i.date))}: ${i.summary}`
     );
 
     const signals: string[] = [];

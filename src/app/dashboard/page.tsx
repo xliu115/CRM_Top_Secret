@@ -1742,6 +1742,17 @@ export default function DashboardPage() {
                       })}
                     </div>
                   )}
+                  {feedItems.length > 0 && (
+                    <div className="pt-2 border-t border-border mt-4">
+                      <Link
+                        href="/nudges"
+                        className="inline-flex items-center text-sm font-medium text-primary hover:underline"
+                      >
+                        View more nudges
+                        <ChevronRight className="ml-0.5 h-4 w-4" />
+                      </Link>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

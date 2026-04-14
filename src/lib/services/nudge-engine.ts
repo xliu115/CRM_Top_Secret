@@ -1,5 +1,6 @@
 import { contactRepo, interactionRepo, signalRepo, nudgeRepo, meetingRepo, engagementRepo, nudgeRuleConfigRepo, sequenceRepo } from "@/lib/repositories";
 import { differenceInDays, subDays } from "date-fns";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 import { prisma } from "@/lib/db/prisma";
 import { getWaitingDays, buildSequenceNudgeReason, buildReplyNeededReason } from "./cadence-engine";
 import { scoreContactsForArticle } from "./article-relevance";
@@ -391,7 +392,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
     const lastInteractionCtx = lastNonEmailInteraction
       ? {
           type: lastNonEmailInteraction.type,
-          date: new Date(lastNonEmailInteraction.date).toISOString(),
+          date: formatDateForLLM(new Date(lastNonEmailInteraction.date)),
           summary: lastNonEmailInteraction.summary!,
         }
       : undefined;

@@ -7,6 +7,7 @@ import {
   partnerRepo,
 } from "@/lib/repositories";
 import { generateEmail } from "@/lib/services/llm-service";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 
 export async function POST(
   request: NextRequest,
@@ -50,7 +51,7 @@ export async function POST(
       .slice(0, 5)
       .map(
         (i) =>
-          `${i.type} (${i.date.toISOString().split("T")[0]}): ${i.summary}`
+          `${i.type} (${formatDateForLLM(i.date)}): ${i.summary}`
       );
     const signalStrings = signals
       .slice(0, 5)

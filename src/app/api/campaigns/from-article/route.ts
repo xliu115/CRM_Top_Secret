@@ -4,6 +4,7 @@ import { campaignRepo, contactRepo, interactionRepo } from "@/lib/repositories";
 import { prisma } from "@/lib/db/prisma";
 import { generateArticleCampaignEmail, personalizeCampaignEmail } from "@/lib/services/llm-campaign";
 import { scoreContactsForArticle } from "@/lib/services/article-relevance";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 
 export async function POST(request: NextRequest) {
   try {
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       const interactions = await interactionRepo.findByContactId(r.contact.id);
       const recentInteractions = interactions
         .slice(0, 5)
-        .map((i) => `${i.type} (${i.date.toISOString().split("T")[0]}): ${i.summary}`);
+        .map((i) => `${i.type} (${formatDateForLLM(i.date)}): ${i.summary}`);
 
       const personalizedBody = await personalizeCampaignEmail({
         template: emailDraft.body,

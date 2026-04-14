@@ -3,6 +3,7 @@ import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { prisma } from "@/lib/db/prisma";
 import { generateMeetingBrief } from "@/lib/services/llm-service";
 import { interactionRepo } from "@/lib/repositories";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 
 export async function POST(
   request: NextRequest,
@@ -57,7 +58,7 @@ export async function POST(
       attendeeContacts.map(async (contact) => {
         const interactions = await interactionRepo.findByContactId(contact.id);
         const recentInteractions = interactions.slice(0, 5).map(
-          (i) => `${i.type} on ${new Date(i.date).toLocaleDateString()}: ${i.summary}`
+          (i) => `${i.type} on ${formatDateForLLM(new Date(i.date))}: ${i.summary}`
         );
 
         const signals = await prisma.externalSignal.findMany({

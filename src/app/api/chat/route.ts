@@ -18,6 +18,8 @@ import {
   type InsightData,
   type SentenceFragment,
 } from "@/lib/utils/nudge-summary";
+import type { ChatBlock } from "@/lib/types/chat-blocks";
+import { formatDateForLLM, formatDateTimeForLLM } from "@/lib/utils/format-date";
 
 const FULL_CONTACT_360_INTENT =
   /\b(full\s+contact\s*360)\b/i;
@@ -26,7 +28,7 @@ const QUICK_360_INTENT =
 const COMPANY_360_INTENT =
   /\b(company ?360|company dossier|tell me about (?:the )?company|company intel(?:ligence)?)\b/i;
 const DRAFT_EMAIL_INTENT =
-  /\b(draft (?:an? )?(?:follow[- ]?up |reply )?email|write (?:an? )?(?:follow[- ]?up |reply )?email|email draft|compose (?:an? )?(?:follow[- ]?up |reply )?email|draft (?:a )?(?:follow[- ]?up|reply) to)\b/i;
+  /\b(draft (?:an? )?(?:[\w-]+ ){0,4}email|write (?:an? )?(?:[\w-]+ ){0,4}email|email draft|compose (?:an? )?(?:[\w-]+ ){0,4}email|draft (?:a )?(?:follow[- ]?up|reply|check[- ]?in|thank[- ]?you|congrat\w*|intro(?:duction)?) to)\b/i;
 const SHARE_DOSSIER_INTENT =
   /\b(share (?:the )?dossier|share (?:the )?360|send (?:the )?dossier)\b/i;
 const MEETING_PREP_INTENT =
@@ -34,13 +36,35 @@ const MEETING_PREP_INTENT =
 const MEETINGS_TODAY_INTENT =
   /\b((?:show|list|what are)\s+(?:my\s+)?meetings?\s+(?:today|this week|upcoming)|my meetings?\s+today|today'?s?\s+meetings?|upcoming meetings?)\b/i;
 const DAILY_PRIORITIES_INTENT =
-  /\b(what should I\s+(?:do|focus on|prioritize)|my priorities|today'?s?\s+(?:priorities|plan|agenda)|plan (?:my|for) (?:today|the day))\b/i;
-const NEEDS_ATTENTION_INTENT =
-  /\b((?:who|which)\s+(?:contacts?|clients?|people)\s+need\s+(?:attention|outreach|follow.?up)|need(?:s|ing)?\s+attention|at.?risk\s+(?:contacts?|clients?|relationships?))\b/i;
+  /\b(what should I\s+(?:do|focus on|prioritize)|(?:what (?:are|do I need to do)|my)\s+(?:priorities|today)|today'?s?\s+(?:priorities|plan|agenda)|plan (?:my day|for (?:today|the day))|(?:help me )?plan (?:my )?(?:today|day))\b/i;
+const NEEDS_ATTENTION_INTENT = new RegExp(
+  [
+    "(?:who|which)\\s+(?:contacts?|clients?|people)\\s+need\\s+(?:attention|outreach|follow.?up)",
+    "(?:who|which)\\s+(?:contacts?|clients?|people)\\s+haven'?t\\s+I\\s+(?:spoken|talked|reached|contacted)",
+    "(?:who|which)\\s+(?:contacts?|clients?|people)\\s+are\\s+(?:stale|cold|overdue|at.?risk)",
+    "(?:who|which)\\s+(?:contacts?|clients?|people)\\s+(?:I\\s+)?haven'?t\\s+(?:spoken|talked|reached)",
+    "who\\s+(?:needs?|is\\s+needing)\\s+(?:attention|outreach|follow.?up)",
+    "who\\s+haven'?t\\s+I\\s+(?:spoken|talked|reached|contacted)\\s+(?:to\\s+)?(?:in|for|since|recently|lately)?",
+    "contacts?\\s+(?:I\\s+)?haven'?t\\s+(?:spoken|talked|reached)\\s+(?:to|out)",
+    "contacts?\\s+(?:I\\s+)?(?:haven'?t|not)\\s+(?:spoken|talked|reached|contacted)\\s+(?:to\\s+)?(?:in|for|since|recently|lately)",
+    "need(?:s|ing)?\\s+(?:attention|follow.?up)",
+    "at.?risk\\s+(?:contacts?|clients?|relationships?)",
+    "stale\\s+contacts?",
+    "overdue\\s+(?:contacts?|follow.?ups?)",
+    "contacts?\\s+going\\s+cold",
+  ].join("|"),
+  "i",
+);
 const NUDGE_SUMMARY_INTENT =
   /\b(nudge summary|show (?:me )?(?:the )?(?:nudge|evidence|summary) for|why (?:should I |do I need to )?(?:reach out|contact|follow up)|outreach summary)\b/i;
+const FIRM_RELATIONSHIPS_INTENT =
+  /\b(who (?:else )?(?:knows|covers|has (?:a )?relationship)|(?:firm|shared|cross)[- ](?:relationships?|coverage)|other partners (?:at|for|with)|introductions? (?:to|for)|who knows my contacts?)\b/i;
+const CLIENT_UPDATES_INTENT =
+  /\b((?:what'?s|any) (?:the )?(?:latest|new|updates?|news) (?:with|on|about|for) (?:my )?(?:top |key )?(?:clients?|contacts?|accounts?)|(?:client|contact|account) (?:updates?|activity|news)|recent (?:news|activity|updates?) (?:on|about|for) (?:my )?(?:clients?|contacts?)|top clients? (?:updates?|news))\b/i;
+const WEEKLY_SUMMARY_INTENT =
+  /\b(summarize (?:my )?(?:week|past week)|weekly (?:recap|summary|review|report)|(?:my )?week in review|(?:what (?:happened|did I do)|recap (?:of )?(?:the |my )?(?:past |this )?week)|(?:my|this) (?:past )?week(?:'?s)? (?:summary|recap))\b/i;
 
-const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT, NUDGE_SUMMARY_INTENT];
+const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT, NUDGE_SUMMARY_INTENT, FIRM_RELATIONSHIPS_INTENT, CLIENT_UPDATES_INTENT, WEEKLY_SUMMARY_INTENT];
 
 function extractNameFromQuery(query: string): string {
   let cleaned = query;
@@ -92,25 +116,38 @@ export async function POST(request: NextRequest) {
       return null;
     });
 
-    if (classified && classified.confidence >= 0.5) {
+    // Regex always runs — produces a definitive signal when pattern matches.
+    // Order matters: more specific intents checked before broader ones (e.g., weekly_summary before quick_360 to prevent "recap" collision).
+    let regexIntent: IntentType = "general_question";
+    if (FULL_CONTACT_360_INTENT.test(message)) regexIntent = "full_360";
+    else if (WEEKLY_SUMMARY_INTENT.test(message)) regexIntent = "weekly_summary";
+    else if (QUICK_360_INTENT.test(message)) regexIntent = "quick_360";
+    else if (COMPANY_360_INTENT.test(message)) regexIntent = "company_360";
+    else if (DRAFT_EMAIL_INTENT.test(message)) regexIntent = "draft_email";
+    else if (SHARE_DOSSIER_INTENT.test(message)) regexIntent = "share_dossier";
+    else if (MEETING_PREP_INTENT.test(message)) regexIntent = "meeting_prep";
+    else if (MEETINGS_TODAY_INTENT.test(message)) regexIntent = "meetings_today";
+    else if (DAILY_PRIORITIES_INTENT.test(message)) regexIntent = "daily_priorities";
+    else if (NEEDS_ATTENTION_INTENT.test(message)) regexIntent = "needs_attention";
+    else if (NUDGE_SUMMARY_INTENT.test(message)) regexIntent = "nudge_summary";
+    else if (FIRM_RELATIONSHIPS_INTENT.test(message)) regexIntent = "firm_relationships";
+    else if (CLIENT_UPDATES_INTENT.test(message)) regexIntent = "client_updates";
+
+    if (classified && classified.confidence >= 0.5 && classified.intent !== "general_question") {
       detectedIntent = classified.intent;
       detectedEntity = classified.entity;
-    } else {
-      // Regex fallback
-      if (FULL_CONTACT_360_INTENT.test(message)) detectedIntent = "full_360";
-      else if (QUICK_360_INTENT.test(message)) detectedIntent = "quick_360";
-      else if (COMPANY_360_INTENT.test(message)) detectedIntent = "company_360";
-      else if (DRAFT_EMAIL_INTENT.test(message)) detectedIntent = "draft_email";
-      else if (SHARE_DOSSIER_INTENT.test(message)) detectedIntent = "share_dossier";
-      else if (MEETING_PREP_INTENT.test(message)) detectedIntent = "meeting_prep";
-      else if (MEETINGS_TODAY_INTENT.test(message)) detectedIntent = "meetings_today";
-      else if (DAILY_PRIORITIES_INTENT.test(message)) detectedIntent = "daily_priorities";
-      else if (NEEDS_ATTENTION_INTENT.test(message)) detectedIntent = "needs_attention";
-      else if (NUDGE_SUMMARY_INTENT.test(message)) detectedIntent = "nudge_summary";
+    } else if (regexIntent !== "general_question") {
+      detectedIntent = regexIntent;
+      detectedEntity = extractNameFromQuery(message);
+    } else if (classified && classified.confidence >= 0.5) {
+      detectedIntent = classified.intent;
+      detectedEntity = classified.entity;
+    }
 
-      if (detectedIntent !== "general_question") {
-        detectedEntity = extractNameFromQuery(message);
-      }
+    // Regex override: if regex matched a specific intent but LLM said general_question, trust the regex
+    if (detectedIntent === "general_question" && regexIntent !== "general_question") {
+      detectedIntent = regexIntent;
+      detectedEntity = detectedEntity || extractNameFromQuery(message);
     }
 
     const isMeetingPrep = detectedIntent === "meeting_prep";
@@ -124,6 +161,9 @@ export async function POST(request: NextRequest) {
     const isDraftEmail = detectedIntent === "draft_email";
     const isDraftNote = detectedIntent === "draft_note";
     const isShareDossier = detectedIntent === "share_dossier";
+    const isFirmRelationships = detectedIntent === "firm_relationships";
+    const isClientUpdates = detectedIntent === "client_updates";
+    const isWeeklySummary = detectedIntent === "weekly_summary";
 
     // ── Meeting Prep ─────────────────────────────────────────────────
     if (isMeetingPrep) {
@@ -160,7 +200,7 @@ export async function POST(request: NextRequest) {
               recentInteractions: interactionsByContact
                 .filter((i) => i.contactId === c.id)
                 .slice(0, 3)
-                .map((i) => `${i.type} (${i.date.toISOString().split("T")[0]}): ${i.summary}`),
+                .map((i) => `${i.type} (${formatDateForLLM(i.date)}): ${i.summary}`),
               signals: signalsByContact
                 .filter((s) => s.contactId === c.id)
                 .slice(0, 3)
@@ -192,7 +232,34 @@ export async function POST(request: NextRequest) {
               ])}-->`
             ).slice(0, 1),
           ].filter(Boolean).join("\n\n");
-          return NextResponse.json({ answer: md, sources: [] });
+
+          const meetingBlocks: ChatBlock[] = [
+            {
+              type: "meeting_card",
+              data: {
+                title: match.title,
+                startTime: new Date(match.startTime).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+                attendees: match.attendees.map((a) => ({ name: a.contact.name, title: a.contact.title ?? undefined })),
+                meetingId: match.id,
+                purpose: match.purpose ?? undefined,
+              },
+            },
+          ];
+          if (match.attendees.length > 0) {
+            const firstAttendee = match.attendees[0].contact.name;
+            meetingBlocks.push({
+              type: "action_bar",
+              data: {
+                primary: { label: `Draft Email to ${firstAttendee}`, query: `Draft email to ${firstAttendee}`, icon: "mail" },
+                secondary: match.attendees.slice(1, 4).map((a) => ({
+                  label: `Email ${a.contact.name}`,
+                  query: `Draft email to ${a.contact.name}`,
+                  icon: "mail",
+                })),
+              },
+            });
+          }
+          return NextResponse.json({ answer: stripMarkers(md), sources: [], blocks: meetingBlocks });
         }
 
         return NextResponse.json({
@@ -239,7 +306,30 @@ export async function POST(request: NextRequest) {
           "",
           `<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`,
         ].join("\n\n");
-        return NextResponse.json({ answer: md, sources: [] });
+
+        const meetingBlocks: ChatBlock[] = meetings.slice(0, 10).map((m) => ({
+          type: "meeting_card" as const,
+          data: {
+            title: m.title,
+            startTime: new Date(m.startTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+            attendees: m.attendees.map((a) => ({ name: a.contact.name, title: a.contact.title ?? undefined })),
+            meetingId: m.id,
+            purpose: m.purpose ?? undefined,
+          },
+        }));
+        meetingBlocks.push({
+          type: "action_bar",
+          data: {
+            primary: {
+              label: quickActions[0]?.label ?? "Prep for meeting",
+              query: quickActions[0]?.query ?? "",
+              icon: "calendar",
+            },
+            secondary: quickActions.slice(1).map((qa) => ({ label: qa.label, query: qa.query, icon: "calendar" })),
+          },
+        });
+        const cleanMeetingAnswer = `## Your Upcoming Meetings (${meetings.length})`;
+        return NextResponse.json({ answer: cleanMeetingAnswer, sources: [], blocks: meetingBlocks });
       } catch (err) {
         console.error("[chat] meetings today intent failed:", err);
       }
@@ -322,7 +412,60 @@ export async function POST(request: NextRequest) {
           sections.push(`<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`);
         }
 
-        return NextResponse.json({ answer: sections.join("\n"), sources: [] });
+        const priorityBlocks: ChatBlock[] = [];
+        if (staleContacts.length > 0) {
+          priorityBlocks.push({
+            type: "stale_contacts_list",
+            data: {
+              contacts: staleContacts.map((c) => {
+                const lastDate = c.interactions[0]?.date;
+                const days = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : 30;
+                return {
+                  name: c.name,
+                  company: c.company?.name ?? "",
+                  contactId: c.id,
+                  daysSince: days,
+                };
+              }),
+            },
+          });
+        }
+        priorityBlocks.push({
+          type: "action_bar",
+          data: {
+            primary: {
+              label: quickActions[0]?.label ?? "Who needs attention?",
+              query: quickActions[0]?.query ?? "Which contacts need attention?",
+              icon: quickActions[0]?.label?.startsWith("Prep") ? "calendar" : "search",
+            },
+            secondary: quickActions.slice(1).map((qa) => ({ label: qa.label, query: qa.query, icon: "search" })),
+          },
+        });
+
+        const cleanSections: string[] = [`## Your Day at a Glance`, ""];
+        if (todayMeetings.length > 0) {
+          cleanSections.push(`### Meetings Today (${todayMeetings.length})`);
+          todayMeetings.forEach((m) => {
+            const time = new Date(m.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+            const names = m.attendees.map((a) => a.contact.name).join(", ");
+            cleanSections.push(`- **${time}** — ${m.title} *(${names})*`);
+          });
+          cleanSections.push("");
+        }
+        if (criticalNudges.length > 0) {
+          cleanSections.push(`### Priority Actions (${criticalNudges.length})`);
+          criticalNudges.slice(0, 5).forEach((n) => {
+            cleanSections.push(`- **${n.contact.name}** (${n.contact.company?.name ?? ""}): ${n.reason}`);
+          });
+          cleanSections.push("");
+        }
+        if (staleContacts.length > 0) {
+          cleanSections.push(`### Relationships Going Cold`);
+        }
+        if (todayMeetings.length === 0 && criticalNudges.length === 0 && staleContacts.length === 0) {
+          cleanSections.push("Your slate looks clear today. A great time for proactive outreach or strategic planning!");
+        }
+        return NextResponse.json({ answer: cleanSections.join("\n"), sources: [], blocks: priorityBlocks });
       } catch (err) {
         console.error("[chat] daily priorities intent failed:", err);
       }
@@ -394,7 +537,39 @@ export async function POST(request: NextRequest) {
           sections.push(`<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`);
         }
 
-        return NextResponse.json({ answer: sections.join("\n"), sources: [] });
+        const attentionBlocks: ChatBlock[] = [];
+        const staleListItems = additionalStale.map((c) => {
+          const lastDate = c.interactions[0]?.date;
+          const days = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : 14;
+          const signal = c.signals[0]?.content?.slice(0, 60);
+          return { name: c.name, company: c.company?.name ?? "", contactId: c.id, daysSince: days, signal };
+        });
+        const nudgeListItems = contactNudges.slice(0, 5).map((n) => ({
+          name: n.contact.name,
+          company: n.contact.company?.name ?? "",
+          contactId: n.contactId,
+          daysSince: 0,
+          signal: n.reason.slice(0, 60),
+        }));
+        const combinedStale = [...nudgeListItems, ...staleListItems];
+        if (combinedStale.length > 0) {
+          attentionBlocks.push({ type: "stale_contacts_list", data: { contacts: combinedStale } });
+        }
+        if (quickActions.length > 0) {
+          attentionBlocks.push({
+            type: "action_bar",
+            data: {
+              primary: { label: quickActions[0].label, query: quickActions[0].query, icon: "search" },
+              secondary: quickActions.slice(1).map((qa) => ({ label: qa.label, query: qa.query, icon: "search" })),
+            },
+          });
+        }
+
+        const fullMarkdown = sections.join("\n");
+        const cleanAnswer = attentionBlocks.length > 0
+          ? stripMarkers(`## Contacts Needing Attention\n\nHere are the contacts that need your attention, sorted by priority.`)
+          : stripMarkers(fullMarkdown);
+        return NextResponse.json({ answer: cleanAnswer, sources: [], blocks: attentionBlocks.length > 0 ? attentionBlocks : undefined });
       } catch (err) {
         console.error("[chat] needs attention intent failed:", err);
       }
@@ -469,13 +644,13 @@ export async function POST(request: NextRequest) {
 
           const NUDGE_TYPE_QUICK_ACTION: Record<string, { label: string; queryPrefix: string }> = {
             MEETING_PREP: { label: "Review Meeting Brief", queryPrefix: "Review meeting brief for" },
-            REPLY_NEEDED: { label: "Draft Reply", queryPrefix: "Draft a reply to" },
+            REPLY_NEEDED: { label: "Draft Reply", queryPrefix: "Draft a reply email to" },
             JOB_CHANGE: { label: "Draft Congratulations", queryPrefix: "Draft a congratulations email to" },
             STALE_CONTACT: { label: "Draft Check-in", queryPrefix: "Draft a check-in email to" },
-            FOLLOW_UP: { label: "Continue Follow-up", queryPrefix: "Continue follow-up with" },
-            COMPANY_NEWS: { label: "Draft News Email", queryPrefix: "Draft a news follow-up email to" },
+            FOLLOW_UP: { label: "Draft Follow-up", queryPrefix: "Draft a follow-up email to" },
+            COMPANY_NEWS: { label: "Draft News Email", queryPrefix: "Draft a news email to" },
             UPCOMING_EVENT: { label: "Draft Pre-Event Email", queryPrefix: "Draft a pre-event email to" },
-            EVENT_ATTENDED: { label: "Draft Follow-Up", queryPrefix: "Draft an event follow-up email to" },
+            EVENT_ATTENDED: { label: "Draft Event Follow-Up", queryPrefix: "Draft an event follow-up email to" },
             EVENT_REGISTERED: { label: "Draft Outreach", queryPrefix: "Draft an event outreach email to" },
             ARTICLE_READ: { label: "Draft Content Email", queryPrefix: "Draft a content follow-up email to" },
             LINKEDIN_ACTIVITY: { label: "Draft LinkedIn Email", queryPrefix: "Draft a LinkedIn follow-up email to" },
@@ -490,13 +665,287 @@ export async function POST(request: NextRequest) {
           ];
           sections.push(`\n<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`);
 
+          const primaryIconMap: Record<string, string> = {
+            MEETING_PREP: "calendar", REPLY_NEEDED: "reply", JOB_CHANGE: "mail",
+            STALE_CONTACT: "mail", FOLLOW_UP: "forward", COMPANY_NEWS: "mail",
+            UPCOMING_EVENT: "calendar", EVENT_ATTENDED: "mail", EVENT_REGISTERED: "mail",
+            ARTICLE_READ: "file", LINKEDIN_ACTIVITY: "mail",
+          };
+
+          const blocks: ChatBlock[] = [
+            {
+              type: "contact_card",
+              data: {
+                name: contactName,
+                title: primary.contact.title ?? undefined,
+                company: companyName || undefined,
+                contactId: primary.contactId,
+                priority: primary.priority ?? undefined,
+              },
+            },
+            {
+              type: "action_bar",
+              data: {
+                primary: { label: typeAction.label, query: `${typeAction.queryPrefix} ${contactName}`, icon: primaryIconMap[primaryType] ?? "mail" },
+                secondary: [
+                  { label: "Quick 360", query: `Quick 360 for ${contactName}`, icon: "search" },
+                  { label: "Company 360", query: `Company 360 for ${companyName || contactName}`, icon: "briefcase" },
+                ],
+              },
+            },
+          ];
+
+          const fullMarkdown = sections.join("\n");
+          const cleanAnswer = stripMarkers(fullMarkdown);
+
           return NextResponse.json({
-            answer: sections.join("\n\n"),
+            answer: cleanAnswer,
             sources: [],
+            blocks,
           });
         }
       } catch (err) {
         console.error("[chat] nudge summary intent failed:", err);
+      }
+    }
+
+    // ── Firm Relationships ────────────────────────────────────────────
+    if (isFirmRelationships) {
+      try {
+        const nameQuery = detectedEntity || extractNameFromQuery(message);
+
+        if (!nameQuery) {
+          const topContacts = await contactRepo.findByPartnerId(partnerId);
+          const critical = topContacts.filter((c) => c.importance === "CRITICAL" || c.importance === "HIGH").slice(0, 8);
+          const contactList = critical.length > 0 ? critical : topContacts.slice(0, 8);
+
+          const companyIds = [...new Set(contactList.map((c) => c.companyId))];
+          const otherPartners = await prisma.contact.findMany({
+            where: { companyId: { in: companyIds }, partnerId: { not: partnerId } },
+            select: { companyId: true, partner: { select: { name: true } } },
+            distinct: ["companyId", "partnerId"],
+          });
+          const partnersByCompany = new Map<string, string[]>();
+          for (const row of otherPartners) {
+            const arr = partnersByCompany.get(row.companyId) ?? [];
+            arr.push(row.partner.name);
+            partnersByCompany.set(row.companyId, arr);
+          }
+
+          const blocks: ChatBlock[] = [];
+          const staleItems = contactList.map((c) => {
+            const others = partnersByCompany.get(c.companyId) ?? [];
+            return {
+              name: c.name,
+              company: c.company?.name ?? "",
+              contactId: c.id,
+              daysSince: 0,
+              signal: others.length > 0 ? `Also known by: ${others.join(", ")}` : "No other firm relationships found",
+            };
+          });
+          if (staleItems.length > 0) {
+            blocks.push({ type: "stale_contacts_list", data: { contacts: staleItems } });
+          }
+          blocks.push({
+            type: "action_bar",
+            data: {
+              primary: { label: `Quick 360: ${contactList[0]?.name ?? "Contact"}`, query: `Quick 360 for ${contactList[0]?.name ?? ""}`, icon: "search" },
+              secondary: contactList.slice(1, 3).map((c) => ({ label: `Quick 360: ${c.name}`, query: `Quick 360 for ${c.name}`, icon: "search" })),
+            },
+          });
+
+          return NextResponse.json({
+            answer: `## Firm Relationships\n\nHere are your key contacts and who else at the firm has relationships with them. Click any contact for a deeper look.`,
+            sources: [],
+            blocks,
+          });
+        }
+
+        const contacts = await contactRepo.findByPartnerId(partnerId);
+        const matched = contacts.find((c) =>
+          c.name.toLowerCase().includes(nameQuery.toLowerCase())
+        );
+        if (matched) {
+          const otherPartners = await prisma.contact.findMany({
+            where: { companyId: matched.companyId, partnerId: { not: partnerId } },
+            select: { partner: { select: { name: true } }, name: true },
+          });
+          const partnerNames = [...new Set(otherPartners.map((o) => o.partner.name))];
+          const otherContacts = otherPartners.map((o) => `${o.name} (covered by ${o.partner.name})`);
+
+          const blocks: ChatBlock[] = [
+            { type: "contact_card", data: { name: matched.name, title: matched.title ?? undefined, company: matched.company?.name ?? undefined, contactId: matched.id } },
+            {
+              type: "action_bar",
+              data: {
+                primary: { label: "Quick 360", query: `Quick 360 for ${matched.name}`, icon: "search" },
+                secondary: [{ label: "Draft Email", query: `Draft a check-in email to ${matched.name}`, icon: "mail" }],
+              },
+            },
+          ];
+
+          const partnerList = partnerNames.length > 0 ? partnerNames.join(", ") : "No other partners";
+          const otherContactList = otherContacts.length > 0 ? `\n\n**Other contacts at ${matched.company?.name ?? "the company"}:**\n${otherContacts.map((c) => `- ${c}`).join("\n")}` : "";
+          return NextResponse.json({
+            answer: `## Firm Relationships for ${matched.name}\n\n**Other partners with relationships at ${matched.company?.name ?? "the company"}:** ${partnerList}${otherContactList}`,
+            sources: [],
+            blocks,
+          });
+        }
+
+        return NextResponse.json({
+          answer: `I couldn't find a contact matching "${nameQuery}". Could you try the full name?`,
+          sources: [],
+        });
+      } catch (err) {
+        console.error("[chat] firm relationships intent failed:", err);
+        return NextResponse.json({ answer: "Sorry, I had trouble looking up firm relationships. Please try again.", sources: [] });
+      }
+    }
+
+    // ── Client Updates (latest news/signals for top contacts) ────────
+    if (isClientUpdates) {
+      try {
+        const [signals, nudges] = await Promise.all([
+          prisma.externalSignal.findMany({
+            where: { contact: { partnerId } },
+            include: { contact: { include: { company: true } }, company: true },
+            orderBy: { date: "desc" },
+            take: 15,
+          }).catch(() => []),
+          nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" }).catch(() => []),
+        ]);
+
+        const blocks: ChatBlock[] = [];
+        const recentSignals = signals.filter((s) => s.contact?.id).slice(0, 10);
+
+        if (recentSignals.length > 0 || nudges.length > 0) {
+          const staleItems = recentSignals.map((s) => ({
+            name: s.contact!.name,
+            company: s.contact!.company?.name ?? "",
+            contactId: s.contact!.id,
+            daysSince: Math.floor((Date.now() - new Date(s.date).getTime()) / 86400000),
+            signal: `${s.type}: ${s.content.slice(0, 100)}`,
+          }));
+          if (staleItems.length > 0) {
+            blocks.push({ type: "stale_contacts_list", data: { contacts: staleItems } });
+          }
+
+          const topNames = [...new Set(recentSignals.slice(0, 3).map((s) => s.contact?.name).filter(Boolean))];
+          if (topNames.length > 0) {
+            blocks.push({
+              type: "action_bar",
+              data: {
+                primary: { label: `Quick 360: ${topNames[0]}`, query: `Quick 360 for ${topNames[0]}`, icon: "search" },
+                secondary: topNames.slice(1).map((n) => ({ label: `Quick 360: ${n}`, query: `Quick 360 for ${n}`, icon: "search" })),
+              },
+            });
+          }
+        }
+
+        const signalCount = recentSignals.length;
+        const nudgeCount = nudges.length;
+        const summary = signalCount > 0 || nudgeCount > 0
+          ? `Here are the latest updates across your contacts — ${signalCount} recent signal${signalCount !== 1 ? "s" : ""} and ${nudgeCount} open nudge${nudgeCount !== 1 ? "s" : ""}.`
+          : "No recent signals or updates found for your contacts.";
+
+        return NextResponse.json({
+          answer: `## Latest Client Updates\n\n${summary}`,
+          sources: [],
+          blocks: blocks.length > 0 ? blocks : undefined,
+        });
+      } catch (err) {
+        console.error("[chat] client updates intent failed:", err);
+        return NextResponse.json({ answer: "Sorry, I had trouble fetching client updates. Please try again.", sources: [] });
+      }
+    }
+
+    // ── Weekly Summary ──────────────────────────────────────────────
+    if (isWeeklySummary) {
+      try {
+        const weekAgo = new Date(Date.now() - 7 * 86400000);
+        const [interactions, meetings, signals, nudges] = await Promise.all([
+          prisma.interaction.findMany({
+            where: { contact: { partnerId }, date: { gte: weekAgo } },
+            include: { contact: { include: { company: true } } },
+            orderBy: { date: "desc" },
+            take: 50,
+          }).catch(() => []),
+          prisma.meeting.findMany({
+            where: { partnerId, startTime: { gte: weekAgo } },
+            include: { attendees: { include: { contact: true } } },
+            orderBy: { startTime: "desc" },
+          }).catch(() => []),
+          prisma.externalSignal.findMany({
+            where: { contact: { partnerId }, date: { gte: weekAgo } },
+            include: { contact: { include: { company: true } } },
+            orderBy: { date: "desc" },
+            take: 10,
+          }).catch(() => []),
+          nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" }).catch(() => []),
+        ]);
+
+        const sections: string[] = [`## Your Week in Review`, ""];
+
+        if (meetings.length > 0) {
+          sections.push(`### Meetings (${meetings.length})`);
+          meetings.forEach((m) => {
+            const attendeeNames = m.attendees.map((a) => a.contact.name).join(", ");
+            sections.push(`- **${m.title}** — ${formatDateTimeForLLM(m.startTime)}${attendeeNames ? ` with ${attendeeNames}` : ""}`);
+          });
+          sections.push("");
+        }
+
+        if (interactions.length > 0) {
+          sections.push(`### Interactions (${interactions.length})`);
+          const byType = new Map<string, typeof interactions>();
+          for (const i of interactions) {
+            const group = byType.get(i.type) ?? [];
+            group.push(i);
+            byType.set(i.type, group);
+          }
+          for (const [type, items] of byType) {
+            sections.push(`**${type}s:** ${items.length}`);
+            items.slice(0, 3).forEach((i) => {
+              sections.push(`- ${i.contact.name} (${i.contact.company?.name ?? ""}): ${i.summary.slice(0, 80)}`);
+            });
+          }
+          sections.push("");
+        }
+
+        if (signals.length > 0) {
+          sections.push(`### Signals & News (${signals.length})`);
+          signals.slice(0, 5).forEach((s) => {
+            sections.push(`- **${s.contact?.name ?? "Unknown"}**: ${s.content.slice(0, 80)}`);
+          });
+          sections.push("");
+        }
+
+        sections.push(`### Open Nudges: ${nudges.length}`);
+        if (nudges.length === 0 && meetings.length === 0 && interactions.length === 0) {
+          sections.push("Looks like a quiet week — no interactions, meetings, or signals recorded.");
+        }
+
+        const blocks: ChatBlock[] = [];
+        if (nudges.length > 0) {
+          const topNudgeContacts = nudges.slice(0, 3).map((n) => n.contact.name);
+          blocks.push({
+            type: "action_bar",
+            data: {
+              primary: { label: "Today's Priorities", query: "What should I focus on today?", icon: "zap" },
+              secondary: topNudgeContacts.map((name) => ({ label: `Quick 360: ${name}`, query: `Quick 360 for ${name}`, icon: "search" })),
+            },
+          });
+        }
+
+        return NextResponse.json({
+          answer: sections.join("\n"),
+          sources: [],
+          blocks: blocks.length > 0 ? blocks : undefined,
+        });
+      } catch (err) {
+        console.error("[chat] weekly summary intent failed:", err);
+        return NextResponse.json({ answer: "Sorry, I had trouble generating your weekly summary. Please try again.", sources: [] });
       }
     }
 
@@ -511,9 +960,10 @@ export async function POST(request: NextRequest) {
       const usedActions = getUsedActions(body.history ?? [], currentAction);
 
       const nameQuery = detectedEntity || extractNameFromQuery(message);
-      if (!nameQuery && (isDraftEmail || isDraftNote)) {
+      if (!nameQuery) {
+        const actionName = isDraftEmail ? "draft an email" : isDraftNote ? "draft a note" : isShareDossier ? "share a dossier" : isCompany360 ? "look up a company" : "look up a contact";
         return NextResponse.json({
-          answer: `Who would you like me to draft a ${isDraftNote ? "note" : "email"} for? You can say something like "Draft a ${isDraftNote ? "note" : "email"} to [contact name]."`,
+          answer: `Who would you like me to ${actionName} for? Try something like "${isDraftEmail ? "Draft an email to" : isDraftNote ? "Draft a note to" : "Tell me about"} [name]."`,
           sources: [],
         });
       }
@@ -566,14 +1016,14 @@ export async function POST(request: NextRequest) {
                   title: c.title ?? "",
                   importance: c.importance ?? "MEDIUM",
                   interactionCount: c.interactions.length,
-                  lastInteractionDate: c.interactions[0]?.date?.toISOString() ?? null,
+                  lastInteractionDate: c.interactions[0]?.date ? formatDateForLLM(new Date(c.interactions[0].date)) : null,
                   sentiment: c.interactions[0]?.sentiment ?? null,
                   openNudges: 0,
                 })),
                 partners: [],
                 signals: coSignals.slice(0, 10).map((s) => ({
                   type: s.type,
-                  date: new Date(s.date).toISOString(),
+                  date: formatDateForLLM(new Date(s.date)),
                   content: s.content,
                   url: s.url ?? null,
                 })),
@@ -592,7 +1042,23 @@ export async function POST(request: NextRequest) {
                 "",
                 ...coResult.sections.map((s) => `### ${s.title}\n${s.content}`),
               ].join("\n\n");
-              return NextResponse.json({ answer: md, sources: [] });
+
+              const blocks: ChatBlock[] = [{
+                type: "action_bar",
+                data: {
+                  primary: { label: "Draft Email", query: `Draft email to ${nameQuery}`, icon: "mail" },
+                  secondary: [
+                    { label: "Quick 360", query: `Quick 360 for ${nameQuery}`, icon: "search" },
+                  ],
+                },
+              }];
+              return NextResponse.json({ answer: stripMarkers(md), sources: [], blocks });
+            }
+            if (isCompany360) {
+              return NextResponse.json({
+                answer: `I couldn't find a company matching "${nameQuery}" in your CRM. Try the full company name, or check the Companies tab.`,
+                sources: [],
+              });
             }
           }
 
@@ -604,6 +1070,12 @@ export async function POST(request: NextRequest) {
           if (!contact) {
             const contacts = await contactRepo.search(nameQuery, partnerId);
             contact = contacts[0] ?? null;
+          }
+          if (!contact) {
+            return NextResponse.json({
+              answer: `I couldn't find a contact matching "${nameQuery}" in your CRM. Try using their full name, or check the Contacts tab to verify the spelling.`,
+              sources: [],
+            });
           }
           if (contact) {
             const company = (contact as Record<string, unknown>).company as { name: string; industry?: string; employeeCount?: number; website?: string } | undefined;
@@ -624,7 +1096,21 @@ export async function POST(request: NextRequest) {
                 ...result.sections.map((s) => `### ${s.title}\n${s.content}`),
                 buildQuickActionsMarker(contact.name, usedActions, company?.name),
               ].filter(Boolean).join("\n\n");
-              return NextResponse.json({ answer: md, sources: [] });
+
+              const blocks: ChatBlock[] = [
+                {
+                  type: "contact_card",
+                  data: { name: contact.name, title: contact.title ?? undefined, company: company?.name ?? undefined, contactId: contact.id },
+                },
+                {
+                  type: "action_bar",
+                  data: {
+                    primary: { label: "Draft Email", query: `Draft email to ${contact.name}`, icon: "mail" },
+                    secondary: buildSecondaryActions(contact.name, usedActions, company?.name),
+                  },
+                },
+              ];
+              return NextResponse.json({ answer: stripMarkers(md), sources: [], blocks });
             }
 
             // ── Draft Email ──
@@ -643,18 +1129,36 @@ export async function POST(request: NextRequest) {
                 recentInteractions: ctx.interactions.slice(0, 5).map((i) => `${i.type} on ${i.date}: ${i.summary}`),
                 signals: ctx.signals.slice(0, 3).map((s) => `${s.type}: ${s.content.slice(0, 100)}`),
               });
-              const md = [
-                `## Draft Email to ${contact.name}`,
-                "",
-                `**Subject:** ${emailResult.subject}`,
-                "",
-                emailResult.body,
-                "",
-                `---`,
-                `*You can copy and edit this draft before sending.*`,
-                buildQuickActionsMarker(contact.name, usedActions, company?.name),
-              ].filter(Boolean).join("\n\n");
-              return NextResponse.json({ answer: md, sources: [] });
+              const cleanEmailAnswer = `## Draft Email to ${contact.name}\n\nHere's a draft you can copy and edit before sending.`;
+
+              const blocks: ChatBlock[] = [
+                {
+                  type: "contact_card",
+                  data: {
+                    name: contact.name,
+                    title: contact.title ?? undefined,
+                    company: company?.name ?? undefined,
+                    contactId: contact.id,
+                  },
+                },
+                {
+                  type: "email_preview",
+                  data: {
+                    to: contact.name,
+                    subject: emailResult.subject,
+                    body: emailResult.body,
+                    contactId: contact.id,
+                  },
+                },
+                {
+                  type: "action_bar",
+                  data: {
+                    primary: { label: "Copy Email", query: "", icon: "copy" },
+                    secondary: buildSecondaryActions(contact.name, usedActions, company?.name),
+                  },
+                },
+              ];
+              return NextResponse.json({ answer: cleanEmailAnswer, sources: [], blocks });
             }
 
             // ── Draft Note ──
@@ -676,7 +1180,21 @@ export async function POST(request: NextRequest) {
                 `*You can copy and edit this note before sending.*`,
                 buildQuickActionsMarker(contact.name, usedActions, company?.name),
               ].filter(Boolean).join("\n\n");
-              return NextResponse.json({ answer: md, sources: [] });
+
+              const blocks: ChatBlock[] = [
+                {
+                  type: "contact_card",
+                  data: { name: contact.name, title: contact.title ?? undefined, company: company?.name ?? undefined, contactId: contact.id },
+                },
+                {
+                  type: "action_bar",
+                  data: {
+                    primary: { label: "Copy Note", query: "", icon: "copy" },
+                    secondary: buildSecondaryActions(contact.name, usedActions, company?.name),
+                  },
+                },
+              ];
+              return NextResponse.json({ answer: stripMarkers(md), sources: [], blocks });
             }
 
             // ── Share Dossier ──
@@ -695,7 +1213,21 @@ export async function POST(request: NextRequest) {
                 ...result.talkingPoints.map((tp, i) => `${i + 1}. ${tp}`),
                 buildQuickActionsMarker(contact.name, usedActions, company?.name),
               ].filter(Boolean).join("\n\n");
-              return NextResponse.json({ answer: md, sources: [] });
+
+              const blocks: ChatBlock[] = [
+                {
+                  type: "contact_card",
+                  data: { name: contact.name, title: contact.title ?? undefined, company: company?.name ?? undefined, contactId: contact.id },
+                },
+                {
+                  type: "action_bar",
+                  data: {
+                    primary: { label: "Share Dossier", query: `Share dossier for ${contact.name}`, icon: "share" },
+                    secondary: buildSecondaryActions(contact.name, usedActions, company?.name),
+                  },
+                },
+              ];
+              return NextResponse.json({ answer: stripMarkers(md), sources: [], blocks });
             }
 
             // ── Quick 360 (default contact intent) ──
@@ -718,7 +1250,21 @@ export async function POST(request: NextRequest) {
               tpFormatted,
               buildQuickActionsMarker(contact.name, usedActions, company?.name),
             ].filter(Boolean).join("\n\n");
-            return NextResponse.json({ answer: md, sources: [] });
+
+            const blocks: ChatBlock[] = [
+              {
+                type: "contact_card",
+                data: { name: contact.name, title: contact.title ?? undefined, company: company?.name ?? undefined, contactId: contact.id },
+              },
+              {
+                type: "action_bar",
+                data: {
+                  primary: { label: "Draft Email", query: `Draft email to ${contact.name}`, icon: "mail" },
+                  secondary: buildSecondaryActions(contact.name, usedActions, company?.name),
+                },
+              },
+            ];
+            return NextResponse.json({ answer: stripMarkers(md), sources: [], blocks });
           }
         } catch (err) {
           console.error("[chat] structured intent failed, falling through to default:", err);
@@ -772,6 +1318,14 @@ export async function POST(request: NextRequest) {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
+function stripMarkers(text: string): string {
+  return text
+    .replace(/<!--QUICK_ACTIONS:[\s\S]*?-->/g, "")
+    .replace(/<!--SIGNAL_LABELS:[\s\S]*?-->/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 async function buildContactContext(
   contact: { id: string; name: string; title: string | null; email: string | null; importance: string | null; notes: string | null; companyId: string },
   company: { name: string; industry?: string; employeeCount?: number; website?: string } | undefined,
@@ -804,20 +1358,20 @@ async function buildContactContext(
     },
     interactions: interactions.slice(0, 10).map((i) => ({
       type: i.type,
-      date: new Date(i.date).toISOString(),
+      date: formatDateForLLM(new Date(i.date)),
       summary: i.summary ?? "",
       sentiment: i.sentiment ?? "NEUTRAL",
       direction: (i as Record<string, unknown>).direction as string | undefined,
     })),
     signals: signals.slice(0, 10).map((s) => ({
       type: s.type,
-      date: new Date(s.date).toISOString(),
+      date: formatDateForLLM(new Date(s.date)),
       content: s.content,
       url: s.url ?? null,
     })),
     meetings: meetings.slice(0, 5).map((m) => ({
       title: m.title,
-      date: new Date(m.startTime).toISOString(),
+      date: formatDateTimeForLLM(new Date(m.startTime)),
       attendees: ((m.attendees ?? []) as { contact?: { name?: string } }[]).map((a) => a.contact?.name ?? "Unknown"),
       purpose: m.purpose ?? null,
       briefExcerpt: m.generatedBrief?.slice(0, 200) ?? null,
@@ -833,7 +1387,7 @@ async function buildContactContext(
         isCurrentUser: rc.partnerId === partnerId,
         interactionCount: count,
         intensity: count >= 4 && daysSince !== null && daysSince <= 60 ? "High" : count >= 2 ? "Medium" : "Light",
-        lastInteractionDate: last?.date?.toISOString() ?? null,
+        lastInteractionDate: last?.date ? formatDateForLLM(new Date(last.date)) : null,
         contactsAtCompany: 0,
       };
     }),
@@ -864,6 +1418,17 @@ function getUsedActions(
     if (SHARE_DOSSIER_INTENT.test(text)) used.add("share");
   }
   return used;
+}
+
+function buildSecondaryActions(contactName: string, used: Set<ActionKey>, companyName?: string): { label: string; query: string; icon: string }[] {
+  const all: { key: ActionKey; label: string; query: string; icon: string }[] = [
+    { key: "email", label: "Draft Email", query: `Draft email to ${contactName}`, icon: "mail" },
+    { key: "quick360", label: "Quick 360", query: `Quick 360 for ${contactName}`, icon: "search" },
+    { key: "full360", label: "Full Contact 360", query: `Full Contact 360 for ${contactName}`, icon: "user" },
+    { key: "company360", label: "Company 360", query: `Company 360 for ${companyName || contactName}`, icon: "briefcase" },
+    { key: "share", label: "Share Dossier", query: `Share dossier for ${contactName}`, icon: "share" },
+  ];
+  return all.filter((a) => !used.has(a.key)).map(({ label, query, icon }) => ({ label, query, icon }));
 }
 
 function buildQuickActionsMarker(contactName: string, used: Set<ActionKey>, companyName?: string): string {

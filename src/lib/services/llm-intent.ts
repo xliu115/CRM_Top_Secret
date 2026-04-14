@@ -12,6 +12,9 @@ export type IntentType =
   | "needs_attention"
   | "nudge_summary"
   | "share_dossier"
+  | "firm_relationships"
+  | "client_updates"
+  | "weekly_summary"
   | "general_question";
 
 export type IntentResult = {
@@ -39,7 +42,10 @@ Intents:
 - "needs_attention": User asks about at-risk contacts or who needs follow-up. Examples: "who needs attention?", "which contacts are stale?", "who haven't I spoken to?", "at-risk relationships"
 - "nudge_summary": User wants to see the AI evidence/summary for why they should reach out to a contact (from their nudge cards). Examples: "nudge summary for Brad", "show me the evidence for Beth", "why should I reach out to Andrew?", "outreach summary for Chris", "show the summary for Marc Benioff"
 - "share_dossier": User wants to share a contact's dossier. Examples: "share the dossier for Brad", "send the 360 for Beth", "share dossier"
-- "general_question": Any other question that doesn't fit the above. Examples: "what's the latest news about Microsoft?", "how is Nvidia doing?", "who changed jobs recently?"
+- "firm_relationships": User asks who else at the firm knows their contacts, or wants to see cross-coverage / shared relationships. May mention a specific contact or ask broadly. Examples: "who knows my contacts?", "who else knows Andy Jassy?", "firm relationships for Microsoft", "who has a relationship with Amy Hood?", "who covers Amazon?", "introductions to Brad Smith", "other partners at Google"
+- "client_updates": User wants a summary of recent activity, news, or signals for their top contacts/clients. Examples: "what's the latest with my top clients?", "any updates on my contacts?", "recent news about my clients", "what's new with my key accounts?", "client activity this week"
+- "weekly_summary": User wants a summary of their week — meetings attended, emails sent, interactions, follow-ups. Examples: "summarize my week", "weekly recap", "what happened this week?", "my week in review", "recap of the past week"
+- "general_question": Any other question that doesn't fit the above. Examples: "how is Nvidia doing?", "who changed jobs recently?"
 
 Entity extraction rules:
 - For contact intents, extract the person's name (e.g. "Brad Smith", "Beth")

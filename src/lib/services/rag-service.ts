@@ -7,6 +7,7 @@ import {
   engagementRepo,
 } from "@/lib/repositories";
 import { prisma } from "@/lib/db/prisma";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 import { tavily } from "@tavily/core";
 
 export interface RetrievedDoc {
@@ -99,7 +100,7 @@ export async function retrieveContext(
       docs.push({
         type: "Nudge",
         content: `${n.contact.name} (${n.contact.company.name}): ${n.reason}`,
-        date: new Date(n.createdAt).toISOString().split("T")[0],
+        date: formatDateForLLM(new Date(n.createdAt)),
         id: n.id,
         contactId: n.contact.id,
       });
@@ -114,7 +115,7 @@ export async function retrieveContext(
       docs.push({
         type: "Interaction",
         content: `${i.type} with ${i.contact.name} (${i.contact.company.name}): ${i.summary}${i.nextStep ? ` Next step: ${i.nextStep}` : ""}`,
-        date: new Date(i.date).toISOString().split("T")[0],
+        date: formatDateForLLM(new Date(i.date)),
         id: i.id,
       });
     }
@@ -133,7 +134,7 @@ export async function retrieveContext(
       docs.push({
         type: "Interaction",
         content: `${i.type} with ${i.contact.name} (${i.contact.company.name}): ${i.summary}${i.nextStep ? ` Next step: ${i.nextStep}` : ""}`,
-        date: new Date(i.date).toISOString().split("T")[0],
+        date: formatDateForLLM(new Date(i.date)),
         id: i.id,
       });
     }
@@ -148,7 +149,7 @@ export async function retrieveContext(
       docs.push({
         type: `Signal (${s.type})`,
         content: `${entity}: ${s.content}`,
-        date: new Date(s.date).toISOString().split("T")[0],
+        date: formatDateForLLM(new Date(s.date)),
         id: s.id,
       });
     }
@@ -169,7 +170,7 @@ export async function retrieveContext(
       docs.push({
         type: "Nudge",
         content: `${n.contact.name} (${n.contact.company.name}): ${n.reason}`,
-        date: new Date(n.createdAt).toISOString().split("T")[0],
+        date: formatDateForLLM(new Date(n.createdAt)),
         id: n.id,
         contactId: n.contact.id,
       });
@@ -194,7 +195,7 @@ export async function retrieveContext(
     docs.push({
       type: "Meeting",
       content: `"${m.title}" with ${attendeeNames}. ${m.purpose || ""} ${m.notes || ""}`,
-      date: new Date(m.startTime).toISOString().split("T")[0],
+      date: formatDateForLLM(new Date(m.startTime)),
       id: m.id,
     });
   }
@@ -223,7 +224,7 @@ export async function retrieveContext(
       docs.push({
         type: "Event",
         content: `${c.name} (${c.company.name}): ${e.status} for "${e.name}" — ${e.practice}, ${e.type} in ${e.location || "TBD"}`,
-        date: new Date(e.eventDate).toISOString().split("T")[0],
+        date: formatDateForLLM(new Date(e.eventDate)),
         id: e.id,
       });
     }
@@ -236,7 +237,7 @@ export async function retrieveContext(
         type: "Article",
         content: `${c.name} (${c.company.name}): ${a.articleSent === "Y" ? "Sent" : "Not sent"} "${a.name}" — ${a.views} view${a.views !== 1 ? "s" : ""}${a.sentFrom ? `, sent by ${a.sentFrom}` : ""}`,
         date: a.lastViewDate
-          ? new Date(a.lastViewDate).toISOString().split("T")[0]
+          ? formatDateForLLM(new Date(a.lastViewDate))
           : undefined,
         id: a.id,
       });

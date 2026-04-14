@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { INSIGHT_TYPE_LABELS } from "@/lib/utils/nudge-summary";
+import { BlockRenderer } from "@/components/chat/blocks/block-renderer";
+import type { ChatBlock } from "@/lib/types/chat-blocks";
 
 type QuickAction = { label: string; query?: string; href?: string };
 
@@ -122,14 +124,18 @@ function isProseAnswer(text: string): boolean {
 export function AssistantReply({
   content,
   sources = [],
+  blocks,
   onSendMessage,
   mobile = false,
 }: {
   content: string;
   sources?: Source[];
+  blocks?: ChatBlock[];
   onSendMessage?: (message: string) => void;
   mobile?: boolean;
 }) {
+  const hasBlocks = !mobile && Array.isArray(blocks) && blocks.length > 0;
+
   const crmSources = sources.filter((s) => isCrmSource(s.type));
   const webSources = sources.filter(
     (s) => s.type === "Web Summary" || s.type === "Web Result"
@@ -195,7 +201,7 @@ export function AssistantReply({
         <MarkdownContent content={cleanContent} className={textClass} />
       )}
 
-      {signalLabels.length > 0 && (
+      {!hasBlocks && signalLabels.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {signalLabels.map((sl) => (
             <span
@@ -218,7 +224,7 @@ export function AssistantReply({
         </div>
       )}
 
-      {!mobile && quickActions.length > 0 && (
+      {!hasBlocks && !mobile && quickActions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
           {quickActions.map((action, i) =>
             action.query && onSendMessage ? (
@@ -242,6 +248,10 @@ export function AssistantReply({
             ) : null
           )}
         </div>
+      )}
+
+      {hasBlocks && (
+        <BlockRenderer blocks={blocks!} onSendMessage={onSendMessage} />
       )}
 
       {webSources.length > 0 && (

@@ -187,14 +187,19 @@ export function parseArticleCampaignNudgeDisplay(nudge: {
 }
 
 export const INSIGHT_TYPE_LABELS: Record<string, string> = {
-  JOB_CHANGE: "Executive Transition",
-  COMPANY_NEWS: "Company News",
-  UPCOMING_EVENT: "Upcoming Event",
-  MEETING_PREP: "Meeting Prep",
-  EVENT_ATTENDED: "Event Follow-Up",
-  EVENT_REGISTERED: "Event Outreach",
-  ARTICLE_READ: "Content Follow-Up",
-  LINKEDIN_ACTIVITY: "LinkedIn Activity",
+  STALE_CONTACT: "Time to reconnect",
+  FOLLOW_UP: "Follow-up needed",
+  REPLY_NEEDED: "Awaiting reply",
+  JOB_CHANGE: "Role change",
+  COMPANY_NEWS: "Company news",
+  UPCOMING_EVENT: "Upcoming event",
+  MEETING_PREP: "Meeting prep",
+  EVENT_ATTENDED: "Event follow-up",
+  EVENT_REGISTERED: "Event outreach",
+  ARTICLE_READ: "Content engagement",
+  LINKEDIN_ACTIVITY: "LinkedIn activity",
+  CAMPAIGN_APPROVAL: "Campaign ready",
+  ARTICLE_CAMPAIGN: "Article campaign",
 };
 
 const TYPE_LABELS: Record<string, string> = {

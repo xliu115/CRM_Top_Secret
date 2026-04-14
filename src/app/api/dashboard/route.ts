@@ -11,6 +11,7 @@ import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import { generateMeetingBrief } from "@/lib/services/llm-service";
 import { addDays, isBefore } from "date-fns";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 
 export async function GET(_request: NextRequest) {
   try {
@@ -119,7 +120,7 @@ async function generateMissingBriefs(partnerId: string, meetingIds: string[]) {
         recentInteractions: interactions
           .filter((i) => i.contactId === a.contactId)
           .slice(0, 3)
-          .map((i) => `${i.type} (${i.date.toISOString().split("T")[0]}): ${i.summary}`),
+          .map((i) => `${i.type} (${formatDateForLLM(i.date)}): ${i.summary}`),
         signals: signals
           .filter((s) => s.contactId === a.contactId)
           .slice(0, 3)

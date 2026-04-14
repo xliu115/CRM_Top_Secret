@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStreamingTranscription } from "@/hooks/use-streaming-transcription";
+import type { ChatBlock } from "@/lib/types/chat-blocks";
 
 export type ChatSource = {
   type: string;
@@ -16,6 +17,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   sources?: ChatSource[];
+  blocks?: ChatBlock[];
 };
 
 export type ChatContext = {
@@ -78,7 +80,7 @@ export function useChatSession() {
           const errBody = await res.json().catch(() => ({}));
           throw new Error(errBody.error || "Failed to get response");
         }
-        const { answer, sources } = await res.json();
+        const { answer, sources, blocks } = await res.json();
         setMessages((prev) => [
           ...prev,
           {
@@ -86,6 +88,7 @@ export function useChatSession() {
             role: "assistant",
             content: answer,
             sources: sources ?? [],
+            blocks: Array.isArray(blocks) && blocks.length > 0 ? blocks : undefined,
           },
         ]);
       } catch {

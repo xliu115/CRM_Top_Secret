@@ -10,6 +10,7 @@ import { generateMini360, type Contact360Context } from "@/lib/services/llm-cont
 import { buildBriefingHtml, buildMini360Html } from "@/lib/services/email-service";
 import { searchWeb } from "@/lib/services/rag-service";
 import { addDays, isBefore, format, differenceInDays } from "date-fns";
+import { formatDateForLLM } from "@/lib/utils/format-date";
 import {
   buildTopNudgePayloads,
   mapLatestInteractionSummaryByContact,
@@ -221,7 +222,7 @@ export async function sendMorningBriefing(
               .slice(0, 5)
               .map((i) => ({
                 type: i.type,
-                date: new Date(i.date).toISOString(),
+                date: formatDateForLLM(new Date(i.date)),
                 summary: i.summary ?? "",
                 sentiment: i.sentiment ?? "NEUTRAL",
               })),
@@ -229,7 +230,7 @@ export async function sendMorningBriefing(
               .slice(0, 3)
               .map((s) => ({
                 type: s.type,
-                date: new Date(s.date).toISOString(),
+                date: formatDateForLLM(new Date(s.date)),
                 content: s.content,
                 url: s.url ?? null,
               })),

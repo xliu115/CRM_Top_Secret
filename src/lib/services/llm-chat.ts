@@ -66,7 +66,7 @@ export async function generateChatAnswer(ctx: ChatContext): Promise<string> {
 
 function generateChatTemplate(ctx: ChatContext): string {
   if (ctx.retrievedDocs.length === 0) {
-    return `I don't have enough information to answer that question. Try asking about specific contacts, companies, or recent interactions.`;
+    return `I don't have enough information to answer that question right now. Here are some things I can help with:\n\n- **"What should I focus on today?"** — daily priorities\n- **"Which contacts need attention?"** — stale relationships\n- **"Quick 360 for [name]"** — contact overview\n- **"Draft an email to [name]"** — email drafting\n- **"Summarize my week"** — weekly recap`;
   }
 
   const crmDocs = ctx.retrievedDocs.filter(
@@ -76,37 +76,44 @@ function generateChatTemplate(ctx: ChatContext): string {
     (d) => d.type === "Web Summary" || d.type === "Web Result"
   );
 
+  const contactNames = crmDocs
+    .filter((d) => d.type === "Contact")
+    .slice(0, 3)
+    .map((d) => d.content.split(" – ")[0]?.trim())
+    .filter(Boolean);
+
   const parts: string[] = [];
 
-  if (crmDocs.length > 0) {
-    const byType = new Map<string, typeof crmDocs>();
-    for (const d of crmDocs.slice(0, 8)) {
-      const group = byType.get(d.type) ?? [];
-      group.push(d);
-      byType.set(d.type, group);
-    }
+  parts.push("I'm having trouble generating a full analysis right now, but I found some relevant data. Try one of these more specific queries:");
+  parts.push("");
 
-    parts.push("### From your CRM");
-    for (const [type, docs] of byType) {
-      parts.push(`**${type}${docs.length > 1 ? "s" : ""}:**`);
-      for (const d of docs) {
-        const snippet = d.content.slice(0, 200) + (d.content.length > 200 ? "..." : "");
-        parts.push(`- ${snippet}${d.date ? ` *(${d.date})*` : ""}`);
-      }
+  if (contactNames.length > 0) {
+    parts.push("**Quick actions:**");
+    for (const name of contactNames) {
+      parts.push(`- "Quick 360 for ${name}"`);
     }
+    parts.push(`- "Which contacts need attention?"`);
+    parts.push(`- "What should I focus on today?"`);
+  } else {
+    parts.push("**Try asking:**");
+    parts.push(`- "What should I focus on today?"`);
+    parts.push(`- "Which contacts need attention?"`);
+    parts.push(`- "Show my meetings today"`);
+    parts.push(`- "Summarize my week"`);
   }
 
   if (webDocs.length > 0) {
+    parts.push("");
+    parts.push("**From the web:**");
     const webLines = webDocs
-      .slice(0, 5)
+      .slice(0, 3)
       .map((d) => {
         const url = (d as { url?: string }).url;
-        const snippet = d.content.slice(0, 250) + (d.content.length > 250 ? "..." : "");
+        const snippet = d.content.slice(0, 150) + (d.content.length > 150 ? "..." : "");
         return url ? `- ${snippet} ([source](${url}))` : `- ${snippet}`;
-      })
-      .join("\n");
-    parts.push(`### From the web\n${webLines}`);
+      });
+    parts.push(...webLines);
   }
 
-  return `I found some relevant information but couldn't generate a full analysis:\n\n${parts.join("\n\n")}`;
+  return parts.join("\n");
 }

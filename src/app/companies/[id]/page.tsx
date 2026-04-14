@@ -1002,13 +1002,13 @@ export default function CompanyDetailPage() {
                           <div className="w-1 shrink-0 self-stretch rounded-r bg-red-500" />
                           <div className="flex-[2] min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate leading-tight">{ev.name}</p>
-                            <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5 md:hidden">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</p>
+                            <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5 md:hidden">{format(new Date(ev.eventDate), "MMM d, yyyy")}</p>
                           </div>
                           <div className="flex-[1.2] min-w-0 text-sm text-foreground truncate">{ev.contactName}</div>
                           <div className="flex-[1.2] min-w-0">
                             <Badge variant={ev.status === "Attended" ? "secondary" : "outline"}>{ev.status}</Badge>
                           </div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(ev.eventDate), "MM/dd/yyyy")}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(ev.eventDate), "MMM d, yyyy")}</div>
                           <div className="flex-[1.1] min-w-0 text-sm text-foreground hidden lg:block truncate">{ev.practice}</div>
                           <div className="flex-[1] min-w-0 text-sm text-foreground hidden xl:block truncate">{ev.type}</div>
                         </div>
@@ -1076,7 +1076,7 @@ export default function CompanyDetailPage() {
                           <div className="flex-[1.4] min-w-0 text-sm text-foreground truncate">{art.articleSent}</div>
                           <div className="flex-[1] min-w-0 text-sm text-foreground hidden md:block tabular-nums">{art.views}</div>
                           <div className="flex-[1.2] min-w-0 text-sm text-foreground hidden lg:block truncate">{art.sentFrom ?? "—"}</div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{art.lastViewDate ? format(new Date(art.lastViewDate), "MM/dd/yyyy") : "—"}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{art.lastViewDate ? format(new Date(art.lastViewDate), "MMM d, yyyy") : "—"}</div>
                         </div>
                       ))}
                     </div>
@@ -1176,7 +1176,7 @@ export default function CompanyDetailPage() {
                           <div className="flex-[1.2] min-w-0">
                             <Badge variant={camp.status === "Clicked" ? "secondary" : "outline"}>{camp.status}</Badge>
                           </div>
-                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(camp.statusDate), "MM/dd/yyyy")}</div>
+                          <div className="flex-[1.2] min-w-0 text-sm text-muted-foreground-subtle hidden md:block">{format(new Date(camp.statusDate), "MMM d, yyyy")}</div>
                         </div>
                       ))}
                     </div>
