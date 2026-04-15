@@ -74,20 +74,6 @@ Output valid JSON with this exact structure:
   ]
 }`;
 
-// ── Eligible Types ──────────────────────────────────────────────────
-
-export const ELIGIBLE_INSIGHT_TYPES = new Set([
-  "STALE_CONTACT",
-  "JOB_CHANGE",
-  "COMPANY_NEWS",
-  "LINKEDIN_ACTIVITY",
-  "UPCOMING_EVENT",
-  "EVENT_ATTENDED",
-  "EVENT_REGISTERED",
-  "ARTICLE_READ",
-  "MEETING_PREP",
-]);
-
 // ── Prompt Builder ──────────────────────────────────────────────────
 
 async function buildInsightUserPrompt(

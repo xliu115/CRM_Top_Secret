@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
-import { FragmentText } from "@/components/ui/fragment-text";
-import { buildSummaryFragments, INSIGHT_TYPE_LABELS } from "@/lib/utils/nudge-summary";
+import { ChevronDown, ChevronUp, ExternalLink, Loader2 } from "lucide-react";
+import { INSIGHT_TYPE_LABELS } from "@/lib/utils/nudge-summary";
 import type { InsightData, NudgeForSummary } from "@/lib/utils/nudge-summary";
 import type { StrategicInsight } from "@/lib/services/llm-insight";
 
@@ -56,8 +55,12 @@ export function StrategicInsightBlock({
   const [showEvidence, setShowEvidence] = useState(false);
 
   if (!strategicInsight) {
-    const fragments = buildSummaryFragments(nudge, insights);
-    return <FragmentText fragments={fragments} />;
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground italic">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Generating insight…
+      </div>
+    );
   }
 
   return (

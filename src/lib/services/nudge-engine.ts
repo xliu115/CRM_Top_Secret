@@ -4,7 +4,7 @@ import { formatDateForLLM } from "@/lib/utils/format-date";
 import { prisma } from "@/lib/db/prisma";
 import { getWaitingDays, buildSequenceNudgeReason, buildReplyNeededReason } from "./cadence-engine";
 import { scoreContactsForArticle } from "./article-relevance";
-import { generateStrategicInsight, ELIGIBLE_INSIGHT_TYPES } from "./llm-insight";
+import { generateStrategicInsight } from "./llm-insight";
 
 interface Insight {
   type: string;
@@ -622,8 +622,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
 }
 
 async function enrichNudgesWithInsights(partnerId: string) {
-  const createdNudges = await nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" });
-  const eligible = createdNudges.filter((n) => ELIGIBLE_INSIGHT_TYPES.has(n.ruleType));
+  const eligible = await nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" });
   if (eligible.length === 0) return;
 
   const partner = await partnerRepo.findById(partnerId);

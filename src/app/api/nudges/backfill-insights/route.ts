@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { nudgeRepo, partnerRepo } from "@/lib/repositories";
-import { generateStrategicInsight, ELIGIBLE_INSIGHT_TYPES } from "@/lib/services/llm-insight";
+import { generateStrategicInsight } from "@/lib/services/llm-insight";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +13,6 @@ export async function POST(request: NextRequest) {
 
     const nudges = await nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" });
     const eligible = nudges.filter((n) => {
-      if (!ELIGIBLE_INSIGHT_TYPES.has(n.ruleType)) return false;
       if (force) return true;
       try {
         const meta = JSON.parse(n.metadata ?? "{}");

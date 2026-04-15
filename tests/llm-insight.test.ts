@@ -19,7 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 
 import { callLLMJson } from "@/lib/services/llm-core";
-import { generateStrategicInsight, ELIGIBLE_INSIGHT_TYPES } from "@/lib/services/llm-insight";
+import { generateStrategicInsight } from "@/lib/services/llm-insight";
 import type { NudgeWithRelations } from "@/lib/repositories/interfaces/nudge-repository";
 
 const mockCallLLMJson = vi.mocked(callLLMJson);
@@ -188,25 +188,4 @@ describe("llm-insight", () => {
     });
   });
 
-  describe("ELIGIBLE_INSIGHT_TYPES", () => {
-    it("contains the 9 expected contact nudge types", () => {
-      expect(ELIGIBLE_INSIGHT_TYPES.size).toBe(9);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("STALE_CONTACT")).toBe(true);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("JOB_CHANGE")).toBe(true);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("COMPANY_NEWS")).toBe(true);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("LINKEDIN_ACTIVITY")).toBe(true);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("UPCOMING_EVENT")).toBe(true);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("EVENT_ATTENDED")).toBe(true);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("EVENT_REGISTERED")).toBe(true);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("ARTICLE_READ")).toBe(true);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("MEETING_PREP")).toBe(true);
-    });
-
-    it("does not include non-contact nudge types", () => {
-      expect(ELIGIBLE_INSIGHT_TYPES.has("CAMPAIGN_APPROVAL")).toBe(false);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("ARTICLE_CAMPAIGN")).toBe(false);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("FOLLOW_UP")).toBe(false);
-      expect(ELIGIBLE_INSIGHT_TYPES.has("REPLY_NEEDED")).toBe(false);
-    });
-  });
 });
