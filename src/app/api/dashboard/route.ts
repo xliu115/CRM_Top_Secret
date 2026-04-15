@@ -7,7 +7,7 @@ import {
   signalRepo,
   interactionRepo,
 } from "@/lib/repositories";
-import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
+import { refreshNudgesForPartner, enrichNudgesWithInsights } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import { generateMeetingBrief } from "@/lib/services/llm-service";
 import { addDays, isBefore } from "date-fns";
@@ -98,6 +98,7 @@ async function autoRefreshNudges(partnerId: string) {
   console.log("[dashboard] No open nudges — auto-refreshing...");
   const newsCount = await ingestNewsForPartner(partnerId);
   const nudgeCount = await refreshNudgesForPartner(partnerId);
+  await enrichNudgesWithInsights(partnerId);
   console.log(`[dashboard] Auto-refresh complete: ${newsCount} news, ${nudgeCount} nudges`);
 }
 

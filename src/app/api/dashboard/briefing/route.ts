@@ -19,7 +19,7 @@ import {
 } from "@/lib/services/llm-service";
 import { buildDataDrivenSummaryMarkdown } from "@/lib/services/structured-briefing";
 import { synthesizeVoiceMemo } from "@/lib/services/voice-briefing-service";
-import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
+import { refreshNudgesForPartner, enrichNudgesWithInsights } from "@/lib/services/nudge-engine";
 import { addDays, isBefore, format, differenceInDays } from "date-fns";
 
 export async function GET(_request: NextRequest) {
@@ -27,6 +27,7 @@ export async function GET(_request: NextRequest) {
     const partnerId = await requirePartnerId();
 
     await refreshNudgesForPartner(partnerId);
+    await enrichNudgesWithInsights(partnerId);
 
     const [partner, openNudges, allUpcomingMeetings, clientNews] =
       await Promise.all([

@@ -65,10 +65,26 @@ export type NudgeEvidenceBlock = {
   };
 };
 
+export type StrategicInsightBlock = {
+  type: "strategic_insight";
+  data: {
+    narrative: string;
+    oneLiner?: string;
+    suggestedAction?: { label: string; context?: string };
+    insights: {
+      type: string;
+      reason: string;
+      signalContent?: string;
+      signalUrl?: string;
+    }[];
+  };
+};
+
 export type ChatBlock =
   | ContactCardBlock
   | ActionBarBlock
   | EmailPreviewBlock
   | MeetingCardBlock
   | StaleContactsListBlock
-  | NudgeEvidenceBlock;
+  | NudgeEvidenceBlock
+  | StrategicInsightBlock;

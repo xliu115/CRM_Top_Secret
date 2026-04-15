@@ -118,12 +118,20 @@ function buildNudgeRow(nudge: NudgeWithRelations, appUrl: string, isLast: boolea
   const borderBottom = isLast ? "" : `border-bottom: 1px solid ${MDS.border};`;
   const summaryText = buildSummaryHtml(nudge);
 
-  // Use suggestedAction.label for the CTA and deep-link to chat
   let ctaHref = `${appUrl}/nudges`;
   try {
     const meta = JSON.parse(nudge.metadata ?? "{}");
     if (meta?.strategicInsight?.suggestedAction?.label) {
       ctaLabel = meta.strategicInsight.suggestedAction.label;
+    }
+    if (nudge.ruleType === "CAMPAIGN_APPROVAL") {
+      if (meta.campaignId) ctaHref = `${appUrl}/campaigns/${meta.campaignId}`;
+      else ctaHref = `${appUrl}/campaigns`;
+    } else if (nudge.ruleType === "ARTICLE_CAMPAIGN") {
+      ctaHref = meta.contentItemId
+        ? `${appUrl}/campaigns/draft?contentItemId=${meta.contentItemId}`
+        : `${appUrl}/campaigns`;
+    } else if (nudge.ruleType !== "MEETING_PREP") {
       const sp = new URLSearchParams({
         q: ctaLabel,
         nudgeId: nudge.id,

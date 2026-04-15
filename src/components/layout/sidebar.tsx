@@ -16,7 +16,7 @@ import {
   TrendingUp,
   ChevronsLeft,
   ChevronsRight,
-  Sparkles,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Avatar } from "@/components/ui/avatar";
@@ -38,11 +38,6 @@ const navItems: NavItem[] = [
   { href: "/companies", label: "Institutions", icon: Building2 },
   { href: "/pipeline", label: "Pipeline", icon: TrendingUp },
   { href: "/chat", label: "Ask Anything", icon: MessageSquare },
-  {
-    href: "/prototype/outreach-reminder",
-    label: "Outreach prototype",
-    icon: Sparkles,
-  },
 ];
 
 export function Sidebar({

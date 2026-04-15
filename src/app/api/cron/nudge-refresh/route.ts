@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
+import { refreshNudgesForPartner, enrichNudgesWithInsights } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import { verifyCronSecret } from "@/lib/utils/cron-auth";
 
@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       partners.map(async (partner) => {
         const newsCount = await ingestNewsForPartner(partner.id);
         const nudgeCount = await refreshNudgesForPartner(partner.id);
+        await enrichNudgesWithInsights(partner.id);
         return { name: partner.name, newsCount, nudgeCount };
       })
     );

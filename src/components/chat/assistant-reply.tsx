@@ -197,9 +197,9 @@ export function AssistantReply({
             </div>
           )}
         </>
-      ) : (
+      ) : cleanContent.trim() ? (
         <MarkdownContent content={cleanContent} className={textClass} />
-      )}
+      ) : null}
 
       {!hasBlocks && signalLabels.length > 0 && (
         <div className="flex flex-wrap gap-2">

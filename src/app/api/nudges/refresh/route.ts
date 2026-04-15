@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
-import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
+import { refreshNudgesForPartner, enrichNudgesWithInsights } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import { nudgeRepo, partnerRepo } from "@/lib/repositories";
 import { sendNudgeDigest } from "@/lib/services/email-service";
@@ -17,7 +17,10 @@ export async function POST() {
     // 2. Generate nudges from all signals (including freshly fetched news)
     const count = await refreshNudgesForPartner(partnerId);
 
-    // 3. Send digest via email and SMS channels in the background
+    // 3. Enrich with strategic insights before sending digest
+    await enrichNudgesWithInsights(partnerId);
+
+    // 4. Send digest via email and SMS with enriched nudges
     const partner = await partnerRepo.findById(partnerId);
     if (partner && count > 0) {
       const nudges = await nudgeRepo.findByPartnerId(partnerId, {

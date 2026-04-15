@@ -2512,15 +2512,7 @@ function ContactNudgeCard({
               Generate Brief
             </Button>
           )}
-          {routesToChat ? (
-            <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} asChild>
-              <Link href={buildNudgeChatUrl()}>
-                <CtaIcon className="h-4 w-4" />
-                {cfg.ctaLabel}
-                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          ) : routesToCampaign ? (
+          {routesToCampaign ? (
             <Button size="sm" asChild>
               <Link href={getCampaignHref()}>
                 <CtaIcon className="h-4 w-4" />
@@ -2529,13 +2521,29 @@ function ContactNudgeCard({
               </Link>
             </Button>
           ) : (
-            <SuggestedActionButton
-              suggestedAction={meta?.strategicInsight?.suggestedAction}
-              fallbackLabel={hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
-              fallbackIcon={CtaIcon}
-              variant={hasMeetingPrep ? "outline" : "default"}
-              onClick={() => setShowDraft(!showDraft)}
-            />
+            <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} asChild>
+              <Link href={(() => {
+                if (routesToChat) return buildNudgeChatUrl();
+                const actionLabel = meta?.strategicInsight?.suggestedAction?.label;
+                const q = actionLabel
+                  ? `${actionLabel} for ${nudge.contact.name}`
+                  : `Nudge summary for ${nudge.contact.name}`;
+                const sp = new URLSearchParams({ q });
+                sp.set("nudgeId", nudge.id);
+                sp.set("contactId", nudge.contact.id);
+                return `/chat?${sp.toString()}`;
+              })()}>
+                <CtaIcon className="h-4 w-4" />
+                {routesToChat
+                  ? cfg.ctaLabel
+                  : (meta?.strategicInsight?.suggestedAction?.label
+                      ? (meta.strategicInsight.suggestedAction.label.length > 50
+                          ? meta.strategicInsight.suggestedAction.label.slice(0, 48) + "\u2026"
+                          : meta.strategicInsight.suggestedAction.label)
+                      : (hasMeetingPrep ? "Draft Email" : cfg.ctaLabel))}
+                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
           )}
 
           {nudge.status === "OPEN" && (
@@ -2558,7 +2566,7 @@ function ContactNudgeCard({
           )}
         </div>
 
-        {showDraft && !routesToChat && !routesToCampaign && (
+        {showDraft && hasMeetingPrep && (
           <ContactNudgeDraftPanel nudge={nudge} onClose={() => setShowDraft(false)} />
         )}
       </CardContent>

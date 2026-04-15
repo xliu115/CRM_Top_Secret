@@ -724,9 +724,9 @@ function NudgeCard({
               Generate Brief
             </Button>
           )}
-          {isSequenceNudge ? (
-            <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} asChild>
-              <Link href={(() => {
+          <Button size="sm" variant={hasMeetingPrep ? "outline" : "default"} asChild>
+            <Link href={(() => {
+              if (isSequenceNudge) {
                 const action = isReplyNeeded
                   ? `Draft a reply to ${nudge.contact.name}`
                   : `Draft a follow-up email to ${nudge.contact.name}`;
@@ -734,21 +734,27 @@ function NudgeCard({
                 sp.set("nudgeId", nudge.id);
                 sp.set("contactId", nudge.contact.id);
                 return `/chat?${sp.toString()}`;
-              })()}>
-                <CtaIcon className="h-4 w-4" />
-                {cfg.ctaLabel}
-                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          ) : (
-            <SuggestedActionButton
-              suggestedAction={meta?.strategicInsight?.suggestedAction}
-              fallbackLabel={hasMeetingPrep ? "Draft Email" : cfg.ctaLabel}
-              fallbackIcon={CtaIcon}
-              variant={hasMeetingPrep ? "outline" : "default"}
-              onClick={() => setOpenPanel(openPanel === "email" ? null : "email")}
-            />
-          )}
+              }
+              const actionLabel = meta?.strategicInsight?.suggestedAction?.label;
+              const q = actionLabel
+                ? `${actionLabel} for ${nudge.contact.name}`
+                : `Nudge summary for ${nudge.contact.name}`;
+              const sp = new URLSearchParams({ q });
+              sp.set("nudgeId", nudge.id);
+              sp.set("contactId", nudge.contact.id);
+              return `/chat?${sp.toString()}`;
+            })()}>
+              <CtaIcon className="h-4 w-4" />
+              {isSequenceNudge
+                ? cfg.ctaLabel
+                : (meta?.strategicInsight?.suggestedAction?.label
+                    ? (meta.strategicInsight.suggestedAction.label.length > 50
+                        ? meta.strategicInsight.suggestedAction.label.slice(0, 48) + "\u2026"
+                        : meta.strategicInsight.suggestedAction.label)
+                    : (hasMeetingPrep ? "Draft Email" : cfg.ctaLabel))}
+              <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
 
           {nudge.status === "OPEN" && (
             <>
@@ -772,9 +778,6 @@ function NudgeCard({
 
         {openPanel === "brief" && (
           <MeetingBriefPanel nudge={nudge} onClose={() => setOpenPanel(null)} />
-        )}
-        {openPanel === "email" && !isSequenceNudge && (
-          <DraftEmailPanel nudge={nudge} onClose={() => setOpenPanel(null)} onNudgeSent={onRefresh} />
         )}
       </CardContent>
     </Card>

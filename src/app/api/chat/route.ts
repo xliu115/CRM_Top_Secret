@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { retrieveContext, searchWeb } from "@/lib/services/rag-service";
 import { generateChatAnswer, generateEmail, generateMeetingBrief } from "@/lib/services/llm-service";
 import { generateNote } from "@/lib/services/llm-email";
+import { generateStrategicInsight } from "@/lib/services/llm-insight";
 import {
   generateQuick360,
   generateContact360,
@@ -148,6 +149,40 @@ export async function POST(request: NextRequest) {
     if (detectedIntent === "general_question" && regexIntent !== "general_question") {
       detectedIntent = regexIntent;
       detectedEntity = detectedEntity || extractNameFromQuery(message);
+    }
+
+    // ── Nudge-type-aware intent override ─────────────────────────────
+    // When a nudgeId is provided (user clicked a specific nudge action),
+    // check the nudge's ruleType to ensure correct routing:
+    // - Only MEETING_PREP nudges should route to the meeting brief path
+    // - All other contact nudges route to strategic insights + drafted email
+    let overrideNudge: NudgeWithRelations | null = null;
+    if (ctx_ids.nudgeId) {
+      const nudgeLookup = await prisma.nudge.findUnique({
+        where: { id: ctx_ids.nudgeId },
+        include: { contact: { include: { company: true } }, signal: true },
+      }).catch(() => null);
+
+      if (nudgeLookup) {
+        overrideNudge = nudgeLookup as NudgeWithRelations;
+        if (nudgeLookup.ruleType !== "MEETING_PREP") {
+          detectedIntent = "nudge_summary";
+        }
+      } else if (ctx_ids.contactId) {
+        const fallbackNudges = await nudgeRepo.findByContactId(ctx_ids.contactId).catch(() => []);
+        const openFallback = fallbackNudges.filter((n) => n.status === "OPEN");
+        if (openFallback.length > 0) {
+          const nonMeeting = openFallback.find((n) => n.ruleType !== "MEETING_PREP") ?? openFallback[0];
+          overrideNudge = nonMeeting;
+          if (nonMeeting.ruleType !== "MEETING_PREP") {
+            detectedIntent = "nudge_summary";
+          }
+        } else {
+          detectedIntent = "nudge_summary";
+        }
+      } else {
+        detectedIntent = "nudge_summary";
+      }
     }
 
     const isMeetingPrep = detectedIntent === "meeting_prep";
@@ -581,7 +616,9 @@ export async function POST(request: NextRequest) {
         const nameQuery = detectedEntity || extractNameFromQuery(message);
 
         let nudges: NudgeWithRelations[] = [];
-        if (ctx_ids.contactId) {
+        if (overrideNudge) {
+          nudges = [overrideNudge];
+        } else if (ctx_ids.contactId) {
           nudges = await nudgeRepo.findByContactId(ctx_ids.contactId);
           nudges = nudges.filter((n) => n.status === "OPEN");
         } else if (ctx_ids.nudgeId) {
@@ -605,141 +642,127 @@ export async function POST(request: NextRequest) {
           const primary = nudges[0];
           const contactName = primary.contact.name;
           const companyName = primary.contact.company?.name ?? "";
-
-          const sections: string[] = [];
-          sections.push(`## Why Reach Out: ${contactName}`);
-          if (primary.contact.title) {
-            sections.push(`**${primary.contact.title}** at ${companyName}`);
-          }
-          sections.push("");
-
-          const SKIP_LABEL_TYPES = new Set(["STALE_CONTACT", "FOLLOW_UP", "REPLY_NEEDED", "CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"]);
-          const seenLabels = new Map<string, string | null>();
-
+          // Collect insights and strategic narrative from all nudges
           let allInsights: InsightData[] = [];
-          let hasStrategicNarrative = false;
+          let strategicNarrative: string | null = null;
+          let strategicOneLiner: string | null = null;
+          let suggestedAction: { label: string; context?: string } | null = null;
 
           for (const nudge of nudges) {
             let insights: InsightData[] = [];
-            let strategicNarrative: string | null = null;
             try {
               const meta = JSON.parse(nudge.metadata ?? "{}");
               insights = meta?.insights ?? [];
-              strategicNarrative = meta?.strategicInsight?.narrative ?? null;
+              if (!strategicNarrative && meta?.strategicInsight?.narrative) {
+                strategicNarrative = meta.strategicInsight.narrative;
+                strategicOneLiner = meta.strategicInsight.oneLiner ?? null;
+                suggestedAction = meta.strategicInsight.suggestedAction ?? null;
+              }
             } catch { /* ignore */ }
             allInsights = allInsights.concat(insights);
+          }
 
-            if (strategicNarrative) {
-              hasStrategicNarrative = true;
-              sections.push(strategicNarrative);
-            } else {
-              const fragments = buildSummaryFragments(nudge, insights);
-              const md = fragmentsToMarkdown(fragments);
-              sections.push(md);
-            }
-
-            for (const ins of insights) {
-              if (SKIP_LABEL_TYPES.has(ins.type)) continue;
-              if (!seenLabels.has(ins.type)) {
-                seenLabels.set(ins.type, ins.signalUrl ?? null);
-              } else if (!seenLabels.get(ins.type) && ins.signalUrl) {
-                seenLabels.set(ins.type, ins.signalUrl);
+          // If strategic insight hasn't been enriched yet, generate on the fly
+          if (!strategicNarrative && primary.ruleType !== "MEETING_PREP") {
+            try {
+              const partner = await partnerRepo.findById(partnerId);
+              const pName = partner?.name ?? "Partner";
+              const insight = await generateStrategicInsight(primary, allInsights, pName);
+              if (insight) {
+                strategicNarrative = insight.narrative;
+                strategicOneLiner = insight.oneLiner;
+                suggestedAction = insight.suggestedAction;
+                const meta = JSON.parse(primary.metadata ?? "{}");
+                meta.strategicInsight = insight;
+                nudgeRepo.updateMetadata(primary.id, JSON.stringify(meta)).catch(() => {});
               }
+            } catch (err) {
+              console.error("[chat] on-the-fly insight generation failed:", err);
             }
           }
 
-          if (seenLabels.size > 0) {
-            const labelData = [...seenLabels.entries()].map(([type, url]) => ({ type, url }));
-            sections.push(`<!--SIGNAL_LABELS:${JSON.stringify(labelData)}-->`);
-          }
-
-          const NUDGE_TYPE_QUICK_ACTION: Record<string, { label: string; queryPrefix: string }> = {
-            MEETING_PREP: { label: "Review Meeting Brief", queryPrefix: "Review meeting brief for" },
-            REPLY_NEEDED: { label: "Draft Reply", queryPrefix: "Draft a reply email to" },
-            JOB_CHANGE: { label: "Draft Congratulations", queryPrefix: "Draft a congratulations email to" },
-            STALE_CONTACT: { label: "Draft Check-in", queryPrefix: "Draft a check-in email to" },
-            FOLLOW_UP: { label: "Draft Follow-up", queryPrefix: "Draft a follow-up email to" },
-            COMPANY_NEWS: { label: "Draft News Email", queryPrefix: "Draft a news email to" },
-            UPCOMING_EVENT: { label: "Draft Pre-Event Email", queryPrefix: "Draft a pre-event email to" },
-            EVENT_ATTENDED: { label: "Draft Event Follow-Up", queryPrefix: "Draft an event follow-up email to" },
-            EVENT_REGISTERED: { label: "Draft Outreach", queryPrefix: "Draft an event outreach email to" },
-            ARTICLE_READ: { label: "Draft Content Email", queryPrefix: "Draft a content follow-up email to" },
-            LINKEDIN_ACTIVITY: { label: "Draft LinkedIn Email", queryPrefix: "Draft a LinkedIn follow-up email to" },
-          };
-          const primaryType = primary.ruleType;
-          const typeAction = NUDGE_TYPE_QUICK_ACTION[primaryType] ?? { label: "Draft Email", queryPrefix: "Draft email to" };
-
-          // Use the suggestedAction label if available
-          let primaryActionLabel = typeAction.label;
-          let primaryActionQuery = `${typeAction.queryPrefix} ${contactName}`;
-          try {
-            const primaryMeta = JSON.parse(primary.metadata ?? "{}");
-            if (primaryMeta?.strategicInsight?.suggestedAction?.label) {
-              primaryActionLabel = primaryMeta.strategicInsight.suggestedAction.label;
-              primaryActionQuery = `${primaryMeta.strategicInsight.suggestedAction.label} for ${contactName}`;
-            }
-          } catch { /* ignore */ }
-
-          const quickActions = [
-            { label: primaryActionLabel, query: primaryActionQuery },
-            { label: "Quick 360", query: `Quick 360 for ${contactName}` },
-            { label: "Company 360", query: `Company 360 for ${companyName || contactName}` },
-          ];
-          sections.push(`\n<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`);
-
-          const primaryIconMap: Record<string, string> = {
-            MEETING_PREP: "calendar", REPLY_NEEDED: "reply", JOB_CHANGE: "mail",
-            STALE_CONTACT: "mail", FOLLOW_UP: "forward", COMPANY_NEWS: "mail",
-            UPCOMING_EVENT: "calendar", EVENT_ATTENDED: "mail", EVENT_REGISTERED: "mail",
-            ARTICLE_READ: "file", LINKEDIN_ACTIVITY: "mail",
-          };
-
-          const blocks: ChatBlock[] = [
-            {
-              type: "contact_card",
-              data: {
-                name: contactName,
-                title: primary.contact.title ?? undefined,
-                company: companyName || undefined,
-                contactId: primary.contactId,
-                priority: primary.priority ?? undefined,
+          // Unified block-based response for all non-meeting nudge summaries
+          {
+            const blocks: ChatBlock[] = [
+              {
+                type: "contact_card",
+                data: {
+                  name: contactName,
+                  title: primary.contact.title ?? undefined,
+                  company: companyName || undefined,
+                  contactId: primary.contactId,
+                  priority: primary.priority ?? undefined,
+                },
               },
-            },
-            {
+              {
+                type: "strategic_insight",
+                data: {
+                  narrative: strategicNarrative ?? primary.reason,
+                  oneLiner: strategicOneLiner ?? undefined,
+                  suggestedAction: suggestedAction ?? undefined,
+                  insights: allInsights.map((ins) => ({
+                    type: ins.type,
+                    reason: ins.reason,
+                    signalContent: ins.signalContent,
+                    signalUrl: ins.signalUrl ?? undefined,
+                  })),
+                },
+              },
+            ];
+
+            // Generate drafted email
+            try {
+              const contact = primary.contact;
+              const company = contact.company;
+              const emailCtx = await buildContactContext(contact, company ? { name: company.name, industry: company.industry ?? undefined, employeeCount: company.employeeCount ?? undefined, website: company.website ?? undefined } : undefined, partnerId);
+              emailCtx.partnerName = partnerName;
+
+              let nudgeReason = primary.reason;
+              if (suggestedAction?.context) {
+                nudgeReason = `${primary.reason}. Context: ${suggestedAction.context}`;
+              }
+
+              const emailResult = await generateEmail({
+                partnerName,
+                contactName,
+                contactTitle: contact.title ?? "",
+                companyName: companyName,
+                nudgeReason,
+                recentInteractions: emailCtx.interactions.slice(0, 5).map((i) => `${i.type} on ${i.date}: ${i.summary}`),
+                signals: emailCtx.signals.slice(0, 3).map((s) => `${s.type}: ${s.content.slice(0, 100)}`),
+              });
+
+              blocks.push({
+                type: "email_preview",
+                data: {
+                  to: contactName,
+                  subject: emailResult.subject,
+                  body: emailResult.body,
+                  contactId: primary.contactId,
+                },
+              });
+            } catch (emailErr) {
+              console.error("[chat] nudge email generation failed:", emailErr);
+            }
+
+            blocks.push({
               type: "action_bar",
               data: {
-                primary: { label: primaryActionLabel, query: primaryActionQuery, icon: primaryIconMap[primaryType] ?? "mail" },
+                primary: { label: "Send Email", query: `Send email to ${contactName}`, icon: "send" },
                 secondary: [
+                  { label: "Copy Email", query: "__copy_email__", icon: "copy" },
                   { label: "Quick 360", query: `Quick 360 for ${contactName}`, icon: "search" },
                   { label: "Company 360", query: `Company 360 for ${companyName || contactName}`, icon: "briefcase" },
                 ],
               },
-            },
-          ];
+            });
 
-          if (hasStrategicNarrative && allInsights.length > 0) {
-            blocks.push({
-              type: "nudge_evidence",
-              data: {
-                contactName,
-                insights: allInsights.map((ins) => ({
-                  type: ins.type,
-                  reason: ins.reason,
-                  signalContent: ins.signalContent,
-                  signalUrl: ins.signalUrl ?? undefined,
-                })),
-              },
-            } as ChatBlock);
+            return NextResponse.json({
+              answer: "",
+              sources: [],
+              blocks,
+            });
           }
-
-          const fullMarkdown = sections.join("\n");
-          const cleanAnswer = stripMarkers(fullMarkdown);
-
-          return NextResponse.json({
-            answer: cleanAnswer,
-            sources: [],
-            blocks,
-          });
         }
       } catch (err) {
         console.error("[chat] nudge summary intent failed:", err);

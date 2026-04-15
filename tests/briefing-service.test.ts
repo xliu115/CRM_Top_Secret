@@ -11,6 +11,7 @@ const {
   mockInteractionFindByContactId,
   mockIngestNews,
   mockRefreshNudges,
+  mockEnrichNudgesWithInsights,
   mockGenerateNarrativeBriefing,
   mockBuildBriefingHtml,
   mockResendSend,
@@ -24,6 +25,7 @@ const {
   mockInteractionFindByContactId: vi.fn(),
   mockIngestNews: vi.fn(),
   mockRefreshNudges: vi.fn(),
+  mockEnrichNudgesWithInsights: vi.fn(),
   mockGenerateNarrativeBriefing: vi.fn(),
   mockBuildBriefingHtml: vi.fn(),
   mockResendSend: vi.fn(),
@@ -52,6 +54,7 @@ vi.mock("@/lib/repositories", () => ({
 
 vi.mock("@/lib/services/nudge-engine", () => ({
   refreshNudgesForPartner: mockRefreshNudges,
+  enrichNudgesWithInsights: mockEnrichNudgesWithInsights,
 }));
 
 vi.mock("@/lib/services/news-ingestion-service", () => ({
@@ -130,6 +133,7 @@ describe("briefing-service", () => {
       vi.clearAllMocks();
       mockIngestNews.mockResolvedValue(2);
       mockRefreshNudges.mockResolvedValue(4);
+      mockEnrichNudgesWithInsights.mockResolvedValue(undefined);
       mockInteractionFindByContactIds.mockResolvedValue([]);
       mockInteractionFindByContactId.mockResolvedValue([]);
       mockNudgeFindByPartnerId.mockResolvedValue([minimalNudge()]);
@@ -157,6 +161,7 @@ describe("briefing-service", () => {
       expect(result).toEqual({ sent: true });
       expect(mockIngestNews).toHaveBeenCalledWith("partner-1");
       expect(mockRefreshNudges).toHaveBeenCalledWith("partner-1");
+      expect(mockEnrichNudgesWithInsights).toHaveBeenCalledWith("partner-1");
       expect(mockGenerateNarrativeBriefing).toHaveBeenCalledWith(
         expect.objectContaining({
           partnerName: "Ava Smith",

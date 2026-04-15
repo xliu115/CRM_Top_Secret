@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { partnerRepo, nudgeRepo, meetingRepo, signalRepo, sequenceRepo, interactionRepo } from "@/lib/repositories";
-import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
+import { refreshNudgesForPartner, enrichNudgesWithInsights } from "@/lib/services/nudge-engine";
 import { ingestNewsForPartner } from "@/lib/services/news-ingestion-service";
 import {
   generateNarrativeBriefing,
@@ -89,6 +89,9 @@ export async function sendMorningBriefing(
 
       const nudgeCount = await refreshNudgesForPartner(partnerId);
       console.log(`[briefing-service] Refreshed ${nudgeCount} nudges for ${partner.name}`);
+
+      await enrichNudgesWithInsights(partnerId);
+      console.log(`[briefing-service] Enriched nudges with strategic insights for ${partner.name}`);
     }
 
     const now = new Date();

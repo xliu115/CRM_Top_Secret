@@ -574,7 +574,7 @@ function StructuredBriefingView({
                 <div key={key} className="group">
                   <div className="flex items-baseline gap-1.5 flex-wrap">
                     <Link
-                      href={buildChatUrl({ q: `Nudge summary for ${first.contactName}`, contactId: first.contactId })}
+                      href={buildChatUrl({ q: `Nudge summary for ${first.contactName}`, contactId: first.contactId, nudgeId: first.nudgeId })}
                       className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
                     >
                       {first.contactName}

@@ -273,8 +273,19 @@ export function resolveDeeplink(
     }
     return "/campaigns";
   }
-  if (nudge?.contactId && nudge?.nudgeId) {
-    return `/contacts/${nudge.contactId}?nudge=${nudge.nudgeId}`;
+  if (nudge?.contactId && nudge?.ruleType !== "MEETING_PREP") {
+    const actionLabel = (() => {
+      try {
+        const meta = JSON.parse(nudge.metadata ?? "{}");
+        return meta?.strategicInsight?.suggestedAction?.label;
+      } catch { return undefined; }
+    })();
+    const sp = new URLSearchParams({
+      q: actionLabel ?? "Draft outreach",
+      ...(nudge.nudgeId && { nudgeId: nudge.nudgeId }),
+      contactId: nudge.contactId,
+    });
+    return `/chat?${sp.toString()}`;
   }
   if (nudge?.contactId) {
     return `/contacts/${nudge.contactId}`;
@@ -315,17 +326,30 @@ function buildFallbackActions(ctx: NarrativeBriefingContext): NarrativeBriefingA
           if (meta.campaignId) deeplink = `/campaigns/${meta.campaignId}`;
         } catch { /* fallback to /campaigns */ }
       }
-    } else if (n.ruleType === "ARTICLE_CAMPAIGN" && n.metadata) {
+    } else if (n.ruleType === "ARTICLE_CAMPAIGN") {
       try {
-        const meta = JSON.parse(n.metadata);
+        const meta = JSON.parse(n.metadata ?? "{}");
         deeplink = meta.contentItemId
           ? `/campaigns/draft?contentItemId=${meta.contentItemId}`
           : "/campaigns";
       } catch {
         deeplink = "/campaigns";
       }
+    } else if (n.contactId && n.ruleType !== "MEETING_PREP") {
+      const actionLabel = (() => {
+        try {
+          const meta = JSON.parse(n.metadata ?? "{}");
+          return meta?.strategicInsight?.suggestedAction?.label;
+        } catch { return undefined; }
+      })();
+      const sp = new URLSearchParams({
+        q: actionLabel ?? ruleLabels[n.ruleType ?? ""] ?? "Take action",
+        ...(n.nudgeId && { nudgeId: n.nudgeId }),
+        contactId: n.contactId,
+      });
+      deeplink = `/chat?${sp.toString()}`;
     } else if (n.contactId) {
-      deeplink = `/contacts/${n.contactId}${n.nudgeId ? `?nudge=${n.nudgeId}` : ""}`;
+      deeplink = `/contacts/${n.contactId}`;
     } else {
       deeplink = "/nudges";
     }

@@ -612,16 +612,10 @@ export async function refreshNudgesForPartner(partnerId: string) {
     await nudgeRepo.createMany(candidates);
   }
 
-  // Fire-and-forget: enrich nudges with strategic insights in the background
-  // so the refresh returns immediately and doesn't block briefing generation
-  enrichNudgesWithInsights(partnerId).catch((err) =>
-    console.error("[nudge-engine] Strategic insight generation failed:", err instanceof Error ? err.message : err),
-  );
-
   return candidates.length;
 }
 
-async function enrichNudgesWithInsights(partnerId: string) {
+export async function enrichNudgesWithInsights(partnerId: string) {
   const eligible = await nudgeRepo.findByPartnerId(partnerId, { status: "OPEN" });
   if (eligible.length === 0) return;
 

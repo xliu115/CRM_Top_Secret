@@ -10,9 +10,11 @@ import { MeetingCard } from "./meeting-card";
 import { StaleContactsList } from "./stale-contacts-list";
 import { NudgeEvidence } from "./nudge-evidence";
 import { NudgeSummaryShell } from "./nudge-summary-shell";
+import { StrategicInsight } from "./strategic-insight";
 
 type RenderedGroup =
   | { kind: "nudge-summary"; contactIdx: number; evidenceIdx: number; actionIdx?: number }
+  | { kind: "nudge-action"; contactIdx: number; insightIdx: number; emailIdx?: number; actionIdx?: number }
   | { kind: "email-draft"; contactIdx: number; emailIdx: number; actionIdx?: number }
   | { kind: "meetings-bundle"; meetingIdxs: number[]; actionIdx?: number }
   | { kind: "stale-queue"; listIdx: number; actionIdx?: number }
@@ -27,6 +29,29 @@ function detectGroups(blocks: ChatBlock[]): RenderedGroup[] {
   for (let i = 0; i < blocks.length; i++) {
     if (consumed.has(i)) continue;
     const b = blocks[i];
+
+    // 0. Nudge action: contact_card → strategic_insight → email_preview? → action_bar?
+    if (
+      b.type === "contact_card" &&
+      i + 1 < blocks.length &&
+      blocks[i + 1].type === "strategic_insight"
+    ) {
+      const group: RenderedGroup & { kind: "nudge-action" } = { kind: "nudge-action", contactIdx: i, insightIdx: i + 1 };
+      consumed.add(i);
+      consumed.add(i + 1);
+      let next = i + 2;
+      if (next < blocks.length && blocks[next].type === "email_preview") {
+        group.emailIdx = next;
+        consumed.add(next);
+        next++;
+      }
+      if (next < blocks.length && blocks[next].type === "action_bar") {
+        group.actionIdx = next;
+        consumed.add(next);
+      }
+      groups.push(group);
+      continue;
+    }
 
     // 1. Nudge summary: contact_card → nudge_evidence → action_bar?
     if (
@@ -142,6 +167,46 @@ export function BlockRenderer({
   return (
     <div className="space-y-3">
       {groups.map((group, gi) => {
+        // --- Nudge action: strategic insight card + optional drafted email ---
+        if (group.kind === "nudge-action") {
+          const contact = blocks[group.contactIdx] as Extract<ChatBlock, { type: "contact_card" }>;
+          const insight = blocks[group.insightIdx] as Extract<ChatBlock, { type: "strategic_insight" }>;
+          const email = group.emailIdx != null
+            ? (blocks[group.emailIdx] as Extract<ChatBlock, { type: "email_preview" }>)
+            : undefined;
+          const action = group.actionIdx != null
+            ? (blocks[group.actionIdx] as Extract<ChatBlock, { type: "action_bar" }>)
+            : undefined;
+          return (
+            <BlockClusterShell
+              key={gi}
+              priority={contact.data.priority}
+              header={
+                <div className="flex items-start justify-between gap-2">
+                  <ContactCard data={contact.data} embedded />
+                  {contact.data.priority && (
+                    <Badge variant={getPriorityVariant(contact.data.priority)} className="text-[10px] shrink-0 mt-0.5">
+                      {contact.data.priority}
+                    </Badge>
+                  )}
+                </div>
+              }
+              body={
+                <div className="space-y-0">
+                  <StrategicInsight data={insight.data} embedded />
+                  {email && (
+                    <>
+                      <div className="my-4 border-t border-border/50" />
+                      <EmailPreview data={email.data} embedded />
+                    </>
+                  )}
+                </div>
+              }
+              footer={action ? <ActionBar data={action.data} emailData={email?.data} onSendMessage={onSendMessage} embedded /> : undefined}
+            />
+          );
+        }
+
         // --- Nudge summary shell (existing) ---
         if (group.kind === "nudge-summary") {
           const contact = blocks[group.contactIdx] as Extract<ChatBlock, { type: "contact_card" }>;
@@ -280,6 +345,8 @@ export function BlockRenderer({
             return <StaleContactsList key={gi} data={block.data} />;
           case "nudge_evidence":
             return <NudgeEvidence key={gi} data={block.data} />;
+          case "strategic_insight":
+            return <StrategicInsight key={gi} data={block.data} />;
           default:
             return null;
         }
