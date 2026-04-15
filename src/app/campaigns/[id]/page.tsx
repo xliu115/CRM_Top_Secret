@@ -649,7 +649,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                 {isEventCampaign && (
                   <th className="py-3 pr-3">RSVP</th>
                 )}
-                <th className="py-3 pr-4 text-right">Actions</th>
+                <th className="py-3 pr-4 pl-3 text-right sticky right-0 bg-white dark:bg-card border-l border-border/40">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -665,7 +665,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                 return (
                   <tr
                     key={r.id}
-                    className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors"
+                    className="group/row border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors"
                   >
                     <td className="py-3 pl-4 pr-2 align-middle">
                       {canFollowUp ? (
@@ -728,7 +728,7 @@ function CampaignDetailBody({ id }: { id: string }) {
                         {rsvp.label}
                       </td>
                     )}
-                    <td className="py-3 pr-4 text-right align-middle">
+                    <td className="py-3 pr-4 pl-3 text-right align-middle sticky right-0 bg-white dark:bg-card group-hover/row:bg-muted/30 border-l border-border/40">
                       {canFollowUp ? (
                         <Button
                           type="button"
@@ -1010,7 +1010,7 @@ function ApprovalReviewSection({
               <th className="py-3 pr-3">Company</th>
               <th className="py-3 pr-3">Title</th>
               <th className="py-3 pr-3">Status</th>
-              <th className="py-3 pr-4 text-right">Actions</th>
+              <th className="py-3 pr-4 pl-3 text-right sticky right-0 bg-white dark:bg-card border-l border-border/40">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1027,7 +1027,7 @@ function ApprovalReviewSection({
                 <React.Fragment key={r.id}>
                   <tr
                     className={cn(
-                      "border-b border-border/60 last:border-0 transition-colors",
+                      "group/row border-b border-border/60 last:border-0 transition-colors",
                       isPending
                         ? "bg-amber-50/50 dark:bg-amber-950/10"
                         : r.approvalStatus === "APPROVED"
@@ -1078,7 +1078,14 @@ function ApprovalReviewSection({
                             : "Pending"}
                       </Badge>
                     </td>
-                    <td className="py-3 pr-4 text-right align-middle">
+                    <td className={cn(
+                      "py-3 pr-4 pl-3 text-right align-middle sticky right-0 border-l border-border/40",
+                      isPending
+                        ? "bg-amber-50/50 dark:bg-amber-950/10"
+                        : r.approvalStatus === "APPROVED"
+                          ? "bg-green-50/30 dark:bg-green-950/10"
+                          : "bg-red-50/30 dark:bg-red-950/10"
+                    )}>
                       {isPending ? (
                         <div className="inline-flex gap-1.5">
                           <Button

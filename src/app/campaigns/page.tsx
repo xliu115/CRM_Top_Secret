@@ -373,29 +373,31 @@ function MyCampaignsTab() {
                       ? "Pending approval"
                       : "Draft"}
               </p>
-              <div className="flex flex-wrap gap-4 text-sm border-t border-border/60 pt-3">
-                <span className="text-muted-foreground-subtle">
-                  Recipients:{" "}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {c._count.recipients}
-                  </span>
-                </span>
-                {c.status === "SENT" || c.status === "IN_PROGRESS" ? (
-                  <>
+              <div className="border-t border-border/60 pt-3">
+                {(c.status === "SENT" || c.status === "IN_PROGRESS") ? (
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg font-bold tabular-nums text-foreground">{pct(c.stats.openRate)}</span>
+                      <span className="text-[11px] text-muted-foreground-subtle">opened</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg font-bold tabular-nums text-foreground">{pct(c.stats.clickRate)}</span>
+                      <span className="text-[11px] text-muted-foreground-subtle">clicked</span>
+                    </div>
+                    <span className="ml-auto text-xs text-muted-foreground-subtle tabular-nums">
+                      {c._count.recipients} recipient{c._count.recipients !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4 text-sm">
                     <span className="text-muted-foreground-subtle">
-                      Open:{" "}
-                      <span className="font-semibold tabular-nums text-foreground">
-                        {pct(c.stats.openRate)}
-                      </span>
+                      {c._count.recipients} recipient{c._count.recipients !== 1 ? "s" : ""}
                     </span>
                     <span className="text-muted-foreground-subtle">
-                      Click:{" "}
-                      <span className="font-semibold tabular-nums text-foreground">
-                        {pct(c.stats.clickRate)}
-                      </span>
+                      {c.contents.length} content item{c.contents.length !== 1 ? "s" : ""}
                     </span>
-                  </>
-                ) : null}
+                  </div>
+                )}
               </div>
             </Link>
             );

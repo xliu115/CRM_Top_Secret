@@ -278,7 +278,7 @@ function ContactTableRow({ contact }: ContactRowProps) {
           contact.companyId ? (
             <Link
               href={`/companies/${contact.companyId}`}
-              className="text-xs text-primary hover:underline truncate leading-tight block"
+              className="text-sm font-medium text-foreground hover:text-primary hover:underline truncate leading-tight block transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
               {contact.company.name}
@@ -286,7 +286,7 @@ function ContactTableRow({ contact }: ContactRowProps) {
           ) : (
             <Link
               href="/companies"
-              className="text-xs text-primary hover:underline truncate leading-tight block"
+              className="text-sm font-medium text-foreground hover:text-primary hover:underline truncate leading-tight block transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
               {contact.company.name}
@@ -299,12 +299,11 @@ function ContactTableRow({ contact }: ContactRowProps) {
       <div className={`${COL.lastInteraction}`}>
         {contact.lastInteraction ? (
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground-subtle leading-tight">
-              <span className="font-medium text-foreground/80">{contact.lastInteraction.type}</span>
-              {" · "}
-              {format(new Date(contact.lastInteraction.date), "MMM d, yyyy")}
+            <p className="text-[13px] leading-tight">
+              <span className="font-medium text-foreground">{contact.lastInteraction.type}</span>
+              <span className="text-muted-foreground-subtle">{" · "}{format(new Date(contact.lastInteraction.date), "MMM d, yyyy")}</span>
             </p>
-            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{contact.lastInteraction.summary}</p>
+            <p className="text-xs text-muted-foreground-subtle truncate leading-tight mt-0.5">{contact.lastInteraction.summary}</p>
           </div>
         ) : (
           <span className="text-xs text-muted-foreground-subtle">—</span>
@@ -317,7 +316,7 @@ function ContactTableRow({ contact }: ContactRowProps) {
           <span className="text-xs text-muted-foreground-subtle">—</span>
         )}
       </div>
-      <div className={`${COL.otherPartners} text-xs text-muted-foreground-subtle truncate`}>
+      <div className={`${COL.otherPartners} text-[12px] text-muted-foreground-subtle/70 truncate`}>
         {contact.otherPartners.length > 0 ? contact.otherPartners.join(", ") : "—"}
       </div>
       <div className={COL.nudge}>
