@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 import { AssistantReply } from "@/components/chat/assistant-reply";
-import { useChatSession } from "@/hooks/use-chat-session";
+import { useChatSession, type PendingAction } from "@/hooks/use-chat-session";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 
 const SUGGESTED_QUESTIONS = [
@@ -45,6 +45,13 @@ function ChatPageContent() {
     startListening,
     stopListening,
   } = useChatSession();
+
+  function handleConfirmAction(action: PendingAction) {
+    const label = action.type === "dismiss_nudge" ? "Confirm dismiss"
+      : action.type === "snooze_nudge" ? "Confirm snooze"
+      : "Confirm send";
+    handleSend(label, { pendingAction: action });
+  }
 
   useEffect(() => {
     const q = searchParams.get("q");
@@ -155,6 +162,7 @@ function ChatPageContent() {
                             sources={msg.sources ?? []}
                             blocks={msg.blocks}
                             onSendMessage={handleSend}
+                            onConfirmAction={handleConfirmAction}
                           />
                         ) : (
                           msg.content

@@ -20,10 +20,19 @@ export type ChatMessage = {
   blocks?: ChatBlock[];
 };
 
+export type PendingAction = {
+  type: "dismiss_nudge" | "snooze_nudge" | "send_email";
+  nudgeId: string;
+  contactId: string;
+  contactName: string;
+  emailData?: { subject: string; body: string };
+};
+
 export type ChatContext = {
   nudgeId?: string;
   contactId?: string;
   meetingId?: string;
+  pendingAction?: PendingAction;
 };
 
 export function useChatSession() {

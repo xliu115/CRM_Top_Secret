@@ -11,6 +11,8 @@ import { StaleContactsList } from "./stale-contacts-list";
 import { NudgeEvidence } from "./nudge-evidence";
 import { NudgeSummaryShell } from "./nudge-summary-shell";
 import { StrategicInsight } from "./strategic-insight";
+import { ConfirmationCard } from "./confirmation-card";
+import type { PendingAction } from "@/hooks/use-chat-session";
 
 type RenderedGroup =
   | { kind: "nudge-summary"; contactIdx: number; evidenceIdx: number; actionIdx?: number }
@@ -156,9 +158,11 @@ function getPriorityVariant(priority: string): "default" | "destructive" | "warn
 export function BlockRenderer({
   blocks,
   onSendMessage,
+  onConfirmAction,
 }: {
   blocks: ChatBlock[];
   onSendMessage?: (message: string) => void;
+  onConfirmAction?: (action: PendingAction) => void;
 }) {
   if (blocks.length === 0) return null;
 
@@ -347,6 +351,15 @@ export function BlockRenderer({
             return <NudgeEvidence key={gi} data={block.data} />;
           case "strategic_insight":
             return <StrategicInsight key={gi} data={block.data} />;
+          case "confirmation_card":
+            return (
+              <ConfirmationCard
+                key={gi}
+                data={block.data}
+                onConfirm={onConfirmAction}
+                onCancel={() => onSendMessage?.("Cancelled.")}
+              />
+            );
           default:
             return null;
         }

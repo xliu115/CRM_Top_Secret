@@ -8,6 +8,7 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import { INSIGHT_TYPE_LABELS } from "@/lib/utils/nudge-summary";
 import { BlockRenderer } from "@/components/chat/blocks/block-renderer";
 import type { ChatBlock } from "@/lib/types/chat-blocks";
+import type { PendingAction } from "@/hooks/use-chat-session";
 
 type QuickAction = { label: string; query?: string; href?: string };
 
@@ -126,22 +127,31 @@ export function AssistantReply({
   sources = [],
   blocks,
   onSendMessage,
+  onConfirmAction,
   mobile = false,
 }: {
   content: string;
   sources?: Source[];
   blocks?: ChatBlock[];
   onSendMessage?: (message: string) => void;
+  onConfirmAction?: (action: PendingAction) => void;
   mobile?: boolean;
 }) {
-  const hasBlocks = !mobile && Array.isArray(blocks) && blocks.length > 0;
+  const hasActionableBlocks = Array.isArray(blocks) && blocks.length > 0 && blocks.some((b) => b.type === "confirmation_card");
+  const hasBlocks = (!mobile && Array.isArray(blocks) && blocks.length > 0) || hasActionableBlocks;
 
   const crmSources = sources.filter((s) => isCrmSource(s.type));
   const webSources = sources.filter(
     (s) => s.type === "Web Summary" || s.type === "Web Result"
   );
 
-  const { cleanContent: contentAfterLabels, labels: signalLabels } = extractSignalLabels(content);
+  const contentNoMarkers = content
+    .replace(/<!--PENDING_ACTION:[\s\S]*?-->/g, "")
+    .replace(/<!--EMAIL_BODY:[\s\S]*?-->/g, "")
+    .replace(/^\*\*Subject:\*\*\s*.+$/gm, "")
+    .trim();
+  const contentNoPending = contentNoMarkers;
+  const { cleanContent: contentAfterLabels, labels: signalLabels } = extractSignalLabels(contentNoPending);
   const { cleanContent, actions: quickActions } = extractQuickActions(contentAfterLabels);
 
   const introEnd = cleanContent.search(
@@ -251,7 +261,7 @@ export function AssistantReply({
       )}
 
       {hasBlocks && (
-        <BlockRenderer blocks={blocks!} onSendMessage={onSendMessage} />
+        <BlockRenderer blocks={blocks!} onSendMessage={onSendMessage} onConfirmAction={onConfirmAction} />
       )}
 
       {webSources.length > 0 && (

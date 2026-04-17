@@ -15,6 +15,9 @@ export type IntentType =
   | "firm_relationships"
   | "client_updates"
   | "weekly_summary"
+  | "dismiss_nudge"
+  | "snooze_nudge"
+  | "send_email"
   | "general_question";
 
 export type IntentResult = {
@@ -45,6 +48,9 @@ Intents:
 - "firm_relationships": User asks who else at the firm knows their contacts, or wants to see cross-coverage / shared relationships. May mention a specific contact or ask broadly. Examples: "who knows my contacts?", "who else knows Andy Jassy?", "firm relationships for Microsoft", "who has a relationship with Amy Hood?", "who covers Amazon?", "introductions to Brad Smith", "other partners at Google"
 - "client_updates": User wants a summary of recent activity, news, or signals for their top contacts/clients. Examples: "what's the latest with my top clients?", "any updates on my contacts?", "recent news about my clients", "what's new with my key accounts?", "client activity this week"
 - "weekly_summary": User wants a summary of their week — meetings attended, emails sent, interactions, follow-ups. Examples: "summarize my week", "weekly recap", "what happened this week?", "my week in review", "recap of the past week"
+- "dismiss_nudge": User wants to dismiss, skip, or mark a nudge as done. Examples: "dismiss this nudge", "skip the nudge for Sarah", "mark nudge as done", "I don't need this nudge", "done with this one", "close the nudge for Brad"
+- "snooze_nudge": User wants to snooze a nudge or be reminded later. Examples: "snooze this nudge", "remind me later about Sarah", "snooze for a week", "come back to this later", "snooze the nudge for Brad"
+- "send_email": User wants to SEND a previously drafted email (NOT draft a new one). Examples: "send the email", "send it", "go ahead and send", "yes send to Sarah", "send that email to Brad". This is for confirming dispatch of an already-drafted email, not for composing.
 - "general_question": Any other question that doesn't fit the above. Examples: "how is Nvidia doing?", "who changed jobs recently?"
 
 Entity extraction rules:

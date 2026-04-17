@@ -8,7 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AssistantReply } from "@/components/chat/assistant-reply";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import { useChatSession, type ChatMessage } from "@/hooks/use-chat-session";
+import { useChatSession, type ChatMessage, type PendingAction } from "@/hooks/use-chat-session";
 import { useBriefingAudio } from "@/hooks/use-briefing-audio";
 import { BriefingAudioControls } from "@/components/voice/briefing-audio-controls";
 import { buildBriefingSpokenOpening } from "@/lib/utils/briefing-spoken-opening";
@@ -128,6 +128,13 @@ export default function MobilePage() {
     stopListening,
     prependMessage,
   } = useChatSession();
+
+  function handleConfirmAction(action: PendingAction) {
+    const label = action.type === "dismiss_nudge" ? "Confirm dismiss"
+      : action.type === "snooze_nudge" ? "Confirm snooze"
+      : "Confirm send";
+    handleSend(label, { pendingAction: action });
+  }
 
   const briefingAudio = useBriefingAudio();
 
@@ -296,7 +303,9 @@ export default function MobilePage() {
                         <AssistantReply
                           content={msg.content}
                           sources={msg.sources ?? []}
+                          blocks={msg.blocks}
                           onSendMessage={handleSend}
+                          onConfirmAction={handleConfirmAction}
                           mobile
                         />
                       )

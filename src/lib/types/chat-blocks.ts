@@ -80,6 +80,23 @@ export type StrategicInsightBlock = {
   };
 };
 
+export type ConfirmationCardBlock = {
+  type: "confirmation_card";
+  data: {
+    title: string;
+    description: string;
+    action: {
+      type: "dismiss_nudge" | "snooze_nudge" | "send_email";
+      nudgeId: string;
+      contactId: string;
+      contactName: string;
+      emailData?: { subject: string; body: string };
+    };
+    confirmLabel: string;
+    cancelLabel: string;
+  };
+};
+
 export type ChatBlock =
   | ContactCardBlock
   | ActionBarBlock
@@ -87,4 +104,5 @@ export type ChatBlock =
   | MeetingCardBlock
   | StaleContactsListBlock
   | NudgeEvidenceBlock
-  | StrategicInsightBlock;
+  | StrategicInsightBlock
+  | ConfirmationCardBlock;

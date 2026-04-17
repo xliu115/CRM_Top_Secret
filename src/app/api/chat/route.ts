@@ -65,8 +65,16 @@ const CLIENT_UPDATES_INTENT =
   /\b((?:what'?s|any) (?:the )?(?:latest|new|updates?|news) (?:with|on|about|for) (?:my )?(?:top |key )?(?:clients?|contacts?|accounts?)|(?:client|contact|account) (?:updates?|activity|news)|recent (?:news|activity|updates?) (?:on|about|for) (?:my )?(?:clients?|contacts?)|top clients? (?:updates?|news))\b/i;
 const WEEKLY_SUMMARY_INTENT =
   /\b(summarize (?:my )?(?:week|past week)|weekly (?:recap|summary|review|report)|(?:my )?week in review|(?:what (?:happened|did I do)|recap (?:of )?(?:the |my )?(?:past |this )?week)|(?:my|this) (?:past )?week(?:'?s)? (?:summary|recap))\b/i;
+const DISMISS_NUDGE_INTENT =
+  /\b(dismiss (?:this |the )?nudge|skip (?:this |the )?(?:nudge|one)|mark (?:this |the )?(?:nudge )?(?:as )?done|done with (?:this|the) (?:nudge|one)|close (?:this |the )?nudge)\b/i;
+const SNOOZE_NUDGE_INTENT =
+  /\b(snooze (?:this |the )?(?:nudge|one)|remind me (?:about (?:this |the )?(?:nudge )?)?later|come back (?:to (?:this|the) (?:nudge )?)?later|snooze (?:for|until))\b/i;
+const SEND_EMAIL_INTENT =
+  /\b(send (?:the |that |this )?email|send it|go ahead (?:and )?send|yes,? send)\b/i;
+const AFFIRMATIVE_RESPONSE =
+  /^(yes|confirm|go ahead|do it|yep|yeah|sure|ok|okay)\b/i;
 
-const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT, NUDGE_SUMMARY_INTENT, FIRM_RELATIONSHIPS_INTENT, CLIENT_UPDATES_INTENT, WEEKLY_SUMMARY_INTENT];
+const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT, NUDGE_SUMMARY_INTENT, FIRM_RELATIONSHIPS_INTENT, CLIENT_UPDATES_INTENT, WEEKLY_SUMMARY_INTENT, DISMISS_NUDGE_INTENT, SNOOZE_NUDGE_INTENT, SEND_EMAIL_INTENT];
 
 function extractNameFromQuery(query: string): string {
   let cleaned = query;
@@ -86,7 +94,18 @@ export async function POST(request: NextRequest) {
     let body: {
       message?: string;
       history?: { role: "user" | "assistant"; content: string }[];
-      context?: { nudgeId?: string; contactId?: string; meetingId?: string };
+      context?: {
+        nudgeId?: string;
+        contactId?: string;
+        meetingId?: string;
+        pendingAction?: {
+          type: "dismiss_nudge" | "snooze_nudge" | "send_email";
+          nudgeId: string;
+          contactId: string;
+          contactName: string;
+          emailData?: { subject: string; body: string };
+        };
+      };
     } = {};
     try {
       body = await request.json();
@@ -108,6 +127,110 @@ export async function POST(request: NextRequest) {
     const ctx_ids = body.context ?? {};
     const partner = await partnerRepo.findById(partnerId);
     const partnerName = partner?.name ?? "User";
+
+    // ── Pending action execution (from confirmation card) ─────────────
+    const pendingAction = ctx_ids.pendingAction;
+    if (pendingAction && ["dismiss_nudge", "snooze_nudge", "send_email"].includes(pendingAction.type)) {
+      try {
+        if (pendingAction.type === "dismiss_nudge") {
+          await nudgeRepo.updateStatus(pendingAction.nudgeId, "DONE");
+          return NextResponse.json({
+            answer: `Done — nudge for **${pendingAction.contactName}** has been dismissed.`,
+            sources: [],
+          });
+        }
+        if (pendingAction.type === "snooze_nudge") {
+          await nudgeRepo.updateStatus(pendingAction.nudgeId, "SNOOZED");
+          return NextResponse.json({
+            answer: `Snoozed — nudge for **${pendingAction.contactName}** will come back later.`,
+            sources: [],
+          });
+        }
+        if (pendingAction.type === "send_email" && pendingAction.emailData) {
+          const sendRes = await fetch(new URL("/api/outreach/send", request.url), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: request.headers.get("cookie") ?? "" },
+            body: JSON.stringify({
+              contactId: pendingAction.contactId,
+              nudgeId: pendingAction.nudgeId,
+              subject: pendingAction.emailData.subject,
+              body: pendingAction.emailData.body,
+            }),
+          });
+          if (sendRes.ok) {
+            return NextResponse.json({
+              answer: `Email sent to **${pendingAction.contactName}**.\n\n**Subject:** ${pendingAction.emailData.subject}`,
+              sources: [],
+            });
+          }
+          return NextResponse.json({
+            answer: `Sorry, I couldn't send the email to **${pendingAction.contactName}**. Please try again from the nudge card.`,
+            sources: [],
+          });
+        }
+        if (pendingAction.type === "send_email" && !pendingAction.emailData) {
+          return NextResponse.json({
+            answer: `I don't have the email content to send to **${pendingAction.contactName}**. Please draft an email first.`,
+            sources: [],
+          });
+        }
+      } catch (err) {
+        console.error("[chat] pending action execution failed:", err);
+        return NextResponse.json({
+          answer: "Sorry, something went wrong executing that action. Please try again.",
+          sources: [],
+        });
+      }
+    }
+
+    // ── Voice affirmative response (resolve from last confirmation_card in history) ──
+    if (AFFIRMATIVE_RESPONSE.test(message) && body.history && body.history.length > 0) {
+      const lastAssistant = [...body.history].reverse().find((m) => m.role === "assistant");
+      if (lastAssistant) {
+        const confirmMatch = lastAssistant.content.match(/<!--PENDING_ACTION:([\s\S]*?)-->/);
+        if (confirmMatch) {
+          try {
+            const action = JSON.parse(confirmMatch[1]) as typeof pendingAction;
+            if (action && ["dismiss_nudge", "snooze_nudge", "send_email"].includes(action.type)) {
+              if (action.type === "dismiss_nudge") {
+                await nudgeRepo.updateStatus(action.nudgeId, "DONE");
+                return NextResponse.json({
+                  answer: `Done — nudge for **${action.contactName}** has been dismissed.`,
+                  sources: [],
+                });
+              }
+              if (action.type === "snooze_nudge") {
+                await nudgeRepo.updateStatus(action.nudgeId, "SNOOZED");
+                return NextResponse.json({
+                  answer: `Snoozed — nudge for **${action.contactName}** will come back later.`,
+                  sources: [],
+                });
+              }
+              if (action.type === "send_email" && action.emailData) {
+                const sendRes = await fetch(new URL("/api/outreach/send", request.url), {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Cookie: request.headers.get("cookie") ?? "" },
+                  body: JSON.stringify({
+                    contactId: action.contactId,
+                    nudgeId: action.nudgeId,
+                    subject: action.emailData.subject,
+                    body: action.emailData.body,
+                  }),
+                });
+                if (sendRes.ok) {
+                  return NextResponse.json({
+                    answer: `Email sent to **${action.contactName}**.\n\n**Subject:** ${action.emailData.subject}`,
+                    sources: [],
+                  });
+                }
+              }
+            }
+          } catch {
+            // Malformed pending action marker — fall through to normal routing
+          }
+        }
+      }
+    }
 
     // ── Intent detection (LLM classifier with regex fallback) ────────
     let detectedIntent: IntentType = "general_question";
@@ -134,6 +257,9 @@ export async function POST(request: NextRequest) {
     else if (NUDGE_SUMMARY_INTENT.test(message)) regexIntent = "nudge_summary";
     else if (FIRM_RELATIONSHIPS_INTENT.test(message)) regexIntent = "firm_relationships";
     else if (CLIENT_UPDATES_INTENT.test(message)) regexIntent = "client_updates";
+    else if (DISMISS_NUDGE_INTENT.test(message)) regexIntent = "dismiss_nudge";
+    else if (SNOOZE_NUDGE_INTENT.test(message)) regexIntent = "snooze_nudge";
+    else if (SEND_EMAIL_INTENT.test(message)) regexIntent = "send_email";
 
     if (classified && classified.confidence >= 0.5 && classified.intent !== "general_question") {
       detectedIntent = classified.intent;
@@ -200,6 +326,9 @@ export async function POST(request: NextRequest) {
     const isFirmRelationships = detectedIntent === "firm_relationships";
     const isClientUpdates = detectedIntent === "client_updates";
     const isWeeklySummary = detectedIntent === "weekly_summary";
+    const isDismissNudge = detectedIntent === "dismiss_nudge";
+    const isSnoozeNudge = detectedIntent === "snooze_nudge";
+    const isSendEmail = detectedIntent === "send_email";
 
     // ── Meeting Prep ─────────────────────────────────────────────────
     if (isMeetingPrep) {
@@ -615,6 +744,7 @@ export async function POST(request: NextRequest) {
     if (isNudgeSummary) {
       try {
         const nameQuery = detectedEntity || extractNameFromQuery(message);
+        let draftMarker = "";
 
         let nudges: NudgeWithRelations[] = [];
         if (overrideNudge) {
@@ -742,6 +872,7 @@ export async function POST(request: NextRequest) {
                   contactId: primary.contactId,
                 },
               });
+              draftMarker = `**Subject:** ${emailResult.subject}\n<!--EMAIL_BODY:${emailResult.body}-->`;
             } catch (emailErr) {
               console.error("[chat] nudge email generation failed:", emailErr);
             }
@@ -759,7 +890,7 @@ export async function POST(request: NextRequest) {
             });
 
             return NextResponse.json({
-              answer: "",
+              answer: draftMarker,
               sources: [],
               blocks,
             });
@@ -1007,6 +1138,134 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error("[chat] weekly summary intent failed:", err);
         return NextResponse.json({ answer: "Sorry, I had trouble generating your weekly summary. Please try again.", sources: [] });
+      }
+    }
+
+    // ── Voice Quick Actions: dismiss, snooze, send email ──────────────
+    if (isDismissNudge || isSnoozeNudge || isSendEmail) {
+      try {
+        const actionLabel = isDismissNudge ? "dismiss" : isSnoozeNudge ? "snooze" : "send email for";
+        let targetNudge: NudgeWithRelations | null = null;
+
+        // For send_email, look for a recently drafted email in conversation history
+        let draftedEmail: { subject: string; body: string } | null = null;
+        if (isSendEmail && body.history) {
+          for (let i = body.history.length - 1; i >= 0; i--) {
+            const msg = body.history[i];
+            if (msg.role !== "assistant") continue;
+            const subjectMatch = msg.content.match(/\*\*Subject:\*\*\s*(.+)/);
+            const bodyMatch = msg.content.match(/<!--EMAIL_BODY:([\s\S]*?)-->/);
+            if (subjectMatch) {
+              draftedEmail = {
+                subject: subjectMatch[1].trim(),
+                body: bodyMatch ? bodyMatch[1].trim() : msg.content.slice(0, 2000),
+              };
+              break;
+            }
+          }
+        }
+
+        // Resolve nudge: from context, entity name, or most recent open nudge
+        if (ctx_ids.nudgeId) {
+          targetNudge = await prisma.nudge.findUnique({
+            where: { id: ctx_ids.nudgeId },
+            include: { contact: { include: { company: true } }, signal: true },
+          }).catch(() => null) as NudgeWithRelations | null;
+        }
+        if (!targetNudge && (detectedEntity || ctx_ids.contactId)) {
+          const nameQuery = detectedEntity || "";
+          let resolvedContactId = ctx_ids.contactId;
+          if (!resolvedContactId && nameQuery) {
+            const matchedContacts = await contactRepo.search(nameQuery, partnerId);
+            if (matchedContacts.length > 0) resolvedContactId = matchedContacts[0].id;
+          }
+          if (resolvedContactId) {
+            const contactNudges = await nudgeRepo.findByContactId(resolvedContactId).catch(() => []);
+            targetNudge = (contactNudges.find((n) => n.status === "OPEN") ?? null) as NudgeWithRelations | null;
+          }
+        }
+        if (!targetNudge) {
+          // Fall back: find the most recent open nudge for this partner
+          const recentNudges = await prisma.nudge.findMany({
+            where: { contact: { partnerId }, status: "OPEN" },
+            include: { contact: { include: { company: true } }, signal: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          });
+          if (recentNudges.length > 0) targetNudge = recentNudges[0] as NudgeWithRelations;
+        }
+
+        if (!targetNudge) {
+          return NextResponse.json({
+            answer: `I couldn't find an open nudge to ${actionLabel}. You can see all your nudges on the Nudges page.`,
+            sources: [],
+          });
+        }
+
+        const contactName = targetNudge.contact?.name ?? "this contact";
+        const companyName = targetNudge.contact?.company?.name ?? "";
+        const nudgeReason = targetNudge.reason ?? "Outreach recommended";
+
+        const actionType = isDismissNudge ? "dismiss_nudge" as const
+          : isSnoozeNudge ? "snooze_nudge" as const
+          : "send_email" as const;
+
+        // Build confirmation card
+        let title: string;
+        let description: string;
+        let confirmLabel: string;
+        if (isDismissNudge) {
+          title = `Dismiss nudge for ${contactName}?`;
+          description = `**${contactName}**${companyName ? ` (${companyName})` : ""} — ${nudgeReason}`;
+          confirmLabel = "Dismiss";
+        } else if (isSnoozeNudge) {
+          title = `Snooze nudge for ${contactName}?`;
+          description = `**${contactName}**${companyName ? ` (${companyName})` : ""} — ${nudgeReason}. This nudge will come back later.`;
+          confirmLabel = "Snooze";
+        } else {
+          if (!draftedEmail) {
+            return NextResponse.json({
+              answer: `I don't have a drafted email to send for **${contactName}**. Try "Draft an email to ${contactName}" first.`,
+              sources: [],
+            });
+          }
+          title = `Send email to ${contactName}?`;
+          description = `**To:** ${contactName}${companyName ? ` (${companyName})` : ""}\n**Subject:** ${draftedEmail.subject}`;
+          confirmLabel = "Send";
+        }
+
+        const actionData = {
+          type: actionType,
+          nudgeId: targetNudge.id,
+          contactId: targetNudge.contactId,
+          contactName,
+          ...(draftedEmail && { emailData: draftedEmail }),
+        };
+
+        const blocks: ChatBlock[] = [{
+          type: "confirmation_card",
+          data: {
+            title,
+            description,
+            action: actionData,
+            confirmLabel,
+            cancelLabel: "Cancel",
+          },
+        }];
+
+        // Embed pending action in the answer for voice affirmative resolution
+        const pendingMarker = `<!--PENDING_ACTION:${JSON.stringify(actionData)}-->`;
+        return NextResponse.json({
+          answer: `${pendingMarker}`,
+          sources: [],
+          blocks,
+        });
+      } catch (err) {
+        console.error("[chat] voice quick action intent failed:", err);
+        return NextResponse.json({
+          answer: "Sorry, I had trouble processing that action. Please try again.",
+          sources: [],
+        });
       }
     }
 
