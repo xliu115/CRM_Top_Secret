@@ -90,4 +90,55 @@ export async function callLLMJson<T = Record<string, unknown>>(
   }
 }
 
+export interface WebSearchCitation {
+  url: string;
+  title: string;
+}
+
+export async function callLLMWithWebSearch(
+  systemPrompt: string,
+  userPrompt: string,
+  options?: { model?: string; maxOutputTokens?: number }
+): Promise<{ text: string; citations: WebSearchCitation[] } | null> {
+  if (!openai) return null;
+  const model = options?.model ?? process.env.COMPANY_BRIEF_MODEL ?? "gpt-4o-mini";
+  try {
+    const response = await openai.responses.create({
+      model,
+      instructions: systemPrompt,
+      input: userPrompt,
+      tools: [{ type: "web_search_preview" as const }],
+      ...(options?.maxOutputTokens && { max_output_tokens: options.maxOutputTokens }),
+    });
+
+    let text = "";
+    const citations: WebSearchCitation[] = [];
+    const seenUrls = new Set<string>();
+
+    for (const item of response.output) {
+      if (item.type === "message") {
+        for (const block of item.content) {
+          if (block.type === "output_text") {
+            text += block.text;
+            for (const ann of block.annotations ?? []) {
+              if (ann.type === "url_citation" && !seenUrls.has(ann.url)) {
+                seenUrls.add(ann.url);
+                citations.push({ url: ann.url, title: ann.title ?? ann.url });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return { text, citations };
+  } catch (err) {
+    console.error(
+      "[llm-service] OpenAI web search call failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
+}
+
 export { openai };

@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import { prisma } from "@/lib/db/prisma";
-import { searchWeb } from "@/lib/services/rag-service";
+import { differenceInDays } from "date-fns";
 import {
   generateCompany360,
+  computeIntensity,
   type Company360Context,
   type Company360ContactSummary,
   type Company360PartnerCoverage,
+  type FirmCoverageData,
+  type HealthMatrixEntry,
 } from "@/lib/services/llm-company360";
+import { getCachedCompanyBrief, refreshCompanyBrief } from "@/lib/services/llm-company-brief";
 
 export async function GET(
   _request: NextRequest,
@@ -32,7 +36,7 @@ export async function GET(
       signalsResult,
       meetingsResult,
       sequencesResult,
-      webNewsResult,
+      companyBriefResult,
     ] = await Promise.allSettled([
       prisma.contact.findMany({
         where: { companyId: id },
@@ -62,18 +66,31 @@ export async function GET(
         },
         include: { contact: true },
       }),
-      searchWeb(
-        `${company.name} ${company.industry ?? ""} latest news market`,
-        5
-      ),
+      getCachedCompanyBrief(id),
     ]);
 
     const allContacts = settled(contactsResult, []);
     const signals = settled(signalsResult, []);
     const meetings = settled(meetingsResult, []);
     const sequences = settled(sequencesResult, []);
-    const webNews = settled(webNewsResult, []);
+    let companyBrief = settled(companyBriefResult, null);
 
+    // Auto-generate Company Brief if no cached version exists
+    if (!companyBrief) {
+      try {
+        companyBrief = await refreshCompanyBrief(
+          id,
+          company.name,
+          company.industry ?? "",
+        );
+      } catch (err) {
+        console.error("[company360] Auto-generate Company Brief failed:", err);
+      }
+    }
+
+    const now = new Date();
+
+    // Build contact summaries for LLM context
     const contacts: Company360ContactSummary[] = allContacts.map((c) => {
       const lastInteraction = c.interactions[0] ?? null;
       const lastSentiment = lastInteraction?.sentiment ?? null;
@@ -88,6 +105,7 @@ export async function GET(
       };
     });
 
+    // Build partner coverage map
     const partnerMap = new Map<
       string,
       { name: string; contacts: number; interactions: number; lastDate: Date | null }
@@ -119,6 +137,46 @@ export async function GET(
       lastInteractionDate: data.lastDate?.toISOString() ?? null,
     }));
 
+    // Structured firm coverage
+    const firmCoverage: FirmCoverageData = {
+      totalPartners: partners.length,
+      totalContacts: allContacts.length,
+      partners,
+    };
+
+    // Structured health matrix
+    const healthMatrix: HealthMatrixEntry[] = allContacts.map((c) => {
+      const lastInteraction = c.interactions[0] ?? null;
+      const lastDate = lastInteraction?.date ?? null;
+      const daysSince = lastDate ? differenceInDays(now, new Date(lastDate)) : null;
+      const { level, score } = computeIntensity(c.interactions.length, daysSince);
+      return {
+        name: c.name,
+        title: c.title ?? "",
+        importance: c.importance ?? "MEDIUM",
+        interactionCount: c.interactions.length,
+        lastInteractionDate: lastDate?.toISOString() ?? null,
+        daysSinceLastInteraction: daysSince,
+        intensity: level,
+        intensityScore: score,
+        sentiment: lastInteraction?.sentiment ?? null,
+        openNudges: c.nudges?.length ?? 0,
+        contactId: c.id,
+      };
+    });
+
+    // Sort: CRITICAL first, then by staleness
+    const importanceOrder: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    healthMatrix.sort((a, b) => {
+      const ia = importanceOrder[a.importance] ?? 9;
+      const ib = importanceOrder[b.importance] ?? 9;
+      if (ia !== ib) return ia - ib;
+      const da = a.daysSinceLastInteraction ?? 9999;
+      const db = b.daysSinceLastInteraction ?? 9999;
+      return db - da;
+    });
+
+    // Build LLM context (overview, signals, recommendations only)
     const ctx: Company360Context = {
       company: {
         name: company.name,
@@ -148,13 +206,7 @@ export async function GET(
         currentStep: s.currentStep,
         totalSteps: s.totalSteps,
       })),
-      webNews: webNews
-        .filter((d) => d.type !== "Web Summary")
-        .map((d) => ({
-          title: d.type,
-          content: d.content,
-          url: d.url ?? "",
-        })),
+      webNews: [],
     };
 
     const result = await generateCompany360(ctx);
@@ -165,7 +217,12 @@ export async function GET(
         name: company.name,
         industry: company.industry,
       },
-      result,
+      result: {
+        ...result,
+        firmCoverage,
+        healthMatrix,
+        companyBrief,
+      },
     });
   } catch (err) {
     console.error("[company360] Error:", err);

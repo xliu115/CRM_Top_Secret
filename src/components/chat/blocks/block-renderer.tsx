@@ -325,7 +325,7 @@ export function BlockRenderer({
           return (
             <BlockClusterShell
               key={gi}
-              body={<ActionBar data={action.data} onSendMessage={onSendMessage} embedded />}
+              footer={<ActionBar data={action.data} onSendMessage={onSendMessage} embedded />}
             />
           );
         }

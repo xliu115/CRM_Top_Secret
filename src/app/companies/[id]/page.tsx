@@ -24,6 +24,11 @@ import {
   UserCheck,
   Sparkles,
   X,
+  RefreshCw,
+  FileBarChart,
+  Mic,
+  Newspaper,
+  TrendingUp,
 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -319,6 +324,121 @@ function ContactTableRow({ contact }: { contact: ContactSummary }) {
   );
 }
 
+type DeduplicatedHealthEntry = {
+  name: string;
+  title: string;
+  importance: string;
+  interactionCount: number;
+  lastInteractionDate: string | null;
+  daysSinceLastInteraction: number | null;
+  intensity: string;
+  intensityScore: number;
+  openNudges: number;
+  contactId: string;
+  partnerCount: number;
+};
+
+function deduplicateHealthMatrix(
+  entries: {
+    name: string;
+    title: string;
+    importance: string;
+    interactionCount: number;
+    lastInteractionDate: string | null;
+    daysSinceLastInteraction: number | null;
+    intensity: string;
+    intensityScore: number;
+    sentiment: string | null;
+    openNudges: number;
+    contactId: string;
+  }[]
+): DeduplicatedHealthEntry[] {
+  const byName = new Map<string, DeduplicatedHealthEntry>();
+  for (const e of entries) {
+    const existing = byName.get(e.name);
+    if (!existing) {
+      byName.set(e.name, { ...e, partnerCount: 1 });
+    } else {
+      existing.partnerCount++;
+      existing.interactionCount += e.interactionCount;
+      existing.openNudges += e.openNudges;
+      if (e.intensityScore > existing.intensityScore) {
+        existing.intensity = e.intensity;
+        existing.intensityScore = e.intensityScore;
+        existing.lastInteractionDate = e.lastInteractionDate;
+        existing.daysSinceLastInteraction = e.daysSinceLastInteraction;
+        existing.contactId = e.contactId;
+      }
+    }
+  }
+  const importanceOrder: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  return Array.from(byName.values()).sort((a, b) => {
+    const ia = importanceOrder[a.importance] ?? 9;
+    const ib = importanceOrder[b.importance] ?? 9;
+    if (ia !== ib) return ia - ib;
+    return b.intensityScore - a.intensityScore;
+  });
+}
+
+function formatBriefAge(generatedAt: string): string {
+  const ms = Date.now() - new Date(generatedAt).getTime();
+  const hours = Math.floor(ms / 3600000);
+  if (hours < 1) return "just now";
+  if (hours === 1) return "1 hour ago";
+  if (hours < 24) return `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
+}
+
+function Co360CollapsibleSection({
+  sectionId,
+  title,
+  collapsed,
+  onToggle,
+  children,
+  headerRight,
+  nested,
+}: {
+  sectionId: string;
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  headerRight?: React.ReactNode;
+  nested?: boolean;
+}) {
+  return (
+    <div className={cn(
+      "rounded-lg border border-border bg-background/80",
+      nested && "border-border/50"
+    )}>
+      <button
+        className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/30 transition-colors"
+        onClick={onToggle}
+      >
+        <span className={cn(
+          "font-semibold uppercase tracking-wider text-muted-foreground",
+          nested ? "text-[10px]" : "text-xs"
+        )}>
+          {title}
+        </span>
+        <div className="flex items-center gap-2">
+          {headerRight}
+          {collapsed ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </div>
+      </button>
+      {!collapsed && (
+        <div className="px-4 pb-3">{children}</div>
+      )}
+    </div>
+  );
+}
+
 export default function CompanyDetailPage() {
   const params = useParams();
   const id = params?.id as string;
@@ -350,9 +470,40 @@ export default function CompanyDetailPage() {
   const [co360Result, setCo360Result] = useState<{
     summary: string;
     sections: { id: string; title: string; content: string }[];
+    firmCoverage: {
+      totalPartners: number;
+      totalContacts: number;
+      partners: {
+        partnerName: string;
+        isCurrentUser: boolean;
+        contactCount: number;
+        totalInteractions: number;
+        lastInteractionDate: string | null;
+      }[];
+    };
+    healthMatrix: {
+      name: string;
+      title: string;
+      importance: string;
+      interactionCount: number;
+      lastInteractionDate: string | null;
+      daysSinceLastInteraction: number | null;
+      intensity: string;
+      intensityScore: number;
+      sentiment: string | null;
+      openNudges: number;
+      contactId: string;
+    }[];
+    companyBrief: {
+      subsections: { id: string; title: string; content: string }[];
+      sources: { id: string; title: string; type: string; url: string; date: string; publisher?: string }[];
+      generatedAt: string;
+      model: string;
+    } | null;
   } | null>(null);
   const [co360Expanded, setCo360Expanded] = useState(true);
   const [co360CollapsedSections, setCo360CollapsedSections] = useState<Set<string>>(new Set());
+  const [briefRefreshing, setBriefRefreshing] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -402,6 +553,20 @@ export default function CompanyDetailPage() {
       setCo360Error(err instanceof Error ? err.message : "Failed to generate Company 360");
     } finally {
       setCo360Loading(false);
+    }
+  }
+
+  async function handleRefreshBrief() {
+    setBriefRefreshing(true);
+    try {
+      const res = await fetch(`/api/companies/${id}/company-brief/refresh`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to refresh Company Brief");
+      const data = await res.json();
+      setCo360Result((prev) => prev ? { ...prev, companyBrief: data.companyBrief } : prev);
+    } catch (err) {
+      console.error("Brief refresh failed:", err);
+    } finally {
+      setBriefRefreshing(false);
     }
   }
 
@@ -667,30 +832,238 @@ export default function CompanyDetailPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
-              {co360Result.sections.map((section) => (
-                <div
+              {/* Section 1: Company Overview (LLM prose) */}
+              {co360Result.sections.filter((s) => s.id === "overview").map((section) => (
+                <Co360CollapsibleSection
                   key={section.id}
-                  className="rounded-lg border border-border bg-background/80"
+                  sectionId={section.id}
+                  title={section.title}
+                  collapsed={co360CollapsedSections.has(section.id)}
+                  onToggle={() => toggleCo360Section(section.id)}
                 >
-                  <button
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/30 transition-colors"
-                    onClick={() => toggleCo360Section(section.id)}
-                  >
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {section.title}
-                    </span>
-                    {co360CollapsedSections.has(section.id) ? (
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    ) : (
-                      <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                  </button>
-                  {!co360CollapsedSections.has(section.id) && (
-                    <div className="px-4 pb-3">
-                      <MarkdownPreview content={section.content} />
+                  <MarkdownPreview content={section.content} />
+                </Co360CollapsibleSection>
+              ))}
+
+              {/* Section 2: Firm Coverage & Relationship Health (combined) */}
+              <Co360CollapsibleSection
+                sectionId="coverage-health"
+                title="Firm Coverage & Relationship Health"
+                collapsed={co360CollapsedSections.has("coverage-health")}
+                onToggle={() => toggleCo360Section("coverage-health")}
+              >
+                {/* Partner coverage chips */}
+                {co360Result.firmCoverage.partners.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {co360Result.firmCoverage.partners
+                      .sort((a, b) => (a.isCurrentUser ? -1 : b.isCurrentUser ? 1 : b.totalInteractions - a.totalInteractions))
+                      .map((p, i) => (
+                        <div
+                          key={i}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
+                            p.isCurrentUser
+                              ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30"
+                              : "border-border bg-muted/40"
+                          )}
+                        >
+                          <span className="font-medium">{p.partnerName}</span>
+                          {p.isCurrentUser && <span className="text-[9px] text-blue-600 dark:text-blue-400 font-semibold">You</span>}
+                          <span className="text-muted-foreground">{p.contactCount}c · {p.totalInteractions}i</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {/* Deduplicated contact health rows */}
+                {co360Result.healthMatrix.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[10px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                          <th className="text-left py-1.5 pr-2 font-medium">Contact</th>
+                          <th className="text-center py-1.5 px-1 font-medium">Tier</th>
+                          <th className="text-center py-1.5 px-1 font-medium">Partners</th>
+                          <th className="text-right py-1.5 px-1 font-medium">Int.</th>
+                          <th className="text-right py-1.5 px-1 font-medium">Last</th>
+                          <th className="text-right py-1.5 pl-1 font-medium">Health</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {deduplicateHealthMatrix(co360Result.healthMatrix).map((entry) => {
+                          const isCold = entry.intensity === "Cold" || (entry.daysSinceLastInteraction !== null && entry.daysSinceLastInteraction > 60);
+                          return (
+                            <tr
+                              key={entry.name}
+                              className={cn(
+                                "transition-colors hover:bg-muted/30",
+                                isCold && "bg-red-50/30 dark:bg-red-950/10"
+                              )}
+                            >
+                              <td className="py-1.5 pr-2">
+                                <Link href={`/contacts/${entry.contactId}`} className="hover:underline">
+                                  <span className="font-semibold text-foreground">{entry.name}</span>
+                                </Link>
+                                <span className="text-muted-foreground text-xs ml-1 hidden sm:inline">{entry.title}</span>
+                              </td>
+                              <td className="py-1.5 px-1 text-center">
+                                <TierBadge importance={entry.importance} />
+                              </td>
+                              <td className="py-1.5 px-1 text-center tabular-nums text-xs text-muted-foreground">
+                                {entry.partnerCount}
+                              </td>
+                              <td className="py-1.5 px-1 text-right tabular-nums">{entry.interactionCount}</td>
+                              <td className={cn(
+                                "py-1.5 px-1 text-right whitespace-nowrap text-xs",
+                                entry.daysSinceLastInteraction !== null && entry.daysSinceLastInteraction > 60 && "text-red-600 dark:text-red-400",
+                                entry.daysSinceLastInteraction !== null && entry.daysSinceLastInteraction > 30 && entry.daysSinceLastInteraction <= 60 && "text-amber-600 dark:text-amber-400",
+                                (entry.daysSinceLastInteraction === null || entry.daysSinceLastInteraction <= 30) && "text-green-600 dark:text-green-400",
+                              )}>
+                                {entry.lastInteractionDate
+                                  ? format(new Date(entry.lastInteractionDate), "MMM d")
+                                  : "Never"}
+                              </td>
+                              <td className="py-1.5 pl-1 text-right">
+                                <span className={cn(
+                                  "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
+                                  entry.intensity === "Very High" && "bg-green-100 text-green-800 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800",
+                                  entry.intensity === "High" && "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+                                  entry.intensity === "Medium" && "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+                                  (entry.intensity === "Light" || entry.intensity === "Cold") && "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
+                                )}>
+                                  {entry.intensity}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No contacts tracked at this company.</p>
+                )}
+              </Co360CollapsibleSection>
+
+              {/* Section 4: Company Brief (web-researched) */}
+              <Co360CollapsibleSection
+                sectionId="brief"
+                title="Company Brief"
+                collapsed={co360CollapsedSections.has("brief")}
+                onToggle={() => toggleCo360Section("brief")}
+                headerRight={
+                  co360Result.companyBrief ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        Generated {formatBriefAge(co360Result.companyBrief.generatedAt)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={(e) => { e.stopPropagation(); handleRefreshBrief(); }}
+                        disabled={briefRefreshing}
+                        aria-label="Refresh Company Brief"
+                      >
+                        <RefreshCw className={cn("h-3 w-3", briefRefreshing && "animate-spin")} />
+                      </Button>
                     </div>
-                  )}
-                </div>
+                  ) : undefined
+                }
+              >
+                {briefRefreshing ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating Company Brief...
+                    </div>
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="space-y-1.5">
+                        <Skeleton className="h-3 w-1/4" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : co360Result.companyBrief ? (
+                  <div className="space-y-2">
+                    {co360Result.companyBrief.subsections.map((sub) => (
+                      <Co360CollapsibleSection
+                        key={sub.id}
+                        sectionId={`brief-${sub.id}`}
+                        title={sub.title}
+                        collapsed={co360CollapsedSections.has(`brief-${sub.id}`)}
+                        onToggle={() => toggleCo360Section(`brief-${sub.id}`)}
+                        nested
+                      >
+                        <MarkdownPreview content={sub.content} />
+                      </Co360CollapsibleSection>
+                    ))}
+                    {co360Result.companyBrief.sources.length > 0 && (
+                      <Co360CollapsibleSection
+                        sectionId="brief-sources"
+                        title={`Sources (${co360Result.companyBrief.sources.length})`}
+                        collapsed={!co360CollapsedSections.has("brief-sources-open")}
+                        onToggle={() => toggleCo360Section("brief-sources-open")}
+                        nested
+                      >
+                        <div className="space-y-1">
+                          {co360Result.companyBrief.sources.map((src) => (
+                            <div key={src.id} className="flex items-start gap-2 text-xs">
+                              <span className="mt-0.5 shrink-0">
+                                {src.type === "filing" && <FileBarChart className="h-3 w-3 text-blue-500" />}
+                                {src.type === "transcript" && <Mic className="h-3 w-3 text-purple-500" />}
+                                {src.type === "news" && <Newspaper className="h-3 w-3 text-amber-500" />}
+                                {src.type === "analyst" && <TrendingUp className="h-3 w-3 text-green-500" />}
+                                {src.type === "other" && <FileText className="h-3 w-3 text-muted-foreground" />}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <a
+                                  href={src.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline truncate block"
+                                >
+                                  [{src.id}] {src.title}
+                                </a>
+                                <span className="text-muted-foreground">
+                                  {src.publisher && `${src.publisher} · `}{src.date}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </Co360CollapsibleSection>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Company Brief not yet available.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRefreshBrief}
+                      disabled={briefRefreshing}
+                    >
+                      <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", briefRefreshing && "animate-spin")} />
+                      Generate Company Brief
+                    </Button>
+                  </div>
+                )}
+              </Co360CollapsibleSection>
+
+              {/* Strategic Recommendations (LLM prose) */}
+              {co360Result.sections.filter((s) => s.id === "recommendations").map((section) => (
+                <Co360CollapsibleSection
+                  key={section.id}
+                  sectionId={section.id}
+                  title={section.title}
+                  collapsed={co360CollapsedSections.has(section.id)}
+                  onToggle={() => toggleCo360Section(section.id)}
+                >
+                  <MarkdownPreview content={section.content} />
+                </Co360CollapsibleSection>
               ))}
             </CardContent>
           </Card>

@@ -50,8 +50,8 @@ export function ActionBar({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
+    <div className="flex items-center min-h-[44px]">
+      <div className="flex flex-wrap items-center gap-2">
         {showPrimary && (
           <button
             onClick={() => onSendMessage(data.primary.query)}

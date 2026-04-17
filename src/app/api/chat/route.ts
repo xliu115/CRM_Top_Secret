@@ -11,7 +11,7 @@ import {
   generateContact360,
   type Contact360Context,
 } from "@/lib/services/llm-contact360";
-import { generateCompany360, type Company360Context } from "@/lib/services/llm-company360";
+import { generateCompany360, generateMiniFinancialSnapshot, computeIntensity, type Company360Context } from "@/lib/services/llm-company360";
 import { classifyIntent, type IntentType } from "@/lib/services/llm-intent";
 import { parseStructuredBrief, type StructuredBrief } from "@/lib/types/structured-brief";
 import {
@@ -21,6 +21,7 @@ import {
 } from "@/lib/utils/nudge-summary";
 import type { ChatBlock } from "@/lib/types/chat-blocks";
 import { formatDateForLLM, formatDateTimeForLLM } from "@/lib/utils/format-date";
+import { differenceInDays, format } from "date-fns";
 
 const FULL_CONTACT_360_INTENT =
   /\b(full\s+contact\s*360)\b/i;
@@ -1052,17 +1053,62 @@ export async function POST(request: NextRequest) {
 
             if (companies.length > 0) {
               const co = companies[0];
-              const companyContacts = await prisma.contact.findMany({
-                where: { companyId: co.id, partnerId },
-                include: {
-                  interactions: { orderBy: { date: "desc" }, take: 5 },
-                  signals: { orderBy: { date: "desc" }, take: 3 },
-                },
-                take: 20,
-              });
-              const coSignals = await signalRepo.findByCompanyId(co.id).catch(() => []);
-              const coWeb = await searchWeb(`${co.name} ${co.industry ?? ""} latest news`, 3).catch(() => []);
+              const now = new Date();
 
+              // Fetch firm-wide contacts (all partners) + signals in parallel
+              const [allContacts, coSignals] = await Promise.all([
+                prisma.contact.findMany({
+                  where: { companyId: co.id },
+                  include: {
+                    partner: { select: { id: true, name: true } },
+                    interactions: { orderBy: { date: "desc" }, take: 10 },
+                    nudges: { where: { status: "OPEN" } },
+                  },
+                }),
+                signalRepo.findByCompanyId(co.id).catch(() => []),
+              ]);
+
+              // Build partner coverage map
+              const partnerMap = new Map<string, { name: string; isCurrentUser: boolean; contacts: number; interactions: number; lastDate: Date | null }>();
+              for (const c of allContacts) {
+                const pid = c.partner?.id ?? c.partnerId;
+                const existing = partnerMap.get(pid) ?? {
+                  name: c.partner?.name ?? "Unknown",
+                  isCurrentUser: pid === partnerId,
+                  contacts: 0,
+                  interactions: 0,
+                  lastDate: null,
+                };
+                existing.contacts++;
+                existing.interactions += c.interactions.length;
+                const lastInt = c.interactions[0]?.date ? new Date(c.interactions[0].date) : null;
+                if (lastInt && (!existing.lastDate || lastInt > existing.lastDate)) {
+                  existing.lastDate = lastInt;
+                }
+                partnerMap.set(pid, existing);
+              }
+
+              // Build top contacts with intensity
+              const contactsWithIntensity = allContacts.map((c) => {
+                const lastInt = c.interactions[0]?.date ? new Date(c.interactions[0].date) : null;
+                const daysSince = lastInt ? differenceInDays(now, lastInt) : null;
+                const { level } = computeIntensity(c.interactions.length, daysSince);
+                return {
+                  name: c.name,
+                  title: c.title ?? "",
+                  importance: c.importance ?? "MEDIUM",
+                  interactionCount: c.interactions.length,
+                  lastInteractionDate: lastInt ? formatDateForLLM(lastInt) : null,
+                  sentiment: c.interactions[0]?.sentiment ?? null,
+                  openNudges: c.nudges?.length ?? 0,
+                  intensity: level,
+                };
+              }).sort((a, b) => {
+                const impOrder: Record<string, number> = { CHAMPION: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+                return (impOrder[a.importance] ?? 4) - (impOrder[b.importance] ?? 4);
+              });
+
+              // Build LLM context (use all contacts for richer overview)
               const coCtx: Company360Context = {
                 company: {
                   name: co.name,
@@ -1071,16 +1117,22 @@ export async function POST(request: NextRequest) {
                   employeeCount: co.employeeCount ?? 0,
                   website: co.website ?? "",
                 },
-                contacts: companyContacts.map((c) => ({
+                contacts: contactsWithIntensity.map((c) => ({
                   name: c.name,
-                  title: c.title ?? "",
-                  importance: c.importance ?? "MEDIUM",
-                  interactionCount: c.interactions.length,
-                  lastInteractionDate: c.interactions[0]?.date ? formatDateForLLM(new Date(c.interactions[0].date)) : null,
-                  sentiment: c.interactions[0]?.sentiment ?? null,
-                  openNudges: 0,
+                  title: c.title,
+                  importance: c.importance,
+                  interactionCount: c.interactionCount,
+                  lastInteractionDate: c.lastInteractionDate,
+                  sentiment: c.sentiment,
+                  openNudges: c.openNudges,
                 })),
-                partners: [],
+                partners: Array.from(partnerMap.entries()).map(([, p]) => ({
+                  partnerName: p.name,
+                  isCurrentUser: p.isCurrentUser,
+                  contactCount: p.contacts,
+                  totalInteractions: p.interactions,
+                  lastInteractionDate: p.lastDate ? formatDateForLLM(p.lastDate) : null,
+                })),
                 signals: coSignals.slice(0, 10).map((s) => ({
                   type: s.type,
                   date: formatDateForLLM(new Date(s.date)),
@@ -1089,19 +1141,65 @@ export async function POST(request: NextRequest) {
                 })),
                 meetings: [],
                 sequences: [],
-                webNews: coWeb.filter((d) => d.type !== "Web Summary").map((d) => ({
-                  title: d.type,
-                  content: d.content,
-                  url: d.url ?? "",
-                })),
+                webNews: [],
               };
-              const coResult = await generateCompany360(coCtx);
-              const md = [
+
+              // Run LLM overview + financial snapshot in parallel
+              const [coResult, financialSnapshot] = await Promise.all([
+                generateCompany360(coCtx),
+                generateMiniFinancialSnapshot(co.name, co.industry ?? "").catch(() => null),
+              ]);
+
+              // Build Firm Relationship Snapshot markdown
+              const partners = Array.from(partnerMap.values())
+                .sort((a, b) => b.interactions - a.interactions);
+              const firmLines: string[] = [];
+              firmLines.push(`**${partners.length} partner${partners.length !== 1 ? "s" : ""}** cover **${allContacts.length} contact${allContacts.length !== 1 ? "s" : ""}** at ${co.name}.`);
+              for (const p of partners) {
+                const tag = p.isCurrentUser ? " (You)" : "";
+                const lastStr = p.lastDate ? format(p.lastDate, "MMM d") : "never";
+                firmLines.push(`- **${p.name}${tag}**: ${p.contacts} contact${p.contacts !== 1 ? "s" : ""} · ${p.interactions} interactions · last ${lastStr}`);
+              }
+              // Deduplicate contacts by name (same person tracked by multiple partners)
+              const seenNames = new Set<string>();
+              const uniqueContacts = contactsWithIntensity.filter((c) => {
+                if (seenNames.has(c.name)) return false;
+                seenNames.add(c.name);
+                return true;
+              });
+              const topContacts = uniqueContacts.slice(0, 5);
+              if (topContacts.length > 0) {
+                const contactChips = topContacts.map((c) => {
+                  const coldNote = c.intensity === "Cold" ? " — needs re-engagement" : "";
+                  return `**${c.name}** (${c.title || "N/A"}, ${c.intensity}${coldNote})`;
+                });
+                firmLines.push(`\nKey contacts: ${contactChips.join(" · ")}`);
+              }
+
+              // Assemble final markdown
+              const overviewSection = coResult.sections.find((s) => s.id === "overview");
+              const recsSection = coResult.sections.find((s) => s.id === "recommendations");
+
+              const mdParts: string[] = [
                 `## Company 360: ${co.name}`,
                 `*${coResult.summary}*`,
-                "",
-                ...coResult.sections.map((s) => `### ${s.title}\n${s.content}`),
-              ].join("\n\n");
+              ];
+              if (overviewSection) {
+                mdParts.push(`### Overview\n${overviewSection.content}`);
+              }
+              mdParts.push(`### Firm Relationships\n${firmLines.join("\n")}`);
+              if (financialSnapshot) {
+                mdParts.push(`### Financial Performance\n${financialSnapshot.content}`);
+              }
+              if (recsSection) {
+                mdParts.push(`### Recommendations\n${recsSection.content}`);
+              }
+              if (financialSnapshot && financialSnapshot.sources.length > 0) {
+                const sourceLines = financialSnapshot.sources.map((s, i) => `[${i + 1}] [${s.title}](${s.url})`);
+                mdParts.push(`---\n*Sources:* ${sourceLines.join(" · ")}`);
+              }
+
+              const md = mdParts.join("\n\n");
 
               const blocks: ChatBlock[] = [{
                 type: "action_bar",

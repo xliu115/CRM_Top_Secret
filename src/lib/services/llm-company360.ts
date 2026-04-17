@@ -1,4 +1,4 @@
-import { callLLM } from "./llm-core";
+import { callLLM, callLLMWithWebSearch } from "./llm-core";
 import { format } from "date-fns";
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -30,6 +30,56 @@ export interface Company360PartnerCoverage {
   contactCount: number;
   totalInteractions: number;
   lastInteractionDate: string | null;
+}
+
+// ── Structured data types (returned directly, not LLM-generated) ──
+
+export interface FirmCoverageData {
+  totalPartners: number;
+  totalContacts: number;
+  partners: Company360PartnerCoverage[];
+}
+
+export type IntensityLevel = "Very High" | "High" | "Medium" | "Light" | "Cold";
+
+export interface HealthMatrixEntry {
+  name: string;
+  title: string;
+  importance: string;
+  interactionCount: number;
+  lastInteractionDate: string | null;
+  daysSinceLastInteraction: number | null;
+  intensity: IntensityLevel;
+  intensityScore: number;
+  sentiment: string | null;
+  openNudges: number;
+  contactId: string;
+}
+
+export function computeIntensity(
+  interactionCount: number,
+  daysSinceLastInteraction: number | null,
+): { level: IntensityLevel; score: number } {
+  if (daysSinceLastInteraction === null) return { level: "Cold", score: 0 };
+  let recencyScore = 0;
+  if (daysSinceLastInteraction <= 14) recencyScore = 40;
+  else if (daysSinceLastInteraction <= 30) recencyScore = 30;
+  else if (daysSinceLastInteraction <= 60) recencyScore = 20;
+  else if (daysSinceLastInteraction <= 90) recencyScore = 10;
+  let frequencyScore = 0;
+  if (interactionCount >= 10) frequencyScore = 60;
+  else if (interactionCount >= 7) frequencyScore = 45;
+  else if (interactionCount >= 4) frequencyScore = 30;
+  else if (interactionCount >= 2) frequencyScore = 15;
+  else if (interactionCount >= 1) frequencyScore = 5;
+  const score = recencyScore + frequencyScore;
+  let level: IntensityLevel;
+  if (score >= 70) level = "Very High";
+  else if (score >= 45) level = "High";
+  else if (score >= 20) level = "Medium";
+  else if (score > 0) level = "Light";
+  else level = "Cold";
+  return { level, score };
 }
 
 export interface Company360Context {
@@ -70,18 +120,14 @@ const COMPANY360_SYSTEM_PROMPT = `You are a senior intelligence analyst preparin
 Rules:
 - Write each section as 2-4 sentences of flowing prose. NO bullet points.
 - Use **bold** for names, companies, dates, key numbers.
-- For the coverage map, highlight coordination gaps and opportunities.
-- For health matrix, be honest: "cold" relationships are flagged, not hidden.
 - Strategic recommendations should be specific and actionable.
+- Do NOT include Firm Coverage or Relationship Health — those are shown as structured data separately.
 
 Output format:
 <one-line summary: company position + most important relationship insight>
 ---SECTIONS---
 [
   {"id":"overview","title":"Company Overview","content":"..."},
-  {"id":"coverage","title":"Firm Coverage Map","content":"..."},
-  {"id":"health","title":"Relationship Health Matrix","content":"..."},
-  {"id":"signals","title":"Signals and News","content":"..."},
   {"id":"recommendations","title":"Strategic Recommendations","content":"..."}
 ]`;
 
@@ -110,7 +156,7 @@ function parseCompany360Response(raw: string): Company360Result | null {
     const jsonStr = parts[1].trim().replace(/```json\n?|\n?```/g, "").trim();
     const sections: Company360Section[] = JSON.parse(jsonStr);
 
-    if (!Array.isArray(sections) || sections.length < 4) return null;
+    if (!Array.isArray(sections) || sections.length < 2) return null;
 
     return { summary, sections };
   } catch {
@@ -186,63 +232,7 @@ export function generateCompany360Template(
     content: `**${ctx.company.name}** operates in the ${ctx.company.industry} sector with approximately **${ctx.company.employeeCount} employees**. ${ctx.company.description || `Website: ${ctx.company.website}`}. Your firm has relationships with **${ctx.contacts.length} contact${ctx.contacts.length !== 1 ? "s" : ""}** at this company.`,
   });
 
-  // Section 2: Firm Coverage Map
-  if (ctx.partners.length > 0) {
-    const partnerLines = ctx.partners.map((p) => {
-      const tag = p.isCurrentUser ? " (you)" : "";
-      return `**${p.partnerName}**${tag} covers ${p.contactCount} contact${p.contactCount !== 1 ? "s" : ""} with ${p.totalInteractions} interactions`;
-    });
-    sections.push({
-      id: "coverage",
-      title: "Firm Coverage Map",
-      content: `**${ctx.partners.length} partner${ctx.partners.length !== 1 ? "s"  : ""}** at the firm have relationships at ${ctx.company.name}. ${partnerLines.join(". ")}.`,
-    });
-  } else {
-    sections.push({
-      id: "coverage",
-      title: "Firm Coverage Map",
-      content: `No partner coverage data available for ${ctx.company.name}.`,
-    });
-  }
-
-  // Section 3: Relationship Health Matrix
-  if (ctx.contacts.length > 0) {
-    const contactLines = ctx.contacts.map((c) => {
-      const status = c.interactionCount === 0
-        ? "no activity"
-        : c.lastInteractionDate
-          ? `last contact ${format(new Date(c.lastInteractionDate), "MMM d")}`
-          : "unknown activity";
-      return `**${c.name}** (${c.title}, ${c.importance}): ${c.interactionCount} interactions, ${status}`;
-    });
-    sections.push({
-      id: "health",
-      title: "Relationship Health Matrix",
-      content: contactLines.join(". ") + ".",
-    });
-  } else {
-    sections.push({
-      id: "health",
-      title: "Relationship Health Matrix",
-      content: "No contacts tracked at this company yet.",
-    });
-  }
-
-  // Section 4: Signals and News
-  const signalParts: string[] = [];
-  if (ctx.signals.length > 0) {
-    signalParts.push(`**${ctx.signals.length} signal${ctx.signals.length !== 1 ? "s" : ""}**: ${ctx.signals.slice(0, 3).map((s) => s.content.slice(0, 100)).join("; ")}`);
-  }
-  if (ctx.webNews.length > 0) {
-    signalParts.push(`**Web news**: ${ctx.webNews.slice(0, 2).map((n) => n.content.slice(0, 120)).join("; ")}`);
-  }
-  sections.push({
-    id: "signals",
-    title: "Signals and News",
-    content: signalParts.length > 0 ? signalParts.join(". ") : `No recent signals or news for ${ctx.company.name}.`,
-  });
-
-  // Section 5: Strategic Recommendations
+  // Section 2: Strategic Recommendations
   const recs: string[] = [];
   const coldContacts = ctx.contacts.filter((c) => c.interactionCount === 0 || !c.lastInteractionDate);
   if (coldContacts.length > 0) {
@@ -264,4 +254,52 @@ export function generateCompany360Template(
   const summary = `${ctx.company.name} (${ctx.company.industry}) — ${ctx.contacts.length} contacts tracked across ${ctx.partners.length} partner${ctx.partners.length !== 1 ? "s" : ""}.`;
 
   return { summary, sections };
+}
+
+// ── Mini Financial Snapshot (for chat) ─────────────────────────────
+
+const MINI_FINANCIAL_PROMPT = `You are a financial analyst writing a 3-4 sentence snapshot for a consulting Partner. Be concise and data-driven.
+
+Cover:
+- Latest quarterly revenue/earnings and YoY change
+- Current stock price and YTD performance (if publicly traded)
+- One notable recent development (M&A, product launch, leadership change)
+
+Rules:
+- 3-4 sentences MAX. Flowing prose, no bullet points, no headings, no subheadings.
+- **Bold** key numbers, percentages, and names.
+- If the company is private, focus on funding, valuation, and growth signals instead.
+- If you cannot find reliable financial data, say so briefly rather than guessing.
+- Output ONLY the paragraph. Do NOT include any titles, headers, stock info blocks, disclaimers, or metadata.`;
+
+export interface MiniFinancialSnapshot {
+  content: string;
+  sources: { title: string; url: string }[];
+}
+
+export async function generateMiniFinancialSnapshot(
+  companyName: string,
+  industry: string,
+): Promise<MiniFinancialSnapshot | null> {
+  const userPrompt = `Write a mini financial snapshot for **${companyName}** (${industry || "unknown industry"}). Include the latest available financial data.`;
+
+  const result = await callLLMWithWebSearch(MINI_FINANCIAL_PROMPT, userPrompt, {
+    maxOutputTokens: 400,
+  });
+
+  if (!result?.text) return null;
+
+  // Strip any leaked headings/sections from web search artifacts
+  let content = result.text.trim();
+  const firstHeading = content.search(/^#{1,4}\s/m);
+  if (firstHeading > 0) {
+    content = content.slice(0, firstHeading).trim();
+  }
+
+  if (!content) return null;
+
+  return {
+    content,
+    sources: result.citations.slice(0, 5),
+  };
 }
