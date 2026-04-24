@@ -18,6 +18,7 @@ export type ChatMessage = {
   content: string;
   sources?: ChatSource[];
   blocks?: ChatBlock[];
+  viaCall?: boolean;
 };
 
 export type PendingAction = {
@@ -33,12 +34,20 @@ export type ChatContext = {
   contactId?: string;
   meetingId?: string;
   pendingAction?: PendingAction;
+  callMode?: boolean;
+};
+
+export type ChatMode = "chat" | "call";
+
+export type SendOptions = ChatContext & {
+  viaCall?: boolean;
 };
 
 export function useChatSession() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<ChatMode>("chat");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pendingVoiceRef = useRef<string | null>(null);
@@ -60,15 +69,17 @@ export function useChatSession() {
   } = useStreamingTranscription({ onResult: handleVoiceResult });
 
   const handleSend = useCallback(
-    async (message?: string, context?: ChatContext) => {
+    async (message?: string, context?: SendOptions): Promise<ChatMessage | null> => {
       const text = (message ?? input).trim();
-      if (!text || loading) return;
+      if (!text || loading) return null;
 
       setInput("");
+      const viaCall = context?.viaCall === true;
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
         content: text,
+        viaCall,
       };
       setMessages((prev) => [...prev, userMsg]);
       setLoading(true);
@@ -79,7 +90,11 @@ export function useChatSession() {
           content: m.content,
         }));
         const payload: Record<string, unknown> = { message: text, history };
-        if (context) payload.context = context;
+        if (context) {
+          const { viaCall: _viaCall, ...chatContext } = context;
+          void _viaCall;
+          if (Object.keys(chatContext).length > 0) payload.context = chatContext;
+        }
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -90,26 +105,25 @@ export function useChatSession() {
           throw new Error(errBody.error || "Failed to get response");
         }
         const { answer, sources, blocks } = await res.json();
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: answer,
-            sources: sources ?? [],
-            blocks: Array.isArray(blocks) && blocks.length > 0 ? blocks : undefined,
-          },
-        ]);
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: answer,
+          sources: sources ?? [],
+          blocks: Array.isArray(blocks) && blocks.length > 0 ? blocks : undefined,
+          viaCall,
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+        return assistantMsg;
       } catch {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content:
-              "Sorry, I couldn't process your request. Please try again.",
-          },
-        ]);
+        const errorMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: "Sorry, I couldn't process your request. Please try again.",
+          viaCall,
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+        return errorMsg;
       } finally {
         setLoading(false);
       }
@@ -154,6 +168,8 @@ export function useChatSession() {
     input,
     setInput,
     loading,
+    mode,
+    setMode,
     scrollRef,
     inputRef,
     handleSend,

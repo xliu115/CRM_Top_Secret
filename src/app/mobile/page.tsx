@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { Send, Loader2, Sparkles, Mic, MicOff, Trash2, ChevronRight } from "lucide-react";
+import { Send, Loader2, Sparkles, Mic, MicOff, Trash2, ChevronRight, Phone } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { MobileShell } from "@/components/layout/mobile-shell";
 import { Avatar } from "@/components/ui/avatar";
@@ -14,6 +14,7 @@ import { BriefingAudioControls } from "@/components/voice/briefing-audio-control
 import { buildBriefingSpokenOpening } from "@/lib/utils/briefing-spoken-opening";
 import { prepareBriefingForTTS } from "@/lib/utils/tts-prepare";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
+import { CallMarvinOverlay } from "@/components/voice/call-marvin-overlay";
 
 type BriefingData = {
   briefing: string;
@@ -58,9 +59,10 @@ function getInitialSuggestions(data: BriefingData | null): QuickActionItem[] {
   if (data) {
     const contacts = extractContactNames(data);
     contacts.slice(0, 2).forEach((name) => {
+      const first = name.split(" ")[0] ?? name;
       suggestions.push({
-        label: `Quick 360: ${name}`,
-        query: `Quick 360 for ${name}`,
+        label: `Draft email: ${first}`,
+        query: `Draft an email to ${name}`,
       });
     });
   }
@@ -113,6 +115,8 @@ export default function MobilePage() {
     input,
     setInput,
     loading,
+    mode,
+    setMode,
     scrollRef,
     inputRef,
     handleSend,
@@ -207,8 +211,20 @@ export default function MobilePage() {
 
   const hasMessages = messages.length > 0;
 
+  const callMarvinButton = voiceSupported ? (
+    <button
+      type="button"
+      onClick={() => setMode("call")}
+      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-blue-600 px-3 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 active:scale-[0.97] active:bg-blue-800"
+      aria-label="Call Marvin"
+    >
+      <Phone className="h-3.5 w-3.5" />
+      Call Marvin
+    </button>
+  ) : null;
+
   return (
-    <MobileShell>
+    <MobileShell headerAction={callMarvinButton}>
       <div className="flex h-full flex-col">
         {/* Scrollable feed */}
         <div className="flex-1 overflow-y-auto">
@@ -283,20 +299,22 @@ export default function MobilePage() {
                               </p>
                             </div>
                           )}
+                          <div className="mb-3">
+                            <BriefingAudioControls
+                              isPlaying={briefingAudio.isPlaying}
+                              isPaused={briefingAudio.isPaused}
+                              isLoading={briefingAudio.isLoading}
+                              elapsed={briefingAudio.elapsed}
+                              duration={briefingAudio.duration}
+                              onPlay={handlePlayBriefing}
+                              onPause={briefingAudio.pause}
+                              onResume={briefingAudio.resume}
+                              onStop={briefingAudio.stop}
+                            />
+                          </div>
                           <MarkdownContent
                             content={msg.content}
                             className="text-[15px] leading-relaxed text-foreground"
-                          />
-                          <BriefingAudioControls
-                            isPlaying={briefingAudio.isPlaying}
-                            isPaused={briefingAudio.isPaused}
-                            isLoading={briefingAudio.isLoading}
-                            elapsed={briefingAudio.elapsed}
-                            duration={briefingAudio.duration}
-                            onPlay={handlePlayBriefing}
-                            onPause={briefingAudio.pause}
-                            onResume={briefingAudio.resume}
-                            onStop={briefingAudio.stop}
                           />
                         </div>
                       ) : (
@@ -448,6 +466,14 @@ export default function MobilePage() {
           </div>
         </div>
       </div>
+
+      <CallMarvinOverlay
+        open={mode === "call"}
+        onClose={() => setMode("chat")}
+        messages={messages}
+        onSend={handleSend}
+        onConfirmAction={handleConfirmAction}
+      />
     </MobileShell>
   );
 }

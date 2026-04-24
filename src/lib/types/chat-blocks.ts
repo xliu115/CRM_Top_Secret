@@ -28,6 +28,75 @@ export type EmailPreviewBlock = {
   };
 };
 
+export type EditableEmailDraftBlock = {
+  type: "editable_email_draft";
+  data: {
+    draftId: string;
+    to: string;
+    subject: string;
+    body: string;
+    contactId?: string;
+    nudgeId?: string;
+    regenerate?: {
+      warmer?: string;
+      shorter?: string;
+      addContext?: string;
+    };
+  };
+};
+
+export type ApprovalDeckBlock = {
+  type: "approval_deck";
+  data: {
+    deckId: string;
+    title?: string;
+    items: {
+      itemId: string;
+      kind: "email";
+      contactName: string;
+      company?: string;
+      contactId?: string;
+      nudgeId?: string;
+      email: {
+        to: string;
+        subject: string;
+        body: string;
+      };
+      approveQuery: string;
+      skipQuery?: string;
+    }[];
+  };
+};
+
+export type MeetingSchedulerBlock = {
+  type: "meeting_scheduler";
+  data: {
+    schedulerId: string;
+    title: string;
+    attendees: { name: string; email?: string }[];
+    durationMinutes: number;
+    slots: {
+      slotId: string;
+      startIso: string;
+      label: string;
+    }[];
+    suggestedSubject?: string;
+    suggestedBody?: string;
+  };
+};
+
+export type CalendarActionBlock = {
+  type: "calendar_action";
+  data: {
+    meetingId: string;
+    title: string;
+    startIso: string;
+    durationMinutes?: number;
+    organizerName?: string;
+    currentStatus?: "pending" | "accepted" | "declined" | "proposed_new_time";
+  };
+};
+
 export type MeetingCardBlock = {
   type: "meeting_card";
   data: {
@@ -101,6 +170,10 @@ export type ChatBlock =
   | ContactCardBlock
   | ActionBarBlock
   | EmailPreviewBlock
+  | EditableEmailDraftBlock
+  | ApprovalDeckBlock
+  | MeetingSchedulerBlock
+  | CalendarActionBlock
   | MeetingCardBlock
   | StaleContactsListBlock
   | NudgeEvidenceBlock

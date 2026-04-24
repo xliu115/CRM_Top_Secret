@@ -6,6 +6,10 @@ import { BlockClusterShell } from "./block-cluster-shell";
 import { ContactCard } from "./contact-card";
 import { ActionBar } from "./action-bar";
 import { EmailPreview } from "./email-preview";
+import { EditableEmailDraft } from "./editable-email-draft";
+import { ApprovalDeck } from "./approval-deck";
+import { MeetingScheduler } from "./meeting-scheduler";
+import { CalendarAction } from "./calendar-action";
 import { MeetingCard } from "./meeting-card";
 import { StaleContactsList } from "./stale-contacts-list";
 import { NudgeEvidence } from "./nudge-evidence";
@@ -32,7 +36,7 @@ function detectGroups(blocks: ChatBlock[]): RenderedGroup[] {
     if (consumed.has(i)) continue;
     const b = blocks[i];
 
-    // 0. Nudge action: contact_card → strategic_insight → email_preview? → action_bar?
+    // 0. Nudge action: contact_card → strategic_insight → email_preview|editable_email_draft? → action_bar?
     if (
       b.type === "contact_card" &&
       i + 1 < blocks.length &&
@@ -42,7 +46,7 @@ function detectGroups(blocks: ChatBlock[]): RenderedGroup[] {
       consumed.add(i);
       consumed.add(i + 1);
       let next = i + 2;
-      if (next < blocks.length && blocks[next].type === "email_preview") {
+      if (next < blocks.length && (blocks[next].type === "email_preview" || blocks[next].type === "editable_email_draft")) {
         group.emailIdx = next;
         consumed.add(next);
         next++;
@@ -72,11 +76,11 @@ function detectGroups(blocks: ChatBlock[]): RenderedGroup[] {
       continue;
     }
 
-    // 2. Email draft: contact_card → email_preview → action_bar?
+    // 2. Email draft: contact_card → email_preview|editable_email_draft → action_bar?
     if (
       b.type === "contact_card" &&
       i + 1 < blocks.length &&
-      blocks[i + 1].type === "email_preview"
+      (blocks[i + 1].type === "email_preview" || blocks[i + 1].type === "editable_email_draft")
     ) {
       const group: RenderedGroup = { kind: "email-draft", contactIdx: i, emailIdx: i + 1 };
       consumed.add(i);
@@ -175,11 +179,12 @@ export function BlockRenderer({
         if (group.kind === "nudge-action") {
           const contact = blocks[group.contactIdx] as Extract<ChatBlock, { type: "contact_card" }>;
           const insight = blocks[group.insightIdx] as Extract<ChatBlock, { type: "strategic_insight" }>;
-          const email = group.emailIdx != null
-            ? (blocks[group.emailIdx] as Extract<ChatBlock, { type: "email_preview" }>)
-            : undefined;
+          const emailBlock = group.emailIdx != null ? blocks[group.emailIdx] : undefined;
           const action = group.actionIdx != null
             ? (blocks[group.actionIdx] as Extract<ChatBlock, { type: "action_bar" }>)
+            : undefined;
+          const emailData = emailBlock?.type === "email_preview" || emailBlock?.type === "editable_email_draft"
+            ? { to: emailBlock.data.to, subject: emailBlock.data.subject, body: emailBlock.data.body, contactId: emailBlock.data.contactId }
             : undefined;
           return (
             <BlockClusterShell
@@ -198,15 +203,19 @@ export function BlockRenderer({
               body={
                 <div className="space-y-0">
                   <StrategicInsight data={insight.data} embedded />
-                  {email && (
+                  {emailBlock && (
                     <>
                       <div className="my-4 border-t border-border/50" />
-                      <EmailPreview data={email.data} embedded />
+                      {emailBlock.type === "editable_email_draft" ? (
+                        <EditableEmailDraft data={emailBlock.data} embedded onSendMessage={onSendMessage} />
+                      ) : emailBlock.type === "email_preview" ? (
+                        <EmailPreview data={emailBlock.data} embedded />
+                      ) : null}
                     </>
                   )}
                 </div>
               }
-              footer={action ? <ActionBar data={action.data} emailData={email?.data} onSendMessage={onSendMessage} embedded /> : undefined}
+              footer={action ? <ActionBar data={action.data} emailData={emailData} onSendMessage={onSendMessage} embedded /> : undefined}
             />
           );
         }
@@ -232,10 +241,13 @@ export function BlockRenderer({
         // --- Email draft cluster ---
         if (group.kind === "email-draft") {
           const contact = blocks[group.contactIdx] as Extract<ChatBlock, { type: "contact_card" }>;
-          const email = blocks[group.emailIdx] as Extract<ChatBlock, { type: "email_preview" }>;
+          const emailBlock = blocks[group.emailIdx] as
+            | Extract<ChatBlock, { type: "email_preview" }>
+            | Extract<ChatBlock, { type: "editable_email_draft" }>;
           const action = group.actionIdx != null
             ? (blocks[group.actionIdx] as Extract<ChatBlock, { type: "action_bar" }>)
             : undefined;
+          const emailData = { to: emailBlock.data.to, subject: emailBlock.data.subject, body: emailBlock.data.body, contactId: emailBlock.data.contactId };
           return (
             <BlockClusterShell
               key={gi}
@@ -250,8 +262,14 @@ export function BlockRenderer({
                   )}
                 </div>
               }
-              body={<EmailPreview data={email.data} embedded />}
-              footer={action ? <ActionBar data={action.data} onSendMessage={onSendMessage} embedded /> : undefined}
+              body={
+                emailBlock.type === "editable_email_draft" ? (
+                  <EditableEmailDraft data={emailBlock.data} embedded onSendMessage={onSendMessage} />
+                ) : (
+                  <EmailPreview data={emailBlock.data} embedded />
+                )
+              }
+              footer={action ? <ActionBar data={action.data} emailData={emailData} onSendMessage={onSendMessage} embedded /> : undefined}
             />
           );
         }
@@ -343,6 +361,14 @@ export function BlockRenderer({
             return <ActionBar key={gi} data={block.data} onSendMessage={onSendMessage} />;
           case "email_preview":
             return <EmailPreview key={gi} data={block.data} />;
+          case "editable_email_draft":
+            return <EditableEmailDraft key={gi} data={block.data} onSendMessage={onSendMessage} />;
+          case "approval_deck":
+            return <ApprovalDeck key={gi} data={block.data} onSendMessage={onSendMessage} />;
+          case "meeting_scheduler":
+            return <MeetingScheduler key={gi} data={block.data} onSendMessage={onSendMessage} />;
+          case "calendar_action":
+            return <CalendarAction key={gi} data={block.data} onSendMessage={onSendMessage} />;
           case "meeting_card":
             return <MeetingCard key={gi} data={block.data} onSendMessage={onSendMessage} />;
           case "stale_contacts_list":
@@ -360,8 +386,11 @@ export function BlockRenderer({
                 onCancel={() => onSendMessage?.("Cancelled.")}
               />
             );
-          default:
+          default: {
+            const _exhaustive: never = block;
+            void _exhaustive;
             return null;
+          }
         }
       })}
     </div>

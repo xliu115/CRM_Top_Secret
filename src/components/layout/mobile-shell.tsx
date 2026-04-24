@@ -32,7 +32,13 @@ const navItems = [
   { href: "/chat", label: "Ask Anything", icon: MessageSquare },
 ];
 
-export function MobileShell({ children }: { children: React.ReactNode }) {
+export function MobileShell({
+  children,
+  headerAction,
+}: {
+  children: React.ReactNode;
+  headerAction?: React.ReactNode;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -49,14 +55,17 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
           <span className="text-base font-bold text-foreground">Activate</span>
         </Link>
 
-        <button
-          type="button"
-          onClick={() => setMenuOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground-subtle transition-colors hover:bg-muted hover:text-foreground"
-          aria-label="Open menu"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {headerAction}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground-subtle transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
       </header>
 
       {/* Page content */}

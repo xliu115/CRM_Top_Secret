@@ -98,6 +98,9 @@ export async function POST(request: NextRequest) {
         nudgeId?: string;
         contactId?: string;
         meetingId?: string;
+        callMode?: boolean;
+        editDraftId?: string;
+        currentBody?: string;
         pendingAction?: {
           type: "dismiss_nudge" | "snooze_nudge" | "send_email";
           nudgeId: string;
@@ -864,12 +867,18 @@ export async function POST(request: NextRequest) {
               });
 
               blocks.push({
-                type: "email_preview",
+                type: "editable_email_draft",
                 data: {
+                  draftId: `draft-${primary.id}`,
                   to: contactName,
                   subject: emailResult.subject,
                   body: emailResult.body,
                   contactId: primary.contactId,
+                  nudgeId: primary.id,
+                  regenerate: {
+                    warmer: `Rewrite the email to ${contactName} in a warmer, more personal tone.`,
+                    shorter: `Rewrite the email to ${contactName} to be shorter — 3 sentences max.`,
+                  },
                 },
               });
               draftMarker = `**Subject:** ${emailResult.subject}\n<!--EMAIL_BODY:${emailResult.body}-->`;
@@ -1559,12 +1568,17 @@ export async function POST(request: NextRequest) {
                   },
                 },
                 {
-                  type: "email_preview",
+                  type: "editable_email_draft",
                   data: {
+                    draftId: `draft-${contact.id}-${Date.now()}`,
                     to: contact.name,
                     subject: emailResult.subject,
                     body: emailResult.body,
                     contactId: contact.id,
+                    regenerate: {
+                      warmer: `Rewrite the email to ${contact.name} in a warmer, more personal tone.`,
+                      shorter: `Rewrite the email to ${contact.name} to be shorter — 3 sentences max.`,
+                    },
                   },
                 },
                 {
