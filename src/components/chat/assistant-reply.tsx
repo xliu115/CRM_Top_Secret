@@ -8,7 +8,7 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import { INSIGHT_TYPE_LABELS } from "@/lib/utils/nudge-summary";
 import { BlockRenderer } from "@/components/chat/blocks/block-renderer";
 import type { ChatBlock } from "@/lib/types/chat-blocks";
-import type { PendingAction } from "@/hooks/use-chat-session";
+import type { PendingAction, SendMessageFn } from "@/hooks/use-chat-session";
 
 type QuickAction = { label: string; query?: string; href?: string };
 
@@ -133,7 +133,7 @@ export function AssistantReply({
   content: string;
   sources?: Source[];
   blocks?: ChatBlock[];
-  onSendMessage?: (message: string) => void;
+  onSendMessage?: SendMessageFn;
   onConfirmAction?: (action: PendingAction) => void;
   mobile?: boolean;
 }) {

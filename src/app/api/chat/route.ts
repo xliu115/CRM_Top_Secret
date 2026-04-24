@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
         meetingId?: string;
         callMode?: boolean;
         editDraftId?: string;
+        currentSubject?: string;
         currentBody?: string;
         pendingAction?: {
           type: "dismiss_nudge" | "snooze_nudge" | "send_email";
@@ -1156,20 +1157,27 @@ export async function POST(request: NextRequest) {
         const actionLabel = isDismissNudge ? "dismiss" : isSnoozeNudge ? "snooze" : "send email for";
         let targetNudge: NudgeWithRelations | null = null;
 
-        // For send_email, look for a recently drafted email in conversation history
+        // For send_email, prefer the inline-edited body/subject carried through context.
+        // Fall back to scanning history for the last drafted email marker.
         let draftedEmail: { subject: string; body: string } | null = null;
-        if (isSendEmail && body.history) {
-          for (let i = body.history.length - 1; i >= 0; i--) {
-            const msg = body.history[i];
-            if (msg.role !== "assistant") continue;
-            const subjectMatch = msg.content.match(/\*\*Subject:\*\*\s*(.+)/);
-            const bodyMatch = msg.content.match(/<!--EMAIL_BODY:([\s\S]*?)-->/);
-            if (subjectMatch) {
-              draftedEmail = {
-                subject: subjectMatch[1].trim(),
-                body: bodyMatch ? bodyMatch[1].trim() : msg.content.slice(0, 2000),
-              };
-              break;
+        if (isSendEmail) {
+          const ctxSubject = ctx_ids.currentSubject?.trim();
+          const ctxBody = ctx_ids.currentBody?.trim();
+          if (ctxSubject && ctxBody) {
+            draftedEmail = { subject: ctxSubject, body: ctxBody };
+          } else if (body.history) {
+            for (let i = body.history.length - 1; i >= 0; i--) {
+              const msg = body.history[i];
+              if (msg.role !== "assistant") continue;
+              const subjectMatch = msg.content.match(/\*\*Subject:\*\*\s*(.+)/);
+              const bodyMatch = msg.content.match(/<!--EMAIL_BODY:([\s\S]*?)-->/);
+              if (subjectMatch) {
+                draftedEmail = {
+                  subject: subjectMatch[1].trim(),
+                  body: bodyMatch ? bodyMatch[1].trim() : msg.content.slice(0, 2000),
+                };
+                break;
+              }
             }
           }
         }

@@ -35,6 +35,9 @@ export type ChatContext = {
   meetingId?: string;
   pendingAction?: PendingAction;
   callMode?: boolean;
+  currentSubject?: string;
+  currentBody?: string;
+  editDraftId?: string;
 };
 
 export type ChatMode = "chat" | "call";
@@ -42,6 +45,8 @@ export type ChatMode = "chat" | "call";
 export type SendOptions = ChatContext & {
   viaCall?: boolean;
 };
+
+export type SendMessageFn = (message: string, ctx?: SendOptions) => unknown;
 
 export function useChatSession() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ChatBlock } from "@/lib/types/chat-blocks";
 import { Badge } from "@/components/ui/badge";
 import { BlockClusterShell } from "./block-cluster-shell";
@@ -16,7 +17,7 @@ import { NudgeEvidence } from "./nudge-evidence";
 import { NudgeSummaryShell } from "./nudge-summary-shell";
 import { StrategicInsight } from "./strategic-insight";
 import { ConfirmationCard } from "./confirmation-card";
-import type { PendingAction } from "@/hooks/use-chat-session";
+import type { PendingAction, SendMessageFn } from "@/hooks/use-chat-session";
 
 type RenderedGroup =
   | { kind: "nudge-summary"; contactIdx: number; evidenceIdx: number; actionIdx?: number }
@@ -165,7 +166,7 @@ export function BlockRenderer({
   onConfirmAction,
 }: {
   blocks: ChatBlock[];
-  onSendMessage?: (message: string) => void;
+  onSendMessage?: SendMessageFn;
   onConfirmAction?: (action: PendingAction) => void;
 }) {
   if (blocks.length === 0) return null;
@@ -183,39 +184,14 @@ export function BlockRenderer({
           const action = group.actionIdx != null
             ? (blocks[group.actionIdx] as Extract<ChatBlock, { type: "action_bar" }>)
             : undefined;
-          const emailData = emailBlock?.type === "email_preview" || emailBlock?.type === "editable_email_draft"
-            ? { to: emailBlock.data.to, subject: emailBlock.data.subject, body: emailBlock.data.body, contactId: emailBlock.data.contactId }
-            : undefined;
           return (
-            <BlockClusterShell
+            <NudgeActionCluster
               key={gi}
-              priority={contact.data.priority}
-              header={
-                <div className="flex items-start justify-between gap-2">
-                  <ContactCard data={contact.data} embedded />
-                  {contact.data.priority && (
-                    <Badge variant={getPriorityVariant(contact.data.priority)} className="text-[10px] shrink-0 mt-0.5">
-                      {contact.data.priority}
-                    </Badge>
-                  )}
-                </div>
-              }
-              body={
-                <div className="space-y-0">
-                  <StrategicInsight data={insight.data} embedded />
-                  {emailBlock && (
-                    <>
-                      <div className="my-4 border-t border-border/50" />
-                      {emailBlock.type === "editable_email_draft" ? (
-                        <EditableEmailDraft data={emailBlock.data} embedded onSendMessage={onSendMessage} />
-                      ) : emailBlock.type === "email_preview" ? (
-                        <EmailPreview data={emailBlock.data} embedded />
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              }
-              footer={action ? <ActionBar data={action.data} emailData={emailData} onSendMessage={onSendMessage} embedded /> : undefined}
+              contact={contact}
+              insight={insight}
+              emailBlock={emailBlock}
+              action={action}
+              onSendMessage={onSendMessage}
             />
           );
         }
@@ -247,29 +223,13 @@ export function BlockRenderer({
           const action = group.actionIdx != null
             ? (blocks[group.actionIdx] as Extract<ChatBlock, { type: "action_bar" }>)
             : undefined;
-          const emailData = { to: emailBlock.data.to, subject: emailBlock.data.subject, body: emailBlock.data.body, contactId: emailBlock.data.contactId };
           return (
-            <BlockClusterShell
+            <EmailDraftCluster
               key={gi}
-              priority={contact.data.priority}
-              header={
-                <div className="flex items-start justify-between gap-2">
-                  <ContactCard data={contact.data} embedded />
-                  {contact.data.priority && (
-                    <Badge variant={getPriorityVariant(contact.data.priority)} className="text-[10px] shrink-0 mt-0.5">
-                      {contact.data.priority}
-                    </Badge>
-                  )}
-                </div>
-              }
-              body={
-                emailBlock.type === "editable_email_draft" ? (
-                  <EditableEmailDraft data={emailBlock.data} embedded onSendMessage={onSendMessage} />
-                ) : (
-                  <EmailPreview data={emailBlock.data} embedded />
-                )
-              }
-              footer={action ? <ActionBar data={action.data} emailData={emailData} onSendMessage={onSendMessage} embedded /> : undefined}
+              contact={contact}
+              emailBlock={emailBlock}
+              action={action}
+              onSendMessage={onSendMessage}
             />
           );
         }
@@ -394,5 +354,139 @@ export function BlockRenderer({
         }
       })}
     </div>
+  );
+}
+
+type ContactBlock = Extract<ChatBlock, { type: "contact_card" }>;
+type InsightBlock = Extract<ChatBlock, { type: "strategic_insight" }>;
+type EmailBlock =
+  | Extract<ChatBlock, { type: "email_preview" }>
+  | Extract<ChatBlock, { type: "editable_email_draft" }>;
+type ActionBlock = Extract<ChatBlock, { type: "action_bar" }>;
+
+function useEmailEdits(emailBlock: EmailBlock | undefined) {
+  const draftId =
+    emailBlock?.type === "editable_email_draft" ? emailBlock.data.draftId : undefined;
+  const initialSubject = emailBlock?.data.subject ?? "";
+  const initialBody = emailBlock?.data.body ?? "";
+
+  const [prevKey, setPrevKey] = useState(draftId ?? initialSubject);
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
+
+  const currentKey = draftId ?? initialSubject;
+  if (currentKey !== prevKey) {
+    setPrevKey(currentKey);
+    setSubject(initialSubject);
+    setBody(initialBody);
+  }
+
+  return { subject, body, setSubject, setBody };
+}
+
+function NudgeActionCluster({
+  contact,
+  insight,
+  emailBlock,
+  action,
+  onSendMessage,
+}: {
+  contact: ContactBlock;
+  insight: InsightBlock;
+  emailBlock?: ChatBlock;
+  action?: ActionBlock;
+  onSendMessage?: SendMessageFn;
+}) {
+  const email =
+    emailBlock?.type === "email_preview" || emailBlock?.type === "editable_email_draft"
+      ? (emailBlock as EmailBlock)
+      : undefined;
+  const { subject, body, setSubject, setBody } = useEmailEdits(email);
+
+  const emailData = email
+    ? { to: email.data.to, subject, body, contactId: email.data.contactId }
+    : undefined;
+
+  return (
+    <BlockClusterShell
+      priority={contact.data.priority}
+      header={
+        <div className="flex items-start justify-between gap-2">
+          <ContactCard data={contact.data} embedded />
+          {contact.data.priority && (
+            <Badge variant={getPriorityVariant(contact.data.priority)} className="text-[10px] shrink-0 mt-0.5">
+              {contact.data.priority}
+            </Badge>
+          )}
+        </div>
+      }
+      body={
+        <div className="space-y-0">
+          <StrategicInsight data={insight.data} embedded />
+          {email && (
+            <>
+              <div className="my-4 border-t border-border/50" />
+              {email.type === "editable_email_draft" ? (
+                <EditableEmailDraft
+                  data={email.data}
+                  embedded
+                  onSendMessage={onSendMessage}
+                  onBodyChange={setBody}
+                  onSubjectChange={setSubject}
+                />
+              ) : (
+                <EmailPreview data={email.data} embedded />
+              )}
+            </>
+          )}
+        </div>
+      }
+      footer={action ? <ActionBar data={action.data} emailData={emailData} onSendMessage={onSendMessage} embedded /> : undefined}
+    />
+  );
+}
+
+function EmailDraftCluster({
+  contact,
+  emailBlock,
+  action,
+  onSendMessage,
+}: {
+  contact: ContactBlock;
+  emailBlock: EmailBlock;
+  action?: ActionBlock;
+  onSendMessage?: SendMessageFn;
+}) {
+  const { subject, body, setSubject, setBody } = useEmailEdits(emailBlock);
+  const emailData = { to: emailBlock.data.to, subject, body, contactId: emailBlock.data.contactId };
+
+  return (
+    <BlockClusterShell
+      priority={contact.data.priority}
+      header={
+        <div className="flex items-start justify-between gap-2">
+          <ContactCard data={contact.data} embedded />
+          {contact.data.priority && (
+            <Badge variant={getPriorityVariant(contact.data.priority)} className="text-[10px] shrink-0 mt-0.5">
+              {contact.data.priority}
+            </Badge>
+          )}
+        </div>
+      }
+      body={
+        emailBlock.type === "editable_email_draft" ? (
+          <EditableEmailDraft
+            data={emailBlock.data}
+            embedded
+            onSendMessage={onSendMessage}
+            onBodyChange={setBody}
+            onSubjectChange={setSubject}
+          />
+        ) : (
+          <EmailPreview data={emailBlock.data} embedded />
+        )
+      }
+      footer={action ? <ActionBar data={action.data} emailData={emailData} onSendMessage={onSendMessage} embedded /> : undefined}
+    />
   );
 }

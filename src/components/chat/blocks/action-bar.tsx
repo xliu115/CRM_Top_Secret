@@ -6,6 +6,7 @@ import {
   Share2, Copy, Send, User, ChevronRight, FileText, Check,
 } from "lucide-react";
 import type { ActionBarBlock, EmailPreviewBlock } from "@/lib/types/chat-blocks";
+import type { SendMessageFn } from "@/hooks/use-chat-session";
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   mail: Mail,
@@ -33,7 +34,7 @@ export function ActionBar({
 }: {
   data: ActionBarBlock["data"];
   emailData?: EmailPreviewBlock["data"];
-  onSendMessage?: (message: string) => void;
+  onSendMessage?: SendMessageFn;
   embedded?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -49,12 +50,25 @@ export function ActionBar({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function handlePrimary() {
+    if (!onSendMessage) return;
+    const isSendAction = /^send\b/i.test(data.primary.label);
+    if (isSendAction && emailData) {
+      onSendMessage(data.primary.query, {
+        currentSubject: emailData.subject,
+        currentBody: emailData.body,
+      });
+    } else {
+      onSendMessage(data.primary.query);
+    }
+  }
+
   return (
     <div className="flex items-center min-h-[44px]">
       <div className="flex flex-wrap items-center gap-2">
         {showPrimary && (
           <button
-            onClick={() => onSendMessage(data.primary.query)}
+            onClick={handlePrimary}
             className={embedded
               ? "inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
               : "inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/20"

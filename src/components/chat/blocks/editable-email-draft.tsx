@@ -16,6 +16,7 @@ type Props = {
   embedded?: boolean;
   onSendMessage?: (message: string) => void;
   onBodyChange?: (body: string) => void;
+  onSubjectChange?: (subject: string) => void;
   onVoiceEdit?: () => void;
   voiceEditing?: boolean;
 };
@@ -25,6 +26,7 @@ export function EditableEmailDraft({
   embedded = false,
   onSendMessage,
   onBodyChange,
+  onSubjectChange,
   onVoiceEdit,
   voiceEditing = false,
 }: Props) {
@@ -54,12 +56,15 @@ export function EditableEmailDraft({
   function commit() {
     setEditing(false);
     onBodyChange?.(body);
+    onSubjectChange?.(subject);
   }
 
   function cancel() {
     setBody(data.body);
     setSubject(data.subject);
     setEditing(false);
+    onBodyChange?.(data.body);
+    onSubjectChange?.(data.subject);
   }
 
   function regenerate(flavor: "warmer" | "shorter") {

@@ -167,7 +167,7 @@ export function CallMarvinOverlay({
             <div className="w-full">
               <BlockRenderer
                 blocks={displayBlocks}
-                onSendMessage={(m) => onSend(m, { viaCall: true, callMode: true })}
+                onSendMessage={(m, ctx) => onSend(m, { viaCall: true, callMode: true, ...ctx })}
                 onConfirmAction={onConfirmAction}
               />
             </div>
