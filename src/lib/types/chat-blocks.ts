@@ -10,11 +10,15 @@ export type ContactCardBlock = {
   };
 };
 
+type ActionBarItem = { label: string; query: string; icon: string };
+
 export type ActionBarBlock = {
   type: "action_bar";
   data: {
-    primary: { label: string; query: string; icon: string };
-    secondary: { label: string; query: string; icon: string }[];
+    primary: ActionBarItem;
+    secondary: ActionBarItem[];
+    tertiary?: ActionBarItem[];
+    variant?: "default" | "destructive_primary";
   };
 };
 
@@ -116,6 +120,7 @@ export type MeetingBriefBlock = {
     synthesis: string;
     fullBrief: string;
     temperature?: "COLD" | "COOL" | "WARM" | "HOT";
+    firstAttendeeName?: string;
   };
 };
 
