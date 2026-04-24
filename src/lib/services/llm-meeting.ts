@@ -40,6 +40,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown, no expl
   "newsEmptyReason": "Only if no meaningful news available",
   "executiveProfile": {
     "bioSummary": "2-3 sentences career arc, not full CV",
+    "topOfMind": "3-4 sentences (70-110 words) of strategic synthesis on what is dominating this executive's attention right now. Must explicitly connect two or more concrete signals from the news/signals/recent moves provided (company initiative, public statement, organizational shift, external pressure) and name the strategic bet or tension those signals point to. Close with a sentence on what that likely means they want from a conversation with us (the implication for the meeting). Present-tense, specific to this person this quarter, no industry filler.",
     "recentMoves": [{ "date": "Mon YYYY", "description": "What they did" }],
     "patternCallout": "2-3 sentences on the pattern, only if clear pattern exists"
   },
@@ -56,7 +57,7 @@ QUALITY RULES:
 - primaryContactProfile.bullets: Each starts with a bold 2-4 word label. Never include LinkedIn connections, education (unless relevant), or generic title descriptions. Prioritize recent actions, public statements, decision patterns. Target 3 bullets.
 - conversationStarters: Exactly 3. Each must be specific to THIS person, THIS company, THIS meeting. If a question could be asked to any executive in the same industry, rewrite it. Each gets a tacticalNote (max 15 words) explaining the strategic purpose.
 - newsInsights: Target 3. Headlines must state the IMPLICATION, not the event. Body must connect to this meeting specifically. If no meaningful news, set newsEmptyReason and leave array empty.
-- executiveProfile: Career arc, not full CV. recentMoves in reverse chronological order. patternCallout only if a clear pattern exists.
+- executiveProfile: Career arc, not full CV. topOfMind is the strategic heart of the brief — it must be 3-4 sentences (70-110 words), weave together at least two concrete signals from the data (not repeat the same fact), name the underlying strategic bet or tension (e.g. "balancing AI transformation with platform execution"), and end with what that likely means they'll want from this meeting. If signals are too thin to support that level of synthesis, write a shorter honest version naming the gap rather than padding with generic industry language. recentMoves in reverse chronological order. patternCallout only if a clear pattern exists.
 - relationshipHistory: Temperature based on engagement frequency and recency. COLD = no engagement 2+ years. COOL = sparse. WARM = regular. HOT = active with champion. Synthesize from interaction history.
 - attendees: Include all meeting attendees with abbreviated titles and initials.
 
@@ -112,6 +113,67 @@ export async function generateMeetingBrief(
   }
 
   return generateBriefTemplate(ctx);
+}
+
+function firstSentence(text: string, max = 180): string {
+  const cleaned = text.trim().replace(/\s+/g, " ");
+  const match = cleaned.match(/^(.+?[.!?])(\s|$)/);
+  const sentence = match ? match[1] : cleaned;
+  return sentence.length > max ? sentence.slice(0, max - 1).trimEnd() + "…" : sentence;
+}
+
+function cleanSignal(raw: string): string {
+  return stripMarkdown(raw.replace(/^[A-Z_]+\s*(\([^)]*\))?\s*:?\s*/, "")).trim();
+}
+
+function deriveTopOfMind(
+  primary: MeetingBriefContext["attendees"][number] | undefined,
+  newsInsights: StructuredBrief["newsInsights"],
+): string | undefined {
+  if (!primary) return undefined;
+
+  const firstName = primary.name.split(/\s+/)[0] ?? primary.name;
+  const sentences: string[] = [];
+
+  const newsBodies = newsInsights
+    .map((n) => firstSentence(n.body))
+    .filter((s) => s.length > 20);
+
+  const strategicSignals = primary.signals
+    .map(cleanSignal)
+    .filter((s) =>
+      /growth|strategy|expansion|ai|transformation|restructur|cost|layoff|merger|acquisition|launch|hiring|funding|pricing|partnership|earnings|regulation|competitor/i.test(
+        s,
+      ),
+    )
+    .map((s) => firstSentence(s));
+
+  const leadSignal = newsBodies[0] ?? strategicSignals[0];
+  if (!leadSignal) return undefined;
+
+  sentences.push(
+    `${firstName} is currently navigating ${leadSignal.replace(/^[A-Z]/, (c) => c.toLowerCase())}`.replace(/\.$/, "") + ".",
+  );
+
+  const secondSignal = newsBodies[1] ?? strategicSignals.find((s) => !leadSignal.includes(s.slice(0, 30)));
+  if (secondSignal) {
+    sentences.push(
+      `At the same time, ${secondSignal.replace(/^[A-Z]/, (c) => c.toLowerCase())}`.replace(/\.$/, "") +
+        ", which adds pressure on how they prioritize the next few quarters.",
+    );
+  }
+
+  if (newsBodies.length >= 2 || strategicSignals.length >= 2) {
+    sentences.push(
+      `Taken together, the signals suggest ${firstName} is weighing where to concentrate executive attention and capital between these priorities.`,
+    );
+  }
+
+  sentences.push(
+    `A conversation that helps them pressure-test those trade-offs — or unlock capacity on them — is likely to land.`,
+  );
+
+  return sentences.join(" ");
 }
 
 function generateBriefTemplate(ctx: MeetingBriefContext): string {
@@ -242,6 +304,7 @@ function generateBriefTemplate(ctx: MeetingBriefContext): string {
       bioSummary: primary
         ? `${primary.name} is ${primary.title} at ${primary.company}.`
         : "No executive profile data available.",
+      topOfMind: deriveTopOfMind(primary, newsInsights),
       recentMoves,
       patternCallout: recentMoves.length > 0 ? undefined : undefined,
     },

@@ -1902,6 +1902,9 @@ function structuredBriefToMarkdown(brief: StructuredBrief): string {
   if (brief.executiveProfile.bioSummary) {
     sections.push(`\n### Executive Profile`);
     sections.push(brief.executiveProfile.bioSummary);
+    if (brief.executiveProfile.topOfMind) {
+      sections.push(`\n**Top-of-Mind:** ${brief.executiveProfile.topOfMind}`);
+    }
     if (brief.executiveProfile.recentMoves.length > 0) {
       sections.push(`\n**Recent Moves:**`);
       for (const m of brief.executiveProfile.recentMoves) {

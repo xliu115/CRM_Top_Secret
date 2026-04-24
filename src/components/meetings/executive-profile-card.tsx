@@ -2,7 +2,7 @@
 
 import type { StructuredBrief } from "@/lib/types/structured-brief";
 import { PrepDetailSection } from "./prep-detail-section";
-import { UserCircle } from "lucide-react";
+import { UserCircle, Sparkles } from "lucide-react";
 
 interface ExecutiveProfileCardProps {
   profile: StructuredBrief["executiveProfile"];
@@ -18,6 +18,20 @@ export function ExecutiveProfileCard({ profile }: ExecutiveProfileCardProps) {
         <p className="text-sm text-foreground/80 leading-relaxed">
           {profile.bioSummary}
         </p>
+
+        {profile.topOfMind && (
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 dark:border-indigo-900/50 dark:bg-indigo-950/20 p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                Top-of-Mind
+              </p>
+            </div>
+            <p className="text-sm text-foreground/80 leading-relaxed">
+              {profile.topOfMind}
+            </p>
+          </div>
+        )}
 
         {profile.recentMoves.length > 0 && (
           <div>

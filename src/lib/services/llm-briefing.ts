@@ -98,30 +98,33 @@ export interface NarrativeBriefingContext extends DashboardBriefingContext {
   })[];
 }
 
-const NARRATIVE_SYSTEM_PROMPT = `You are a trusted chief of staff writing a morning briefing for a senior consulting Partner. Your tone is warm, direct, and efficient — like a colleague who knows their priorities.
+const NARRATIVE_SYSTEM_PROMPT = `You are a trusted chief of staff recording the morning briefing for a senior consulting Partner who often listens to it on the go. Write for the ear first, the eye second: natural conversational prose that still scans well.
 
-Format:
-- Open with ONE bold headline sentence that names the single most important action today and why. If a campaign approval exists, lead with that; otherwise lead with the top-priority contact.
-- Below the headline, use SHORT BULLET SECTIONS grouped by category. Each section has a bold label on its own line, then 1-3 markdown bullet points. Only include sections that have data:
-  - **Campaign approvals** — campaign name, pending count, deadline. List first when present.
-  - **Article campaigns** — article title, matched contact count — review and send.
-  - **Priority contacts** — who to reach out to, company, days-since, why.
-  - **Meetings** — title, time, key attendees, optional prep note.
-  - **On the radar** — notable client news worth knowing.
-- Write each bullet as a short, natural sentence — like a colleague briefing you verbally. Use "you/your" voice (e.g. "hasn't heard from you in 94 days", not "94 days since last contact"). NOT a data dump.
-- Use **bold** for: contact full names (first mention), company names, days-since numbers, meeting titles, campaign names, and deadlines. Do NOT bold generic phrases.
-- Reference people by full name on first mention, first name only after.
-- Total length: 100-150 words. This is a 60-second glance, not a 2-minute read.
-- Do NOT write flowing paragraphs. Use the bullet format described above.
+Principles:
+- **Insights over data.** Lead with WHY a person or moment matters right now — pull from the strategic insight (oneLiner first, then narrative) when the nudge has one. Facts (days since, last note) come second, woven into the sentence.
+- **Speakable, not scannable.** Never drop clipped data labels like "94 days since last contact" or "Priority: HIGH". Convert days-since into natural phrases — use the "(~…)" humanized form provided in the data (e.g. "it's been close to three months"). Use "you/your" and natural contractions.
+- **One breath per bullet.** Each bullet is ONE natural sentence (occasionally two). No fragments, bracketed data, or sub-bullets.
+- **Bold sparingly.** At most one or two anchors per bullet — usually the person's full name or the campaign/article title. Do NOT bold days-since phrases, dates, times, or generic words.
+
+Structure (markdown optimized for listening):
+- Open with ONE plain-text headline sentence (no bold) that names the single most important thing to do today and why it matters. If a campaign approval is pending, lead with that; otherwise lead with the highest-priority contact or insight.
+- Below, group into short bullet sections. Each section label is one bold phrase on its own line. Only include sections that have data:
+  - **Campaign approvals** — campaign name, pending count, deadline.
+  - **Article campaigns** — article title and how many contacts are matched.
+  - **Priority contacts** — who to reach out to, led by the strategic reason it matters now; the days-since humanized phrase comes second.
+  - **Meetings** — what's on the calendar and a one-line prep angle if useful.
+  - **On the radar** — the one or two client signals worth knowing today.
+- Reference people by full name on first mention, first name after.
+- Total length: 90-140 words. Aim shorter if the signal is thin. This is a 45-second listen, not a dashboard.
 
 After the briefing, output a JSON block with exactly 3 top actions in this format:
 ---ACTIONS---
 [{"contactName":"...","company":"...","actionLabel":"...","detail":"..."}]
 
-actionLabel should be a short CTA like "Draft check-in email", "Review meeting brief", "View company news", "Review campaign" (for CAMPAIGN_APPROVAL nudges), or "Review article campaign" (for ARTICLE_CAMPAIGN nudges).
-detail should be a brief reason like "94 days since last contact", "Meeting tomorrow at 10am", "5 contacts pending approval, due Apr 10", or "8 contacts matched".
-For CAMPAIGN_APPROVAL actions, use the campaign name as "contactName" and set "company" to "Campaign".
-For ARTICLE_CAMPAIGN actions, use the article title as "contactName" and set "company" to "Article Campaign".`;
+actionLabel: a short CTA like "Draft check-in email", "Review meeting brief", "View company news", "Review campaign" (for CAMPAIGN_APPROVAL), or "Review article campaign" (for ARTICLE_CAMPAIGN).
+detail: a short human reason like "Haven't caught up in about 3 months", "Meeting tomorrow at 10am", "5 contacts pending, due Apr 10", or "8 contacts matched". Prefer humanized time phrases over raw day counts.
+For CAMPAIGN_APPROVAL actions, use the campaign name as "contactName" and "Campaign" as "company".
+For ARTICLE_CAMPAIGN actions, use the article title as "contactName" and "Article Campaign" as "company".`;
 
 function parseNudgeStrategicInsight(metadata?: string) {
   if (!metadata) return null;
@@ -129,32 +132,49 @@ function parseNudgeStrategicInsight(metadata?: string) {
     const meta = JSON.parse(metadata);
     return meta?.strategicInsight as {
       narrative: string;
+      oneLiner?: string;
       suggestedAction?: { label: string };
     } | undefined ?? null;
   } catch { return null; }
+}
+
+function humanizeDaysSince(days?: number): string | null {
+  if (days == null || days < 1) return null;
+  if (days < 3) return "only a couple of days";
+  if (days < 10) return "about a week";
+  if (days < 21) return "a couple of weeks";
+  if (days < 45) return "about a month";
+  if (days < 80) return "a couple of months";
+  if (days < 120) return "close to three months";
+  if (days < 200) return "several months";
+  return "well over half a year";
 }
 
 function formatNudgeBlockForPrompt(ctx: NarrativeBriefingContext): string {
   if (!ctx.nudges.length) return "No open nudges today.";
   return `Open nudges (${ctx.nudges.length}):\n${ctx.nudges
     .map((n) => {
+      const humanDays = humanizeDaysSince(n.daysSince);
       const touch = n.lastContactedLabel
-        ? ` [last touch: ${n.lastContactedLabel}${n.daysSince != null ? `, ${n.daysSince} days ago` : ""}]`
+        ? ` [last touch: ${n.lastContactedLabel}${n.daysSince != null ? `, ${n.daysSince} days ago (~${humanDays})` : ""}]`
         : n.daysSince != null
-          ? ` [${n.daysSince} days since last contact]`
+          ? ` [${n.daysSince} days since last contact (~${humanDays})]`
           : "";
       const note =
         n.lastInteractionSummary && n.lastInteractionSummary.trim()
           ? ` [last interaction note: ${n.lastInteractionSummary.slice(0, 200)}]`
           : "";
       const strategic = parseNudgeStrategicInsight(n.metadata);
+      const insightLead = strategic?.oneLiner
+        ? ` [insight oneLiner: ${strategic.oneLiner}]`
+        : "";
       const reasonText = strategic?.narrative
         ? strategic.narrative.slice(0, 300)
         : n.reason;
       const suggested = strategic?.suggestedAction?.label
         ? ` [suggested: ${strategic.suggestedAction.label}]`
         : "";
-      return `- [${n.priority}] ${n.contactName} (${n.company}): ${reasonText}${touch}${note}${suggested}${n.ruleType ? ` [type: ${n.ruleType}]` : ""}`;
+      return `- [${n.priority}] ${n.contactName} (${n.company}): ${reasonText}${insightLead}${touch}${note}${suggested}${n.ruleType ? ` [type: ${n.ruleType}]` : ""}`;
     })
     .join("\n")}`;
 }
@@ -392,6 +412,27 @@ function buildFallbackActions(ctx: NarrativeBriefingContext): NarrativeBriefingA
   return actions.slice(0, 3);
 }
 
+function firstSentence(text: string | undefined, max = 160): string | null {
+  if (!text) return null;
+  const cleaned = stripMarkdown(text).trim();
+  if (!cleaned) return null;
+  const match = cleaned.match(/^(.+?[.!?])(\s|$)/);
+  const sentence = match ? match[1] : cleaned;
+  const trimmed = sentence.length > max ? `${sentence.slice(0, max - 1).trimEnd()}…` : sentence;
+  return trimmed;
+}
+
+function strategicLead(n: NarrativeBriefingContext["nudges"][number]): string | null {
+  const strategic = parseNudgeStrategicInsight(n.metadata);
+  if (strategic?.oneLiner) {
+    const trimmed = strategic.oneLiner.trim();
+    return trimmed.endsWith(".") ? trimmed : `${trimmed}.`;
+  }
+  const fromNarrative = firstSentence(strategic?.narrative);
+  if (fromNarrative) return fromNarrative;
+  return firstSentence(n.reason);
+}
+
 function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBriefingResult {
   const lines: string[] = [];
   const firstName = ctx.partnerName.split(" ")[0];
@@ -403,43 +444,48 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
     n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN" && n.ruleType !== "FOLLOW_UP"
   );
 
-  // Bold headline — campaign approval takes priority, then top contact nudge
+  // Plain-text headline (no bold) — insight-led, listenable.
   if (campaignNudges.length > 0) {
     const nameMatch = campaignNudges[0].reason.match(/Campaign "([^"]+)"/);
     const campName = nameMatch?.[1] ?? "a campaign";
     lines.push(
-      `**${firstName}, approve **${campName}** today — ${campaignNudges.length === 1 ? "it needs" : "they need"} your sign-off before going out.**`
+      `${firstName}, the one thing that needs you first today is approving **${campName}** so it can go out.`
     );
   } else if (articleCampaignNudges.length > 0) {
     const artTitle = articleCampaignNudges[0].reason.match(/article "([^"]+)"/)?.[1] ?? "a new article";
     lines.push(
-      `**${firstName}, share **"${artTitle}"** with your contacts — we've matched relevant people for you.**`
+      `${firstName}, there's a timely article — **"${artTitle}"** — worth sharing with the contacts we've matched for you.`
     );
   } else if (followUpNudges.length > 0) {
     const top = followUpNudges[0];
     lines.push(
-      `**${firstName}, follow up with ${top.contactName} at ${top.company} — your outreach is waiting for a response.**`
+      `${firstName}, circle back with **${top.contactName}** at ${top.company} — your last note is still sitting without a reply.`
     );
   } else if (contactNudges.length > 0) {
     const top = contactNudges[0];
-    const daysPart = top.daysSince ? ` — it's been **${top.daysSince} days**` : "";
-    lines.push(
-      `**Reach out to ${top.contactName} at ${top.company} today${daysPart}.**`
-    );
+    const lead = strategicLead(top);
+    const human = humanizeDaysSince(top.daysSince);
+    const opener = lead
+      ? `Top of the list today is **${top.contactName}** at ${top.company} — ${lead.replace(/^./, (c) => c.toLowerCase())}`
+      : `Top of the list today is **${top.contactName}** at ${top.company}.`;
+    const tail = human ? ` You haven't been in touch in ${human}.` : "";
+    lines.push(`${opener}${tail}`);
   }
 
-  // Campaign approvals section
+  // Campaign approvals
   if (campaignNudges.length > 0) {
     lines.push("");
     lines.push("**Campaign approvals**");
     for (const n of campaignNudges) {
       const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
       const campName = nameMatch?.[1] ?? "A campaign";
-      lines.push(`- **${campName}** needs your approval — review and approve so it can go out on your behalf.`);
+      lines.push(
+        `- **${campName}** is waiting on your sign-off before it can go out on your behalf.`
+      );
     }
   }
 
-  // Article campaigns section
+  // Article campaigns
   if (articleCampaignNudges.length > 0) {
     lines.push("");
     lines.push("**Article campaigns**");
@@ -451,11 +497,16 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
         const meta = JSON.parse(n.metadata ?? "{}");
         matchCount = meta.matchCount ?? 0;
       } catch { /* ignore */ }
-      lines.push(`- **"${artTitle}"** — ${matchCount} contact${matchCount !== 1 ? "s" : ""} matched. Review and send.`);
+      const who = matchCount > 0
+        ? `${matchCount} contact${matchCount === 1 ? "" : "s"} we've flagged as a good fit`
+        : "a handful of contacts we think are a good fit";
+      lines.push(
+        `- **"${artTitle}"** is ready to share with ${who} — give it a quick review and send.`
+      );
     }
   }
 
-  // Active follow-ups section
+  // Active follow-ups
   if (followUpNudges.length > 0) {
     lines.push("");
     lines.push("**Active follow-ups**");
@@ -466,52 +517,59 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
         const fuInsight = meta.insights?.find((i: { type: string }) => i.type === "FOLLOW_UP");
         waitDays = fuInsight?.waitingDays ?? 0;
       } catch { /* ignore */ }
-      const waitPart = waitDays > 0 ? ` — no response in **${waitDays} days**` : "";
+      const waitPhrase = humanizeDaysSince(waitDays);
+      const waitPart = waitPhrase ? `it's been ${waitPhrase} with no reply` : "they still haven't replied";
       lines.push(
-        `- **${n.contactName}** at **${n.company}**${waitPart}. Time to send a follow-up.`
+        `- **${n.contactName}** at ${n.company} — ${waitPart}, so a short nudge makes sense today.`
       );
     }
   }
 
-  // Priority contacts section
+  // Priority contacts — insight-led
   if (contactNudges.length > 0) {
     lines.push("");
     lines.push("**Priority contacts**");
     for (const n of contactNudges.slice(0, 3)) {
-      const daysPart = n.daysSince
-        ? ` hasn't heard from you in **${n.daysSince} days**.`
-        : ".";
-      const reasonSnippet = n.reason.length > 80
-        ? n.reason.slice(0, 77) + "..."
-        : n.reason;
-      lines.push(
-        `- **${n.contactName}** at **${n.company}**${daysPart} ${reasonSnippet}`
-      );
+      const lead = strategicLead(n);
+      const human = humanizeDaysSince(n.daysSince);
+      const pieces: string[] = [];
+      pieces.push(`**${n.contactName}** at ${n.company}`);
+      if (lead) {
+        pieces.push(lead.replace(/^./, (c) => c.toLowerCase()));
+      }
+      if (human) {
+        pieces.push(`you haven't spoken in ${human}`);
+      }
+      let sentence = pieces.join(" — ");
+      if (!/[.!?]$/.test(sentence)) sentence = `${sentence}.`;
+      lines.push(`- ${sentence}`);
     }
   }
 
-  // Meetings section
+  // Meetings
   if (ctx.meetings.length > 0) {
     lines.push("");
     lines.push("**Meetings**");
     for (const m of ctx.meetings.slice(0, 2)) {
-      const attendees = m.attendeeNames.map((a) => `**${a}**`).join(", ");
+      const attendees = m.attendeeNames.length > 0
+        ? ` with ${m.attendeeNames.slice(0, 2).join(" and ")}${m.attendeeNames.length > 2 ? ` and ${m.attendeeNames.length - 2} more` : ""}`
+        : "";
       lines.push(
-        `- You've got **"${m.title}"** at **${m.startTime}** with ${attendees}.`
+        `- **${m.title}** ${m.startTime}${attendees} — worth a quick prep pass before you walk in.`
       );
     }
     if (ctx.meetings.length > 2) {
-      lines.push(`- Plus **${ctx.meetings.length - 2}** more this week.`);
+      lines.push(`- Plus ${ctx.meetings.length - 2} more on the calendar this week.`);
     }
   }
 
-  // On the radar section
+  // On the radar
   if (ctx.clientNews.length > 0) {
     lines.push("");
     lines.push("**On the radar**");
     for (const news of ctx.clientNews.slice(0, 2)) {
       const cleaned = stripMarkdown(news.content);
-      const headline = cleaned.slice(0, 120) + (cleaned.length > 120 ? "..." : "");
+      const headline = firstSentence(cleaned, 130) ?? cleaned.slice(0, 130);
       lines.push(
         news.company
           ? `- **${news.company}** is in the news — ${headline}`
@@ -522,7 +580,7 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
 
   if (lines.length === 0) {
     lines.push(
-      `**${firstName}, it's a quiet day — a great time for proactive outreach to strengthen your key relationships.**`
+      `${firstName}, it's a quiet one today — no urgent asks, no meetings pushing. Good window to reach out before something else fills it.`
     );
   }
 

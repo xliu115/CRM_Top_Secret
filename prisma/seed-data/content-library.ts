@@ -14,6 +14,12 @@ export function generateContentLibrary(): {
   articles: ContentItemCreate[];
   events: ContentItemCreate[];
 } {
+  // Anchor the three most recent articles to `now` so the ARTICLE_CAMPAIGN
+  // nudge rule (which only considers articles published in the last 14 days)
+  // always has fresh candidates after re-seeding, regardless of calendar drift.
+  const now = Date.now();
+  const daysAgo = (days: number) => new Date(now - days * 86400000);
+
   const articles: ContentItemCreate[] = [
     {
       id: "ci-art-001",
@@ -182,7 +188,7 @@ export function generateContentLibrary(): {
       )}`,
       imageUrl: "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=300&h=300&fit=crop",
       practice: "Technology",
-      publishedAt: new Date("2026-04-01T09:00:00Z"),
+      publishedAt: daysAgo(8),
     },
     {
       id: "ci-art-014",
@@ -195,7 +201,7 @@ export function generateContentLibrary(): {
       )}`,
       imageUrl: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&h=300&fit=crop",
       practice: "Financial Services",
-      publishedAt: new Date("2026-04-02T11:00:00Z"),
+      publishedAt: daysAgo(5),
     },
     {
       id: "ci-art-015",
@@ -208,7 +214,7 @@ export function generateContentLibrary(): {
       )}`,
       imageUrl: "https://images.unsplash.com/photo-1556742111-a301076d9d18?w=300&h=300&fit=crop",
       practice: "Consumer & Retail",
-      publishedAt: new Date("2026-04-04T14:00:00Z"),
+      publishedAt: daysAgo(3),
     },
   ];
 

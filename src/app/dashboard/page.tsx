@@ -920,8 +920,44 @@ export default function DashboardPage() {
           const message = (body && typeof body.error === "string") ? body.error : "Failed to fetch dashboard";
           throw new Error(message);
         }
-        const dashboard = await dashboardRes.json();
+        const dashboard: DashboardData = await dashboardRes.json();
         setDashboardData(dashboard);
+
+        // Auto-regenerate any structured meeting briefs missing Top-of-Mind
+        // or carrying a pre-expansion (short) Top-of-Mind from the earlier
+        // schema. New Top-of-Mind targets 70-110 words; treat anything under
+        // ~200 characters as legacy content and refresh it.
+        const TOP_OF_MIND_MIN_CHARS = 200;
+        const meetingsNeedingBriefRefresh = dashboard.upcomingMeetings.filter((m) => {
+          if (!m.generatedBrief) return false;
+          const sb = parseStructuredBrief(m.generatedBrief);
+          if (sb === null) return false;
+          const tom = sb.executiveProfile.topOfMind?.trim() ?? "";
+          return tom.length < TOP_OF_MIND_MIN_CHARS;
+        });
+        if (meetingsNeedingBriefRefresh.length > 0) {
+          Promise.all(
+            meetingsNeedingBriefRefresh.map((m) =>
+              fetch(`/api/meetings/${m.id}/brief?force=true`, { method: "POST" })
+                .then((r) => r.ok ? r.json() : null)
+                .then((data: { brief?: string } | null) => ({ id: m.id, brief: data?.brief ?? null }))
+                .catch(() => ({ id: m.id, brief: null }))
+            )
+          ).then((updates) => {
+            if (cancelled) return;
+            setDashboardData((prev) => {
+              if (!prev) return prev;
+              const byId = new Map(updates.filter((u) => u.brief).map((u) => [u.id, u.brief!]));
+              if (byId.size === 0) return prev;
+              return {
+                ...prev,
+                upcomingMeetings: prev.upcomingMeetings.map((m) =>
+                  byId.has(m.id) ? { ...m, generatedBrief: byId.get(m.id)! } : m
+                ),
+              };
+            });
+          });
+        }
 
         if (nudgesRes.ok) {
           const nudges: Nudge[] = await nudgesRes.json();
@@ -1094,7 +1130,11 @@ export default function DashboardPage() {
 
   const todayMeetings = meetingBuckets.find((b) => b.label === "Today")?.meetings ?? [];
   const tomorrowMeetings = meetingBuckets.find((b) => b.label === "Tomorrow")?.meetings ?? [];
-  const upcomingPrepMeetings = [...todayMeetings, ...tomorrowMeetings].slice(0, 3);
+  // Cap meeting cards in Top Nudges at 1 — the next most-imminent meeting.
+  // The full list still appears in the dedicated "Today's Meetings & Briefs"
+  // section below, so this trades redundancy for variety (article share,
+  // campaign approvals, follow-ups can flow into the remaining slots).
+  const upcomingPrepMeetings = [...todayMeetings, ...tomorrowMeetings].slice(0, 1);
 
   const feedItems: FeedItem[] = [
     ...upcomingPrepMeetings.map((m): FeedItem => ({
@@ -1418,24 +1458,60 @@ export default function DashboardPage() {
                               </CardHeader>
 
                               <CardContent className="space-y-3">
-                                <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
-                                  <div className="flex items-center gap-1.5 mb-2">
-                                    <Sparkles className="h-4 w-4 text-indigo-600" />
-                                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                                      {briefLabel}
-                                    </span>
+                                {structuredBrief?.executiveProfile.topOfMind ? (
+                                  <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 dark:border-indigo-900/50 dark:bg-indigo-950/20 px-5 py-4">
+                                    <div className="flex items-center gap-1.5">
+                                      <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                                        {briefLabel}
+                                      </span>
+                                    </div>
+                                    {summaryPreview ? (
+                                      <p className="mt-1.5 text-sm text-foreground/80 leading-relaxed">
+                                        {summaryPreview}
+                                      </p>
+                                    ) : (
+                                      <p className="mt-1.5 text-sm text-foreground/80 leading-relaxed">
+                                        {attendeeNames}
+                                      </p>
+                                    )}
+                                    {attendeeNames && summaryPreview && (
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        {attendeeNames}
+                                      </p>
+                                    )}
+                                    <div className="mt-4">
+                                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                                        Top-of-Mind
+                                        {structuredBrief.primaryContactProfile.name
+                                          ? ` · ${structuredBrief.primaryContactProfile.name}`
+                                          : ""}
+                                      </span>
+                                      <p className="mt-1.5 text-sm text-foreground/80 leading-relaxed">
+                                        {structuredBrief.executiveProfile.topOfMind}
+                                      </p>
+                                    </div>
                                   </div>
-                                  {summaryPreview ? (
-                                    <p className="text-sm text-foreground/70 leading-relaxed">{summaryPreview}</p>
-                                  ) : (
-                                    <p className="text-sm text-foreground/70 leading-relaxed">{attendeeNames}</p>
-                                  )}
-                                  {attendeeNames && summaryPreview && (
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                      {attendeeNames}
-                                    </p>
-                                  )}
-                                </div>
+                                ) : (
+                                  <div className="rounded-xl border border-border bg-muted/30 px-5 py-4">
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                      <Sparkles className="h-4 w-4 text-indigo-600" />
+                                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                                        {briefLabel}
+                                      </span>
+                                    </div>
+                                    {summaryPreview ? (
+                                      <p className="text-sm text-foreground/70 leading-relaxed">{summaryPreview}</p>
+                                    ) : (
+                                      <p className="text-sm text-foreground/70 leading-relaxed">{attendeeNames}</p>
+                                    )}
+                                    {attendeeNames && summaryPreview && (
+                                      <p className="text-xs text-muted-foreground mt-2">
+                                        {attendeeNames}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
 
                                 <div>
                                   <Link

@@ -30,6 +30,7 @@ export interface StructuredBrief {
 
   executiveProfile: {
     bioSummary: string;
+    topOfMind?: string;
     recentMoves: Array<{
       date: string;
       description: string;
@@ -134,6 +135,10 @@ export function formatBriefAsText(brief: StructuredBrief): string {
   if (brief.executiveProfile.bioSummary) {
     lines.push("EXECUTIVE PROFILE");
     lines.push(brief.executiveProfile.bioSummary);
+    if (brief.executiveProfile.topOfMind) {
+      lines.push("");
+      lines.push(`Top-of-Mind: ${brief.executiveProfile.topOfMind}`);
+    }
     if (brief.executiveProfile.recentMoves.length > 0) {
       lines.push("");
       lines.push("Recent Moves:");
