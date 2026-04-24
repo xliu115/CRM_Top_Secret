@@ -333,7 +333,7 @@ export function BlockRenderer({
           case "meeting_card":
             return <MeetingCard key={gi} data={block.data} onSendMessage={onSendMessage} />;
           case "meeting_brief":
-            return <MeetingBrief key={gi} data={block.data} />;
+            return <MeetingBrief key={gi} data={block.data} onSendMessage={onSendMessage} />;
           case "stale_contacts_list":
             return <StaleContactsList key={gi} data={block.data} />;
           case "nudge_evidence":

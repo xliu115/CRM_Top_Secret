@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { ActionBar } from "./action-bar";
+import { buildMeetingBriefActionBar } from "@/lib/services/mobile-action-bars";
+import type { SendMessageFn } from "@/hooks/use-chat-session";
 import type { MeetingBriefBlock } from "@/lib/types/chat-blocks";
 
 const TEMPERATURE_STYLES: Record<string, string> = {
@@ -15,9 +18,11 @@ const TEMPERATURE_STYLES: Record<string, string> = {
 export function MeetingBrief({
   data,
   embedded = false,
+  onSendMessage,
 }: {
   data: MeetingBriefBlock["data"];
   embedded?: boolean;
+  onSendMessage?: SendMessageFn;
 }) {
   const [expanded, setExpanded] = useState(false);
   const tempClass = data.temperature ? TEMPERATURE_STYLES[data.temperature] : "";
@@ -52,24 +57,21 @@ export function MeetingBrief({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 min-h-[36px]"
-          aria-expanded={expanded}
-        >
-          {expanded ? (
-            <>
-              <ChevronUp className="h-3.5 w-3.5" />
-              Hide full brief
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-3.5 w-3.5" />
-              View full brief
-            </>
-          )}
-        </button>
+        <div className="mt-3">
+          <ActionBar
+            data={buildMeetingBriefActionBar({
+              expanded,
+              firstAttendeeName: data.firstAttendeeName,
+            })}
+            onSendMessage={(query) => {
+              if (query === "__toggle_brief__") {
+                setExpanded((v) => !v);
+                return;
+              }
+              onSendMessage?.(query);
+            }}
+          />
+        </div>
 
         {expanded && (
           <div className="mt-4 border-t border-border pt-4">

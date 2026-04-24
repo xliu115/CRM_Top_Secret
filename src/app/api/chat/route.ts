@@ -424,23 +424,10 @@ export async function POST(request: NextRequest) {
                 synthesis,
                 fullBrief: briefBody,
                 temperature: structured?.relationshipHistory?.temperature,
+                firstAttendeeName: match.attendees[0]?.contact.name,
               },
             },
           ];
-          if (match.attendees.length > 0) {
-            const firstAttendee = match.attendees[0].contact.name;
-            meetingBlocks.push({
-              type: "action_bar",
-              data: {
-                primary: { label: `Draft Email to ${firstAttendee}`, query: `Draft email to ${firstAttendee}`, icon: "mail" },
-                secondary: match.attendees.slice(1, 4).map((a) => ({
-                  label: `Email ${a.contact.name}`,
-                  query: `Draft email to ${a.contact.name}`,
-                  icon: "mail",
-                })),
-              },
-            });
-          }
           return NextResponse.json({ answer: stripMarkers(md), sources: [], blocks: meetingBlocks });
         }
 
