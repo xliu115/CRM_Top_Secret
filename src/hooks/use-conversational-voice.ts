@@ -41,6 +41,8 @@ export function useConversationalVoice({ onUserTurn, enabled }: UseConversationa
   const onUserTurnRef = useRef(onUserTurn);
   onUserTurnRef.current = onUserTurn;
 
+  const startListenCycleRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     setIsSupported(
       typeof window !== "undefined" &&
@@ -54,8 +56,15 @@ export function useConversationalVoice({ onUserTurn, enabled }: UseConversationa
     if (hardStopTimerRef.current) { clearTimeout(hardStopTimerRef.current); hardStopTimerRef.current = null; }
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
     const recorder = recorderRef.current;
-    if (recorder && recorder.state !== "inactive") { try { recorder.stop(); } catch { /* */ } }
+    if (recorder) {
+      // Detach handlers BEFORE stopping so the old onstop can't fire
+      // transcribeAndEmit with stale chunks from a superseded cycle.
+      recorder.ondataavailable = null;
+      recorder.onstop = null;
+      if (recorder.state !== "inactive") { try { recorder.stop(); } catch { /* */ } }
+    }
     recorderRef.current = null;
+    chunksRef.current = [];
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch { /* */ } audioCtxRef.current = null; }
@@ -80,11 +89,15 @@ export function useConversationalVoice({ onUserTurn, enabled }: UseConversationa
 
   const transcribeAndEmit = useCallback(async () => {
     if (transcribingRef.current) return;
+    if (stoppedRef.current) {
+      chunksRef.current = [];
+      return;
+    }
     transcribingRef.current = true;
     try {
       const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current });
       chunksRef.current = [];
-      if (blob.size < 1500) {
+      if (blob.size < 1500 || !speechDetectedRef.current) {
         setState("listening");
         return;
       }
@@ -137,7 +150,16 @@ export function useConversationalVoice({ onUserTurn, enabled }: UseConversationa
           : "audio/mp4";
       mimeTypeRef.current = mimeType;
 
-      const ctx = new AudioContext();
+      const AudioCtxCtor =
+        typeof window !== "undefined"
+          ? (window.AudioContext ||
+              (window as unknown as { webkitAudioContext?: typeof AudioContext })
+                .webkitAudioContext)
+          : undefined;
+      if (!AudioCtxCtor) {
+        throw new Error("AudioContext is not supported in this browser.");
+      }
+      const ctx = new AudioCtxCtor();
       audioCtxRef.current = ctx;
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
@@ -194,8 +216,17 @@ export function useConversationalVoice({ onUserTurn, enabled }: UseConversationa
       };
       rafRef.current = requestAnimationFrame(tick);
 
+      // Hard-stop always fires after MAX_TURN_MS even if the user never spoke,
+      // so a silent mic can't hold the pipeline open indefinitely. If no speech
+      // was detected, transcribeAndEmit will drop the tiny blob and loop back
+      // into listening via startListenCycle on the next turn.
       hardStopTimerRef.current = setTimeout(() => {
-        if (speechDetectedRef.current) stopForSilence();
+        if (!speechDetectedRef.current) {
+          // Nothing was said — skip transcription entirely, just restart.
+          if (!stoppedRef.current) startListenCycleRef.current();
+          return;
+        }
+        stopForSilence();
       }, MAX_TURN_MS);
     } catch (err) {
       if (err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
@@ -207,6 +238,8 @@ export function useConversationalVoice({ onUserTurn, enabled }: UseConversationa
       stoppedRef.current = true;
     }
   }, [cleanupRecorder, transcribeAndEmit]);
+
+  startListenCycleRef.current = startListenCycle;
 
   const speak = useCallback(async (text: string) => {
     if (stoppedRef.current || !text.trim()) return;
