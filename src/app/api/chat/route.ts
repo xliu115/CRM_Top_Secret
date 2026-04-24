@@ -1216,11 +1216,11 @@ export async function POST(request: NextRequest) {
         let confirmLabel: string;
         if (isDismissNudge) {
           title = `Dismiss nudge for ${contactName}?`;
-          description = `**${contactName}**${companyName ? ` (${companyName})` : ""} — ${nudgeReason}`;
+          description = `${contactName}${companyName ? ` (${companyName})` : ""} — ${nudgeReason}`;
           confirmLabel = "Dismiss";
         } else if (isSnoozeNudge) {
           title = `Snooze nudge for ${contactName}?`;
-          description = `**${contactName}**${companyName ? ` (${companyName})` : ""} — ${nudgeReason}. This nudge will come back later.`;
+          description = `${contactName}${companyName ? ` (${companyName})` : ""} — ${nudgeReason}. This nudge will come back later.`;
           confirmLabel = "Snooze";
         } else {
           if (!draftedEmail) {
@@ -1230,7 +1230,7 @@ export async function POST(request: NextRequest) {
             });
           }
           title = `Send email to ${contactName}?`;
-          description = `**To:** ${contactName}${companyName ? ` (${companyName})` : ""}\n**Subject:** ${draftedEmail.subject}`;
+          description = `To: ${contactName}${companyName ? ` (${companyName})` : ""}\nSubject: ${draftedEmail.subject}`;
           confirmLabel = "Send";
         }
 

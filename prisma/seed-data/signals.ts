@@ -328,75 +328,20 @@ const realNewsByCompany: Record<string, RealNewsItem[]> = {
   ],
 };
 
-// ── Real event signals (based on actual industry conferences) ────────
+// NOTE on data accuracy
+// --------------------------------------------------------------------
+// The platform surfaces signal content verbatim in narratives, emails,
+// and voice briefings. Randomly generated per-contact signals (fake
+// job changes, fabricated event appearances, invented LinkedIn quotes)
+// caused the LLM to assert false facts about real executives — e.g.
+// claiming Jensen Huang had transitioned from CEO to "VP of AI & Data".
+//
+// To keep everything grounded in verifiable content, signals are now
+// sourced exclusively from `realNewsByCompany` (curated, URL-backed
+// company news). Any contact-specific signals should be added as
+// explicit, hand-authored entries — never via templated randomization.
 
-const realEventTemplates = [
-  "{name} confirmed as speaker at GTC 2026 (March 16-19, San Jose) on {area} innovations",
-  "{name} presenting at Davos World Economic Forum on technology and society",
-  "{name} speaking at HIMSS 2026 on the future of {area} in healthcare",
-  "{name} moderating panel at RSA Conference on cybersecurity trends",
-  "{name} attending Mobile World Congress – opportunity to meet in person",
-  "{company} hosting annual partner summit in San Francisco next week",
-  "{name} confirmed for NRF 2026 panel on retail technology",
-  "{name} presenting at AWS re:Invent on {area} strategy",
-  "{name} keynoting at Dreamforce 2026 on enterprise {area}",
-  "{company} sponsoring AI World Congress – {name} leading their delegation",
-  "{name} attending McKinsey Tech Forward conference in New York",
-  "{name} speaking at Gartner IT Symposium on {area} roadmap",
-];
-
-// ── Real LinkedIn-style signals ─────────────────────────────────────
-
-const realLinkedinTemplates = [
-  "{name} posted about {company}'s latest results: 'Proud of what the team delivered this quarter'",
-  "{name} shared article on {area} trends: 'This is exactly where our industry is headed'",
-  "{name} commented on McKinsey's latest report on {area}: 'Spot-on analysis'",
-  "{name} celebrated work anniversary at {company}: '5 years of building the future'",
-  "{name} posted: 'Excited to announce our new {area} initiative at {company}'",
-  "{name} shared {company}'s blog on {area}: 'Our team has been working on this for months'",
-  "{name} reposted CEO's vision for AI transformation: 'This is why I joined {company}'",
-  "{name} endorsed by 15+ peers for expertise in {area} and digital transformation",
-  "{name} posted: 'Looking for partners who understand {area} at enterprise scale — DM me'",
-  "{name} shared thoughts on agentic AI: 'The next wave of enterprise automation is here'",
-  "{name} commented on industry layoffs: 'We're doubling down on {area} talent at {company}'",
-  "{name} posted about attending McKinsey's CIO Roundtable: 'Great conversations on {area}'",
-];
-
-const jobChangeTemplates = [
-  "{name} promoted to {newTitle} at {company}",
-  "{name} has moved from {company} to a competitor – relationship at risk",
-  "{name} announced new role: {newTitle} at {company}",
-  "{name} expanded responsibilities to include {area} at {company}",
-  "{name} transitioned from {oldTitle} to {newTitle} at {company}",
-];
-
-const areas = [
-  "generative AI",
-  "cloud infrastructure",
-  "data governance",
-  "process automation",
-  "digital commerce",
-  "platform engineering",
-  "responsible AI",
-  "edge computing",
-  "quantum computing",
-  "sustainability tech",
-  "agentic AI",
-  "AI infrastructure",
-];
-
-const newTitles = [
-  "SVP of Technology",
-  "Chief Digital Officer",
-  "EVP of Innovation",
-  "VP of AI & Data",
-  "Head of Strategic Partnerships",
-  "CTO",
-  "VP of Product",
-];
-
-export function generateSignals(contacts: ContactRef[]) {
-  const rand = seededRandom(456);
+export function generateSignals(_contacts: ContactRef[]) {
   const signals: {
     id: string;
     contactId: string | null;
@@ -411,7 +356,8 @@ export function generateSignals(contacts: ContactRef[]) {
   const now = new Date();
   let idx = 0;
 
-  // Company-level news signals — use REAL news with explicit recency
+  // Company-level news signals — real, URL-backed items from
+  // `realNewsByCompany` with explicit recency in days.
   for (const company of companies) {
     const newsItems = realNewsByCompany[company.id] ?? [];
     for (const item of newsItems) {
@@ -423,73 +369,7 @@ export function generateSignals(contacts: ContactRef[]) {
         date: new Date(now.getTime() - item.daysAgo * 86400000),
         content: item.content,
         url: item.url,
-        confidence: 0.9 + rand() * 0.1,
-      });
-      idx++;
-    }
-  }
-
-  // Contact-level signals: events, job changes, LinkedIn activity
-  // These are dated within the last 0-7 days for maximum nudge relevance
-  for (const contact of contacts) {
-    const company = companies.find((c) => c.id === contact.companyId)!;
-    const signalCount = 2 + Math.floor(rand() * 3);
-
-    for (let i = 0; i < signalCount; i++) {
-      const r = rand();
-      let type: SignalType;
-      let content: string;
-      let url: string | null = null;
-      const daysAgo = Math.floor(rand() * 7);
-      const area = areas[Math.floor(rand() * areas.length)];
-      const linkedinSlug = contact.name
-        .toLowerCase()
-        .replace(/ /g, "-")
-        .replace(/[^a-z-]/g, "");
-
-      if (r < 0.25) {
-        type = "EVENT";
-        const template =
-          realEventTemplates[Math.floor(rand() * realEventTemplates.length)];
-        content = template
-          .replace(/{name}/g, contact.name)
-          .replace(/{company}/g, company.name)
-          .replace(/{area}/g, area);
-        url = `https://www.linkedin.com/in/${linkedinSlug}`;
-      } else if (r < 0.4) {
-        type = "JOB_CHANGE";
-        const template =
-          jobChangeTemplates[Math.floor(rand() * jobChangeTemplates.length)];
-        const newTitle = newTitles[Math.floor(rand() * newTitles.length)];
-        content = template
-          .replace(/{name}/g, contact.name)
-          .replace(/{company}/g, company.name)
-          .replace(/{newTitle}/g, newTitle)
-          .replace(/{oldTitle}/g, contact.title)
-          .replace(/{area}/g, area);
-        url = `https://www.linkedin.com/in/${linkedinSlug}`;
-      } else {
-        type = "LINKEDIN_ACTIVITY";
-        const template =
-          realLinkedinTemplates[
-            Math.floor(rand() * realLinkedinTemplates.length)
-          ];
-        content = template
-          .replace(/{name}/g, contact.name)
-          .replace(/{company}/g, company.name)
-          .replace(/{area}/g, area);
-        url = `https://www.linkedin.com/in/${linkedinSlug}`;
-      }
-
-      signals.push({
-        id: `sig-${String(idx).padStart(4, "0")}`,
-        contactId: contact.id,
-        companyId: contact.companyId,
-        type,
-        date: new Date(now.getTime() - daysAgo * 86400000),
-        content,
-        url,
-        confidence: 0.65 + rand() * 0.35,
+        confidence: 0.95,
       });
       idx++;
     }

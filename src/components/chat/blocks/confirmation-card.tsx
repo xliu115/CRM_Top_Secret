@@ -3,6 +3,7 @@
 import { CheckCircle, XCircle, Send, BellOff, Trash2 } from "lucide-react";
 import type { ConfirmationCardBlock } from "@/lib/types/chat-blocks";
 import type { PendingAction } from "@/hooks/use-chat-session";
+import { stripMarkdownToPlainText } from "@/lib/utils/strip-markdown";
 
 const ACTION_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   dismiss_nudge: Trash2,
@@ -29,8 +30,8 @@ export function ConfirmationCard({
             <Icon className="h-4 w-4 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-foreground">{data.title}</p>
-            <p className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{data.description}</p>
+            <p className="text-sm font-semibold text-foreground">{stripMarkdownToPlainText(data.title)}</p>
+            <p className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{stripMarkdownToPlainText(data.description)}</p>
           </div>
         </div>
       </div>

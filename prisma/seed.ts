@@ -41,7 +41,9 @@ async function main() {
   await prisma.externalSignal.deleteMany();
   await prisma.interaction.deleteMany();
   await prisma.contact.deleteMany();
+  await prisma.companyBrief.deleteMany();
   await prisma.company.deleteMany();
+  await prisma.nudgeRuleConfig.deleteMany();
   await prisma.partner.deleteMany();
 
   // Partners
