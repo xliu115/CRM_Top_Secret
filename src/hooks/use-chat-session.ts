@@ -145,7 +145,17 @@ export function useChatSession() {
   }, [isListening, isTranscribing, handleSend]);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Prefer scrolling so the latest CTA row sits above the input/keyboard.
+    // Falls back to the trailing scroll sentinel when no action bar is in view.
+    requestAnimationFrame(() => {
+      const ctaRows = document.querySelectorAll<HTMLElement>("[data-cta-row]");
+      const latestCta = ctaRows[ctaRows.length - 1];
+      if (latestCta) {
+        latestCta.scrollIntoView({ block: "end", behavior: "smooth" });
+      } else {
+        scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+    });
   }, [messages, loading]);
 
   useEffect(() => {
