@@ -101,7 +101,7 @@ export function CallMarvinOverlay({
   const ringScale = 1 + level * 0.6;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm">
+    <div className="absolute inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm">
       <div className="flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
         <div className="flex items-center gap-2">
           <div className="relative h-2 w-2">
@@ -117,7 +117,7 @@ export function CallMarvinOverlay({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium text-foreground/80 transition-colors hover:bg-muted"
+          className="inline-flex min-h-[44px] items-center -mr-2 rounded-md px-2 text-[15px] font-normal text-blue-600 motion-safe:transition-colors active:text-blue-800 dark:text-blue-400 dark:active:text-blue-300"
         >
           Back to chat
         </button>
@@ -140,7 +140,7 @@ export function CallMarvinOverlay({
               ) : voice.state === "listening" ? (
                 <Mic className="h-10 w-10" />
               ) : voice.state === "speaking" ? (
-                <span className="text-2xl font-semibold tracking-tight">M</span>
+                <span className="text-2xl font-semibold tracking-tight">A</span>
               ) : (
                 <MicOff className="h-10 w-10" />
               )}
