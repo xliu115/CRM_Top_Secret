@@ -36,7 +36,7 @@ If the best relationship manager in the world had perfect memory and unlimited t
 - Narrative AI Morning Briefing — AI-generated narrative weaving nudges, meetings, news, and relationship context into a coherent 2-minute read. Delivered daily via email (Resend).
 - Smart Nudge Sequencing (Cadence Engine) — multi-step relationship workflows: initial outreach → follow-up if no response → escalation → archive. State machine in nudge engine, new CadenceStep model.
 
-## Deferred to TODOS.md
+## Deferred to [docs/TODOS.md](../TODOS.md)
 
 - Relationship Health Dashboard with Trends — periodic snapshots, trend lines, "fastest declining" alerts
 - Firm-Wide Relationship Graph visualization — D3 graph, admin analytics page

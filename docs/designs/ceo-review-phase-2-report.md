@@ -30,7 +30,7 @@ Prior review: 2026-03-26 (SCOPE EXPANSION, 2 accepted, 4 deferred)
 | 10 | Zero test coverage for both shipped features | Testing | **FIXED** — Added 39 tests across 3 new test files (73 total) |
 | 11 | No `.env.example` | Developer experience | **FIXED** — Created with all required env vars |
 | 12 | No `vercel.json` cron config | Deployment | **FIXED** — Created with schedules for all 3 cron routes |
-| 13 | Audit logging for email sends | Observability | **DEFERRED** — Added to TODOS.md |
+| 13 | Audit logging for email sends | Observability | **DEFERRED** — Added to [docs/TODOS.md](../TODOS.md) |
 
 ## Test Coverage After Review
 
@@ -71,7 +71,7 @@ Prior review: 2026-03-26 (SCOPE EXPANSION, 2 accepted, 4 deferred)
 1. Split `llm-service.ts` → **A) Split now** — Done
 2. Extract `verifyCronSecret()` → **A) Extract now** — Done
 3. Middleware gap on sequence/outreach routes → **A) Fix now** — Done
-4. Audit logging for email sends → Skipped (unresolved, deferred to TODOS.md)
+4. Audit logging for email sends → Skipped (unresolved, deferred to [docs/TODOS.md](../TODOS.md))
 5. Sequential partner processing in cron → **A) Switch to Promise.allSettled()** — Done
 
 ### Section 2: Error Map
