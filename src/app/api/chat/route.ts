@@ -13,6 +13,10 @@ import {
 } from "@/lib/services/llm-contact360";
 import { generateCompany360, generateMiniFinancialSnapshot, computeIntensity, type Company360Context } from "@/lib/services/llm-company360";
 import { classifyIntent, type IntentType } from "@/lib/services/llm-intent";
+import {
+  buildEmailDraftActionBar,
+  buildNudgeActionActionBar,
+} from "@/lib/services/mobile-action-bars";
 import { parseStructuredBrief, type StructuredBrief } from "@/lib/types/structured-brief";
 import { synthesizeBrief, synthesizeFromRaw } from "@/lib/utils/meeting-brief-synthesis";
 import {
@@ -898,14 +902,7 @@ export async function POST(request: NextRequest) {
 
             blocks.push({
               type: "action_bar",
-              data: {
-                primary: { label: "Send Email", query: `Send email to ${contactName}`, icon: "send" },
-                secondary: [
-                  { label: "Copy Email", query: "__copy_email__", icon: "copy" },
-                  { label: "Quick 360", query: `Quick 360 for ${contactName}`, icon: "search" },
-                  { label: "Company 360", query: `Company 360 for ${companyName || contactName}`, icon: "briefcase" },
-                ],
-              },
+              data: buildNudgeActionActionBar({ contactName }),
             });
 
             return NextResponse.json({
@@ -1600,10 +1597,7 @@ export async function POST(request: NextRequest) {
                 },
                 {
                   type: "action_bar",
-                  data: {
-                    primary: { label: "Copy Email", query: "", icon: "copy" },
-                    secondary: buildSecondaryActions(contact.name, usedActions, company?.name),
-                  },
+                  data: buildEmailDraftActionBar({ contactName: contact.name }),
                 },
               ];
               return NextResponse.json({ answer: cleanEmailAnswer, sources: [], blocks });
