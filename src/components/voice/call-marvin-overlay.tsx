@@ -79,10 +79,11 @@ export function CallMarvinOverlay({
     enabled: open,
   });
 
+  const { start: voiceStart, stop: voiceStop } = voice;
   useEffect(() => {
-    if (open) voice.start();
-    else voice.stop();
-  }, [open, voice]);
+    if (open) voiceStart();
+    else voiceStop();
+  }, [open, voiceStart, voiceStop]);
 
   const lastAssistant = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
