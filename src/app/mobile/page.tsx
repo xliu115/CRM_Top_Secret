@@ -257,11 +257,11 @@ export default function MobilePage() {
     <button
       type="button"
       onClick={() => setMode("call")}
-      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-blue-600 px-3 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 active:scale-[0.97] active:bg-blue-800"
-      aria-label="Call Marvin"
+      className="inline-flex min-h-[44px] items-center gap-1 -mr-1 rounded-md px-2 text-[15px] font-normal text-blue-600 motion-safe:transition-colors active:text-blue-800 dark:text-blue-400 dark:active:text-blue-300"
+      aria-label="Call Activate"
     >
-      <Phone className="h-3.5 w-3.5" />
-      Call Marvin
+      <Phone className="h-4 w-4" />
+      Call Activate
     </button>
   ) : null;
 

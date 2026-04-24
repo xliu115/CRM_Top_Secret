@@ -110,7 +110,7 @@ export function CallMarvinOverlay({
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {voice.state === "listening" && "Listening"}
             {voice.state === "thinking" && "Thinking"}
-            {voice.state === "speaking" && "Marvin"}
+            {voice.state === "speaking" && "Activate"}
             {voice.state === "idle" && "Connecting"}
           </span>
         </div>
@@ -159,7 +159,7 @@ export function CallMarvinOverlay({
             ) : voice.error ? (
               <p className="text-sm text-destructive">{voice.error}</p>
             ) : (
-              <p className="text-sm text-muted-foreground">Connecting to Marvin…</p>
+              <p className="text-sm text-muted-foreground">Connecting to Activate…</p>
             )}
           </div>
 
