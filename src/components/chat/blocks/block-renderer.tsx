@@ -12,6 +12,7 @@ import { ApprovalDeck } from "./approval-deck";
 import { MeetingScheduler } from "./meeting-scheduler";
 import { CalendarAction } from "./calendar-action";
 import { MeetingCard } from "./meeting-card";
+import { MeetingBrief } from "./meeting-brief";
 import { StaleContactsList } from "./stale-contacts-list";
 import { NudgeEvidence } from "./nudge-evidence";
 import { NudgeSummaryShell } from "./nudge-summary-shell";
@@ -331,6 +332,8 @@ export function BlockRenderer({
             return <CalendarAction key={gi} data={block.data} onSendMessage={onSendMessage} />;
           case "meeting_card":
             return <MeetingCard key={gi} data={block.data} onSendMessage={onSendMessage} />;
+          case "meeting_brief":
+            return <MeetingBrief key={gi} data={block.data} />;
           case "stale_contacts_list":
             return <StaleContactsList key={gi} data={block.data} />;
           case "nudge_evidence":

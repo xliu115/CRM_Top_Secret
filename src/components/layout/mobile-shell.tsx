@@ -44,7 +44,7 @@ export function MobileShell({
   const { data: session } = useSession();
 
   const deviceFrame = (
-    <div className="flex h-full flex-col bg-background">
+    <div className="relative flex h-full flex-col bg-background">
       {/* Compact header */}
       <header
         className="flex shrink-0 items-center justify-between border-b border-border bg-card px-4"

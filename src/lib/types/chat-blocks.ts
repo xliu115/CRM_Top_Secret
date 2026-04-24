@@ -108,6 +108,17 @@ export type MeetingCardBlock = {
   };
 };
 
+export type MeetingBriefBlock = {
+  type: "meeting_brief";
+  data: {
+    meetingId: string;
+    meetingTitle: string;
+    synthesis: string;
+    fullBrief: string;
+    temperature?: "COLD" | "COOL" | "WARM" | "HOT";
+  };
+};
+
 export type StaleContactsListBlock = {
   type: "stale_contacts_list";
   data: {
@@ -175,6 +186,7 @@ export type ChatBlock =
   | MeetingSchedulerBlock
   | CalendarActionBlock
   | MeetingCardBlock
+  | MeetingBriefBlock
   | StaleContactsListBlock
   | NudgeEvidenceBlock
   | StrategicInsightBlock

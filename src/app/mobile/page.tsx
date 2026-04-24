@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Send, Loader2, Sparkles, Mic, MicOff, Trash2, ChevronRight, Phone } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { MobileShell } from "@/components/layout/mobile-shell";
-import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AssistantReply } from "@/components/chat/assistant-reply";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -230,11 +229,16 @@ export default function MobilePage() {
         <div className="flex-1 overflow-y-auto">
           <div className="space-y-5 px-4 py-4">
             {briefingLoading && !hasMessages && (
-              <div className="flex gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <Sparkles className="h-4 w-4 text-primary" />
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Sparkles className="h-3 w-3 text-primary" />
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground-subtle">
+                    Activate
+                  </p>
                 </div>
-                <div className="flex items-center gap-2 pt-2.5">
+                <div className="flex items-center gap-2">
                   <div className="flex gap-1">
                     <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "0ms" }} />
                     <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -265,20 +269,29 @@ export default function MobilePage() {
 
             {/* Messages */}
             {messages.map((msg) => (
-              <div key={msg.id} className="flex gap-3">
-                {msg.role === "assistant" ? (
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-base">
-                    🐦
-                  </div>
-                ) : (
-                  <Avatar name={session?.user?.name || "User"} size="sm" />
-                )}
-                <div className="min-w-0 flex-1 space-y-1.5">
+              <div key={msg.id} className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  {msg.role === "assistant" ? (
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[13px]">
+                      🐦
+                    </div>
+                  ) : (
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                      {(session?.user?.name || "You")
+                        .split(/\s+/)
+                        .map((p) => p[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2)}
+                    </div>
+                  )}
                   <p className="text-xs font-medium text-muted-foreground-subtle">
                     {msg.role === "assistant"
                       ? "Activate"
                       : session?.user?.name || "You"}
                   </p>
+                </div>
+                <div className="min-w-0">
                   <div
                     className={
                       msg.role === "user"
@@ -336,11 +349,16 @@ export default function MobilePage() {
             ))}
 
             {loading && (
-              <div className="flex gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  🐦
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[13px]">
+                    🐦
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground-subtle">
+                    Activate
+                  </p>
                 </div>
-                <div className="flex items-center gap-2 pt-2.5">
+                <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   <span className="text-[15px] text-muted-foreground-subtle">
                     Searching your data & the web...

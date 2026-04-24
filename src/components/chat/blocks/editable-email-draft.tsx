@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Pencil,
-  Check,
-  X,
   Sparkles,
   Mic,
   Loader2,
 } from "lucide-react";
 import type { EditableEmailDraftBlock } from "@/lib/types/chat-blocks";
+import { EmailComposerModal } from "./email-composer-modal";
 
 type Props = {
   data: EditableEmailDraftBlock["data"];
@@ -35,7 +34,6 @@ export function EditableEmailDraft({
   const [subject, setSubject] = useState(data.subject);
   const [regenerating, setRegenerating] = useState<string | null>(null);
   const [prevDraftId, setPrevDraftId] = useState(data.draftId);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   if (prevDraftId !== data.draftId) {
     setPrevDraftId(data.draftId);
@@ -44,27 +42,12 @@ export function EditableEmailDraft({
     setEditing(false);
   }
 
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      const el = textareaRef.current;
-      el.focus();
-      el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 360) + "px";
-    }
-  }, [editing]);
-
-  function commit() {
+  function handleSave(next: { subject: string; body: string }) {
+    setSubject(next.subject);
+    setBody(next.body);
+    onSubjectChange?.(next.subject);
+    onBodyChange?.(next.body);
     setEditing(false);
-    onBodyChange?.(body);
-    onSubjectChange?.(subject);
-  }
-
-  function cancel() {
-    setBody(data.body);
-    setSubject(data.subject);
-    setEditing(false);
-    onBodyChange?.(data.body);
-    onSubjectChange?.(data.subject);
   }
 
   function regenerate(flavor: "warmer" | "shorter") {
@@ -79,84 +62,72 @@ export function EditableEmailDraft({
     ? "overflow-hidden"
     : "rounded-lg border border-border bg-card overflow-hidden";
 
+  const hasRegenerate =
+    Boolean(data.regenerate?.warmer) ||
+    Boolean(data.regenerate?.shorter) ||
+    Boolean(onVoiceEdit);
+
+  function openComposer() {
+    setEditing(true);
+  }
+
+  function handleDraftKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openComposer();
+    }
+  }
+
   return (
-    <div className={outerClass}>
-      <div className={embedded ? "pb-1 flex items-center justify-between gap-2" : "px-4 pt-3 pb-2 flex items-center justify-between gap-2"}>
-        <span className="text-sm font-semibold text-foreground">Email Draft</span>
-        {!editing ? (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-background/60 px-2 py-1 text-[11px] font-medium text-foreground/80 transition-colors hover:bg-muted"
+    <>
+      <div className={outerClass}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={openComposer}
+          onKeyDown={handleDraftKey}
+          aria-label="Edit email"
+          className="cursor-pointer select-none transition-colors hover:bg-muted/40 active:bg-muted/60"
+        >
+          <div
+            className={
+              embedded
+                ? "pb-1 flex items-center justify-between gap-2"
+                : "px-4 pt-3 pb-2 flex items-center justify-between gap-2"
+            }
           >
-            <Pencil className="h-3 w-3" />
-            Edit
-          </button>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={cancel}
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-background/60 px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted"
-            >
-              <X className="h-3 w-3" />
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={commit}
-              className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
-            >
-              <Check className="h-3 w-3" />
-              Done
-            </button>
+            <span className="text-sm font-semibold text-foreground">Email Draft</span>
+            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-background/60 px-2 py-1 text-[11px] font-medium text-foreground/80">
+              <Pencil className="h-3 w-3" />
+              Edit
+            </span>
           </div>
-        )}
-      </div>
 
-      <div className={`space-y-2.5 ${embedded ? "" : "px-4 pb-3"}`}>
-        <div className="flex items-baseline gap-2">
-          <span className="text-xs font-medium text-muted-foreground shrink-0 w-12">To:</span>
-          <span className="text-sm text-foreground">{data.to}</span>
-        </div>
-
-        <div className="flex items-baseline gap-2">
-          <span className="text-xs font-medium text-muted-foreground shrink-0 w-12">Subject:</span>
-          {editing ? (
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm font-medium text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          ) : (
-            <span className="text-sm font-medium text-foreground">{subject}</span>
-          )}
-        </div>
-
-        <div className="border-t border-border/40 pt-2.5">
-          {editing ? (
-            <textarea
-              ref={textareaRef}
-              value={body}
-              onChange={(e) => {
-                setBody(e.target.value);
-                const el = e.currentTarget;
-                el.style.height = "auto";
-                el.style.height = Math.min(el.scrollHeight, 360) + "px";
-              }}
-              className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              style={{ minHeight: 160 }}
-            />
-          ) : (
-            <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
-              {body}
+          <div className={`space-y-2.5 ${embedded ? "" : "px-4 pb-3"}`}>
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-medium text-muted-foreground shrink-0 w-12">To:</span>
+              <span className="text-sm text-foreground">{data.to}</span>
             </div>
-          )}
+
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-medium text-muted-foreground shrink-0 w-12">Subject:</span>
+              <span className="text-sm font-medium text-foreground">{subject}</span>
+            </div>
+
+            <div className="border-t border-border/40 pt-2.5">
+              <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                {body}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {(data.regenerate?.warmer || data.regenerate?.shorter || onVoiceEdit) && !editing && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+        {hasRegenerate && (
+          <div
+            className={`flex flex-wrap items-center gap-1.5 ${
+              embedded ? "pt-1" : "px-4 pb-3 pt-1"
+            }`}
+          >
             <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground-subtle">
               <Sparkles className="h-3 w-3" />
               Regenerate
@@ -200,6 +171,15 @@ export function EditableEmailDraft({
           </div>
         )}
       </div>
-    </div>
+
+      <EmailComposerModal
+        open={editing}
+        to={data.to}
+        initialSubject={subject}
+        initialBody={body}
+        onClose={() => setEditing(false)}
+        onSave={handleSave}
+      />
+    </>
   );
 }

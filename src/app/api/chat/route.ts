@@ -14,6 +14,7 @@ import {
 import { generateCompany360, generateMiniFinancialSnapshot, computeIntensity, type Company360Context } from "@/lib/services/llm-company360";
 import { classifyIntent, type IntentType } from "@/lib/services/llm-intent";
 import { parseStructuredBrief, type StructuredBrief } from "@/lib/types/structured-brief";
+import { synthesizeBrief, synthesizeFromRaw } from "@/lib/utils/meeting-brief-synthesis";
 import {
   buildSummaryFragments,
   type InsightData,
@@ -388,13 +389,21 @@ export async function POST(request: NextRequest) {
             ? structuredBriefToMarkdown(structured)
             : briefRaw;
 
+          const synthesis = structured
+            ? synthesizeBrief(structured)
+            : synthesizeFromRaw(briefRaw);
+
+          const meetingWhen = new Date(match.startTime).toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+
           const md = [
-            `## Meeting Prep: ${match.title}`,
-            `*${new Date(match.startTime).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}*`,
+            `Here's the synthesis for **${match.title}** — tap *View full brief* for the complete workup.`,
             "",
-            briefBody,
-            "",
-            `---`,
             ...match.attendees.map((a) =>
               `<!--QUICK_ACTIONS:${JSON.stringify([
                 { label: `Draft Email to ${a.contact.name}`, query: `Draft email to ${a.contact.name}` },
@@ -404,13 +413,13 @@ export async function POST(request: NextRequest) {
 
           const meetingBlocks: ChatBlock[] = [
             {
-              type: "meeting_card",
+              type: "meeting_brief",
               data: {
-                title: match.title,
-                startTime: new Date(match.startTime).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
-                attendees: match.attendees.map((a) => ({ name: a.contact.name, title: a.contact.title ?? undefined })),
                 meetingId: match.id,
-                purpose: match.purpose ?? undefined,
+                meetingTitle: `${match.title} · ${meetingWhen}`,
+                synthesis,
+                fullBrief: briefBody,
+                temperature: structured?.relationshipHistory?.temperature,
               },
             },
           ];
