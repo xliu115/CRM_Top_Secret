@@ -14,6 +14,7 @@ import { buildBriefingSpokenOpening } from "@/lib/utils/briefing-spoken-opening"
 import { prepareBriefingForTTS } from "@/lib/utils/tts-prepare";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 import { CallMarvinOverlay } from "@/components/voice/call-marvin-overlay";
+import { StickyActionBar } from "@/components/chat/sticky-action-bar";
 
 type BriefingData = {
   briefing: string;
@@ -207,6 +208,48 @@ export default function MobilePage() {
 
     return deduplicateActions(combined, usedQueries).slice(0, 5);
   }, [messages, briefingData, usedQueries]);
+
+  const [inputFocused, setInputFocused] = useState(false);
+
+  const stickyTarget = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== "assistant" || !m.blocks) continue;
+
+      const hasConfirmation = m.blocks.some((b) => b.type === "confirmation_card");
+      if (hasConfirmation) return null;
+
+      const actionBars = m.blocks.filter(
+        (b) => b.type === "action_bar"
+      );
+      const ab = actionBars[actionBars.length - 1];
+      if (!ab) continue;
+
+      const contactBlock = m.blocks.find((b) => b.type === "contact_card");
+      const contactName = contactBlock?.data.name;
+
+      return {
+        label: contactName ? `Draft to ${contactName}` : ab.data.primary.label,
+        primary: {
+          label: ab.data.primary.label,
+          onClick: () => handleSend(ab.data.primary.query),
+        },
+        more: [
+          ...ab.data.secondary.map((s) => ({
+            label: s.label,
+            onClick: () => handleSend(s.query),
+          })),
+          ...(ab.data.tertiary ?? []).map((t) => ({
+            label: t.label,
+            onClick: () => handleSend(t.query),
+          })),
+        ],
+      };
+    }
+    return null;
+  }, [messages, handleSend]);
+
+  const stickyEnabled = mode !== "call" && !inputFocused;
 
   const hasMessages = messages.length > 0;
 
@@ -426,6 +469,8 @@ export default function MobilePage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
                 placeholder="Ask about your clients..."
                 disabled={loading}
                 rows={1}
@@ -484,6 +529,8 @@ export default function MobilePage() {
           </div>
         </div>
       </div>
+
+      <StickyActionBar enabled={stickyEnabled} target={stickyTarget} />
 
       <CallMarvinOverlay
         open={mode === "call"}
