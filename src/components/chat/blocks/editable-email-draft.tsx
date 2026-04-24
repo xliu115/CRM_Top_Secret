@@ -6,6 +6,8 @@ import {
   Sparkles,
   Mic,
   Loader2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import type { EditableEmailDraftBlock } from "@/lib/types/chat-blocks";
 import { EmailComposerModal } from "./email-composer-modal";
@@ -18,6 +20,10 @@ type Props = {
   onSubjectChange?: (subject: string) => void;
   onVoiceEdit?: () => void;
   voiceEditing?: boolean;
+  editingControlled?: boolean;
+  onEditingChange?: (editing: boolean) => void;
+  onAfterSave?: () => void;
+  onOpenComposer?: () => void;
 };
 
 export function EditableEmailDraft({
@@ -28,12 +34,26 @@ export function EditableEmailDraft({
   onSubjectChange,
   onVoiceEdit,
   voiceEditing = false,
+  editingControlled,
+  onEditingChange,
+  onAfterSave,
+  onOpenComposer,
 }: Props) {
-  const [editing, setEditing] = useState(false);
+  const [editingInternal, setEditingInternal] = useState(false);
+  const editing = editingControlled !== undefined ? editingControlled : editingInternal;
+  const setEditing = (v: boolean) => {
+    if (editingControlled !== undefined) {
+      onEditingChange?.(v);
+    } else {
+      setEditingInternal(v);
+    }
+  };
+
   const [body, setBody] = useState(data.body);
   const [subject, setSubject] = useState(data.subject);
   const [regenerating, setRegenerating] = useState<string | null>(null);
   const [prevDraftId, setPrevDraftId] = useState(data.draftId);
+  const [showFull, setShowFull] = useState(false);
 
   if (prevDraftId !== data.draftId) {
     setPrevDraftId(data.draftId);
@@ -48,6 +68,7 @@ export function EditableEmailDraft({
     onSubjectChange?.(next.subject);
     onBodyChange?.(next.body);
     setEditing(false);
+    onAfterSave?.();
   }
 
   function regenerate(flavor: "warmer" | "shorter") {
@@ -69,6 +90,7 @@ export function EditableEmailDraft({
 
   function openComposer() {
     setEditing(true);
+    onOpenComposer?.();
   }
 
   function handleDraftKey(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -115,9 +137,27 @@ export function EditableEmailDraft({
             </div>
 
             <div className="border-t border-border/40 pt-2.5">
-              <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
+              <div
+                className={`text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap ${
+                  showFull ? "" : "line-clamp-[10]"
+                }`}
+              >
                 {body}
               </div>
+              {body.split("\n").length > 10 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFull((v) => !v);
+                  }}
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-600 motion-safe:active:scale-[0.97]"
+                  aria-label={showFull ? "Show less" : "Show more"}
+                >
+                  {showFull ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showFull ? "Show less" : "Show more"}
+                </button>
+              )}
             </div>
           </div>
         </div>

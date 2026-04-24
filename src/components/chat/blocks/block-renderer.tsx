@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { ChatBlock } from "@/lib/types/chat-blocks";
 import { Badge } from "@/components/ui/badge";
 import { BlockClusterShell } from "./block-cluster-shell";
@@ -400,6 +400,15 @@ function NudgeActionCluster({
   action?: ActionBlock;
   onSendMessage?: SendMessageFn;
 }) {
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [pulse, setPulse] = useState(false);
+  const [hasEdited, setHasEdited] = useState(false);
+  const handleAfterSave = useCallback(() => {
+    setPulse(true);
+    setHasEdited(true);
+    setTimeout(() => setPulse(false), 2000);
+  }, []);
+
   const email =
     emailBlock?.type === "email_preview" || emailBlock?.type === "editable_email_draft"
       ? (emailBlock as EmailBlock)
@@ -408,6 +417,17 @@ function NudgeActionCluster({
 
   const emailData = email
     ? { to: email.data.to, subject, body, contactId: email.data.contactId }
+    : undefined;
+
+  const actionData = action
+    ? {
+        ...action.data,
+        secondary: action.data.secondary.map((s, i) =>
+          i === 0 && hasEdited && s.query === "__edit_email__"
+            ? { ...s, label: "Edit again" }
+            : s
+        ),
+      }
     : undefined;
 
   return (
@@ -436,6 +456,9 @@ function NudgeActionCluster({
                   onSendMessage={onSendMessage}
                   onBodyChange={setBody}
                   onSubjectChange={setSubject}
+                  editingControlled={composerOpen}
+                  onEditingChange={setComposerOpen}
+                  onAfterSave={handleAfterSave}
                 />
               ) : (
                 <EmailPreview data={email.data} embedded />
@@ -444,7 +467,18 @@ function NudgeActionCluster({
           )}
         </div>
       }
-      footer={action ? <ActionBar data={action.data} emailData={emailData} onSendMessage={onSendMessage} embedded /> : undefined}
+      footer={
+        action && actionData ? (
+          <ActionBar
+            data={actionData}
+            emailData={emailData}
+            onSendMessage={onSendMessage}
+            onEditEmail={() => setComposerOpen(true)}
+            pulsePrimary={pulse}
+            embedded
+          />
+        ) : undefined
+      }
     />
   );
 }
@@ -460,8 +494,28 @@ function EmailDraftCluster({
   action?: ActionBlock;
   onSendMessage?: SendMessageFn;
 }) {
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [pulse, setPulse] = useState(false);
+  const [hasEdited, setHasEdited] = useState(false);
+  const handleAfterSave = useCallback(() => {
+    setPulse(true);
+    setHasEdited(true);
+    setTimeout(() => setPulse(false), 2000);
+  }, []);
+
   const { subject, body, setSubject, setBody } = useEmailEdits(emailBlock);
   const emailData = { to: emailBlock.data.to, subject, body, contactId: emailBlock.data.contactId };
+
+  const actionData = action
+    ? {
+        ...action.data,
+        secondary: action.data.secondary.map((s, i) =>
+          i === 0 && hasEdited && s.query === "__edit_email__"
+            ? { ...s, label: "Edit again" }
+            : s
+        ),
+      }
+    : undefined;
 
   return (
     <BlockClusterShell
@@ -484,12 +538,26 @@ function EmailDraftCluster({
             onSendMessage={onSendMessage}
             onBodyChange={setBody}
             onSubjectChange={setSubject}
+            editingControlled={composerOpen}
+            onEditingChange={setComposerOpen}
+            onAfterSave={handleAfterSave}
           />
         ) : (
           <EmailPreview data={emailBlock.data} embedded />
         )
       }
-      footer={action ? <ActionBar data={action.data} emailData={emailData} onSendMessage={onSendMessage} embedded /> : undefined}
+      footer={
+        action && actionData ? (
+          <ActionBar
+            data={actionData}
+            emailData={emailData}
+            onSendMessage={onSendMessage}
+            onEditEmail={() => setComposerOpen(true)}
+            pulsePrimary={pulse}
+            embedded
+          />
+        ) : undefined
+      }
     />
   );
 }
