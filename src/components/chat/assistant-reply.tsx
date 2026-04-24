@@ -137,8 +137,7 @@ export function AssistantReply({
   onConfirmAction?: (action: PendingAction) => void;
   mobile?: boolean;
 }) {
-  const hasActionableBlocks = Array.isArray(blocks) && blocks.length > 0 && blocks.some((b) => b.type === "confirmation_card");
-  const hasBlocks = (!mobile && Array.isArray(blocks) && blocks.length > 0) || hasActionableBlocks;
+  const hasBlocks = Array.isArray(blocks) && blocks.length > 0;
 
   const crmSources = sources.filter((s) => isCrmSource(s.type));
   const webSources = sources.filter(
