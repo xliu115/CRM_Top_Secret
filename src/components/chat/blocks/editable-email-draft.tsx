@@ -219,6 +219,7 @@ export function EditableEmailDraft({
         initialBody={body}
         onClose={() => setEditing(false)}
         onSave={handleSave}
+        returnFocusSelector="[data-cta-primary]"
       />
     </>
   );

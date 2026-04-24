@@ -10,6 +10,7 @@ type Props = {
   initialBody: string;
   onClose: () => void;
   onSave: (next: { subject: string; body: string }) => void;
+  returnFocusSelector?: string;
 };
 
 /**
@@ -24,9 +25,11 @@ export function EmailComposerModal({
   initialBody,
   onClose,
   onSave,
+  returnFocusSelector,
 }: Props) {
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
 
@@ -68,10 +71,35 @@ export function EmailComposerModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      const offset = window.innerHeight - vv.height - vv.offsetTop;
+      setKeyboardOffset(Math.max(0, offset));
+    };
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    onResize();
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+    };
+  }, [open]);
+
   if (!open) return null;
 
   function handleSave() {
     onSave({ subject: subject.trim() || initialSubject, body });
+    if (returnFocusSelector) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = document.querySelector<HTMLElement>(returnFocusSelector);
+          el?.focus();
+        });
+      });
+    }
   }
 
   return (
@@ -105,7 +133,10 @@ export function EmailComposerModal({
         </button>
       </header>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div
+        className="flex flex-1 flex-col overflow-hidden"
+        style={{ paddingBottom: keyboardOffset }}
+      >
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
           <span className="w-14 shrink-0 text-xs font-medium text-muted-foreground">To</span>
           <span className="flex-1 text-[15px] text-foreground">{to}</span>
