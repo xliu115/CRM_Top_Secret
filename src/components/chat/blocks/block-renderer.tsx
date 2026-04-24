@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatBlock } from "@/lib/types/chat-blocks";
 import { Badge } from "@/components/ui/badge";
 import { BlockClusterShell } from "./block-cluster-shell";
@@ -18,6 +18,7 @@ import { NudgeEvidence } from "./nudge-evidence";
 import { NudgeSummaryShell } from "./nudge-summary-shell";
 import { StrategicInsight } from "./strategic-insight";
 import { ConfirmationCard } from "./confirmation-card";
+import { SENTINEL_EDIT_EMAIL } from "@/lib/services/chat-sentinels";
 import type { PendingAction, SendMessageFn } from "@/hooks/use-chat-session";
 
 type RenderedGroup =
@@ -403,16 +404,32 @@ function NudgeActionCluster({
   const [composerOpen, setComposerOpen] = useState(false);
   const [pulse, setPulse] = useState(false);
   const [hasEdited, setHasEdited] = useState(false);
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleAfterSave = useCallback(() => {
     setPulse(true);
     setHasEdited(true);
-    setTimeout(() => setPulse(false), 2000);
+    if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = setTimeout(() => setPulse(false), 2000);
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+    };
   }, []);
 
   const email =
     emailBlock?.type === "email_preview" || emailBlock?.type === "editable_email_draft"
       ? (emailBlock as EmailBlock)
       : undefined;
+
+  const draftId = email?.type === "editable_email_draft" ? email.data.draftId : undefined;
+  const [prevDraftId, setPrevDraftId] = useState(draftId);
+  if (prevDraftId !== draftId) {
+    setPrevDraftId(draftId);
+    setHasEdited(false);
+    setPulse(false);
+  }
+
   const { subject, body, setSubject, setBody } = useEmailEdits(email);
 
   const emailData = email
@@ -423,7 +440,7 @@ function NudgeActionCluster({
     ? {
         ...action.data,
         secondary: action.data.secondary.map((s, i) =>
-          i === 0 && hasEdited && s.query === "__edit_email__"
+          i === 0 && hasEdited && s.query === SENTINEL_EDIT_EMAIL
             ? { ...s, label: "Edit again" }
             : s
         ),
@@ -497,11 +514,26 @@ function EmailDraftCluster({
   const [composerOpen, setComposerOpen] = useState(false);
   const [pulse, setPulse] = useState(false);
   const [hasEdited, setHasEdited] = useState(false);
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleAfterSave = useCallback(() => {
     setPulse(true);
     setHasEdited(true);
-    setTimeout(() => setPulse(false), 2000);
+    if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = setTimeout(() => setPulse(false), 2000);
   }, []);
+  useEffect(() => {
+    return () => {
+      if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+    };
+  }, []);
+
+  const draftId = emailBlock.type === "editable_email_draft" ? emailBlock.data.draftId : undefined;
+  const [prevDraftId, setPrevDraftId] = useState(draftId);
+  if (prevDraftId !== draftId) {
+    setPrevDraftId(draftId);
+    setHasEdited(false);
+    setPulse(false);
+  }
 
   const { subject, body, setSubject, setBody } = useEmailEdits(emailBlock);
   const emailData = { to: emailBlock.data.to, subject, body, contactId: emailBlock.data.contactId };
@@ -510,7 +542,7 @@ function EmailDraftCluster({
     ? {
         ...action.data,
         secondary: action.data.secondary.map((s, i) =>
-          i === 0 && hasEdited && s.query === "__edit_email__"
+          i === 0 && hasEdited && s.query === SENTINEL_EDIT_EMAIL
             ? { ...s, label: "Edit again" }
             : s
         ),

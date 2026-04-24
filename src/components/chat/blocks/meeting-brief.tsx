@@ -5,6 +5,7 @@ import { CalendarDays } from "lucide-react";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { ActionBar } from "./action-bar";
 import { buildMeetingBriefActionBar } from "@/lib/services/mobile-action-bars";
+import { SENTINEL_TOGGLE_BRIEF } from "@/lib/services/chat-sentinels";
 import type { SendMessageFn } from "@/hooks/use-chat-session";
 import type { MeetingBriefBlock } from "@/lib/types/chat-blocks";
 
@@ -64,7 +65,7 @@ export function MeetingBrief({
               firstAttendeeName: data.firstAttendeeName,
             })}
             onSendMessage={(query) => {
-              if (query === "__toggle_brief__") {
+              if (query === SENTINEL_TOGGLE_BRIEF) {
                 setExpanded((v) => !v);
                 return;
               }

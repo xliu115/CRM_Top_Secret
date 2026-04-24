@@ -8,6 +8,10 @@ import {
 } from "lucide-react";
 import type { ActionBarBlock, EmailPreviewBlock } from "@/lib/types/chat-blocks";
 import type { SendMessageFn } from "@/hooks/use-chat-session";
+import {
+  SENTINEL_COPY_EMAIL,
+  SENTINEL_EDIT_EMAIL,
+} from "@/lib/services/chat-sentinels";
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   mail: Mail,
@@ -32,9 +36,6 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 function resolveIcon(name: string) {
   return ICON_MAP[name] ?? ChevronRight;
 }
-
-const SENTINEL_COPY = "__copy_email__";
-const SENTINEL_EDIT = "__edit_email__";
 
 function vibratePrimary() {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
@@ -75,11 +76,11 @@ export function ActionBar({
   }
 
   function dispatch(query: string) {
-    if (query === SENTINEL_COPY) {
+    if (query === SENTINEL_COPY_EMAIL) {
       handleCopyEmail();
       return;
     }
-    if (query === SENTINEL_EDIT) {
+    if (query === SENTINEL_EDIT_EMAIL) {
       onEditEmail?.();
       return;
     }
@@ -150,7 +151,7 @@ export function ActionBar({
       {tertiary.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1 border-t border-border/40">
           {tertiary.map((action, i) => {
-            const isCopy = action.query === SENTINEL_COPY;
+            const isCopy = action.query === SENTINEL_COPY_EMAIL;
             const isDismiss = action.label.toLowerCase() === "dismiss";
             const cls = isDismiss
               ? `${tertiaryClass} text-red-600/70`

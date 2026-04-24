@@ -1,4 +1,9 @@
 import type { ActionBarBlock } from "@/lib/types/chat-blocks";
+import {
+  SENTINEL_COPY_EMAIL,
+  SENTINEL_EDIT_EMAIL,
+  SENTINEL_TOGGLE_BRIEF,
+} from "@/lib/services/chat-sentinels";
 
 type Bar = ActionBarBlock["data"];
 
@@ -12,12 +17,12 @@ export function buildEmailDraftActionBar(args: {
       icon: "send",
     },
     secondary: [
-      { label: "Edit", query: "__edit_email__", icon: "file" },
+      { label: "Edit", query: SENTINEL_EDIT_EMAIL, icon: "file" },
     ],
     tertiary: [
       { label: "Warmer", query: `Make the email to ${args.contactName} warmer.`, icon: "sparkles" },
       { label: "Shorter", query: `Make the email to ${args.contactName} shorter.`, icon: "scissors" },
-      { label: "Copy", query: "__copy_email__", icon: "copy" },
+      { label: "Copy", query: SENTINEL_COPY_EMAIL, icon: "copy" },
     ],
     variant: "default",
   };
@@ -65,7 +70,7 @@ export function buildMeetingBriefActionBar(args: {
         icon: "mail",
       },
       secondary: [
-        { label: "Hide full brief", query: "__toggle_brief__", icon: "chevron-up" },
+        { label: "Hide full brief", query: SENTINEL_TOGGLE_BRIEF, icon: "chevron-up" },
       ],
       variant: "default",
     };
@@ -74,7 +79,7 @@ export function buildMeetingBriefActionBar(args: {
   return {
     primary: {
       label: "View full brief",
-      query: "__toggle_brief__",
+      query: SENTINEL_TOGGLE_BRIEF,
       icon: "chevron-down",
     },
     secondary: draftEmail ? [draftEmail] : [],

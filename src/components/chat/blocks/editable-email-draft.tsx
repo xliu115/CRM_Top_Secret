@@ -60,6 +60,7 @@ export function EditableEmailDraft({
     setBody(data.body);
     setSubject(data.subject);
     setEditing(false);
+    setShowFull(false);
   }
 
   function handleSave(next: { subject: string; body: string }) {

@@ -117,7 +117,7 @@ export function EmailComposerModal({
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[14px] font-medium text-foreground/80 transition-colors hover:bg-muted active:scale-[0.97] min-h-[40px]"
+          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[14px] font-medium text-foreground/80 motion-safe:transition-colors hover:bg-muted motion-safe:active:scale-[0.97] min-h-[40px]"
         >
           <X className="h-4 w-4" />
           Cancel
@@ -126,7 +126,7 @@ export function EmailComposerModal({
         <button
           type="button"
           onClick={handleSave}
-          className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-[14px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.97] min-h-[40px]"
+          className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-[14px] font-semibold text-primary-foreground motion-safe:transition-colors hover:bg-primary/90 motion-safe:active:scale-[0.97] min-h-[40px]"
         >
           <Check className="h-4 w-4" />
           Save
