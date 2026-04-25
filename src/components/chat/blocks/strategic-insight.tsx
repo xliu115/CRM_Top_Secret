@@ -58,8 +58,8 @@ export function StrategicInsight({
     <div className={embedded ? "space-y-3" : "rounded-xl border border-border bg-muted/30 px-5 py-4 space-y-3"}>
       {!embedded && (
         <div className="flex items-center gap-1.5 mb-1">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="text-xs font-bold uppercase tracking-wider text-primary">Insights</span>
+          <Sparkles className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Insights</span>
         </div>
       )}
 
@@ -89,7 +89,7 @@ export function StrategicInsight({
                   <div className="flex items-baseline gap-2 mb-1">
                     <p className="text-xs font-semibold text-foreground">{group.label}</p>
                     {group.items.length > 1 && (
-                      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/10 px-1 text-[10px] font-semibold tabular-nums text-primary">
+                      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
                         {group.items.length}
                       </span>
                     )}

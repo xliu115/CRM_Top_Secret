@@ -78,8 +78,13 @@ const DISMISS_NUDGE_INTENT =
   /\b(dismiss (?:this |the )?nudge|skip (?:this |the )?(?:nudge|one)|mark (?:this |the )?(?:nudge )?(?:as )?done|done with (?:this|the) (?:nudge|one)|close (?:this |the )?nudge)\b/i;
 const SNOOZE_NUDGE_INTENT =
   /\b(snooze (?:this |the )?(?:nudge|one)|remind me (?:about (?:this |the )?(?:nudge )?)?later|come back (?:to (?:this|the) (?:nudge )?)?later|snooze (?:for|until))\b/i;
+// Accepts the action-bar's dispatched query "Send the drafted email to …."
+// in addition to free-form variants. The (?:drafted |draft )? slot is what
+// kept "Send the drafted email to Ted Sarandos." from being recognised as
+// send_email when the LLM classifier was uncertain — making it fall
+// through to general_question.
 const SEND_EMAIL_INTENT =
-  /\b(send (?:the |that |this )?email|send it|go ahead (?:and )?send|yes,? send)\b/i;
+  /\b(send (?:the |that |this )?(?:drafted |draft )?email|send it|go ahead (?:and )?send|yes,? send)\b/i;
 const AFFIRMATIVE_RESPONSE =
   /^(yes|confirm|go ahead|do it|yep|yeah|sure|ok|okay)\b/i;
 

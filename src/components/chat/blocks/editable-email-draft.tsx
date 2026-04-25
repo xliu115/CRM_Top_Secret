@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { EditableEmailDraftBlock } from "@/lib/types/chat-blocks";
 import { EmailComposerModal } from "./email-composer-modal";
+import { cn } from "@/lib/utils/cn";
 
 type Props = {
   data: EditableEmailDraftBlock["data"];
@@ -80,10 +81,6 @@ export function EditableEmailDraft({
     setTimeout(() => setRegenerating(null), 1200);
   }
 
-  const outerClass = embedded
-    ? "overflow-hidden"
-    : "rounded-lg border border-border bg-card overflow-hidden";
-
   const hasRegenerate =
     Boolean(data.regenerate?.warmer) ||
     Boolean(data.regenerate?.shorter) ||
@@ -101,47 +98,57 @@ export function EditableEmailDraft({
     }
   }
 
+  const regenPillClass =
+    "inline-flex items-center gap-1 rounded-full border border-border bg-background/70 px-2.5 py-1 text-[11px] font-medium text-foreground/80 transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none";
+
   return (
     <>
-      <div className={outerClass}>
+      <div
+        className={cn(
+          !embedded && "rounded-lg border border-border bg-card overflow-hidden",
+        )}
+      >
         <div
           role="button"
           tabIndex={0}
           onClick={openComposer}
           onKeyDown={handleDraftKey}
-          aria-label="Edit email"
-          className="cursor-pointer select-none transition-colors hover:bg-muted/40 active:bg-muted/60"
+          aria-label="Edit email draft"
+          className={cn(
+            "cursor-pointer select-none outline-none",
+            "transition-colors hover:bg-muted/30 active:bg-muted/50",
+            "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          )}
         >
           <div
-            className={
-              embedded
-                ? "pb-1 flex items-center justify-between gap-2"
-                : "px-4 pt-3 pb-2 flex items-center justify-between gap-2"
-            }
+            className={cn(
+              "flex items-center justify-between gap-2",
+              embedded ? "pb-1" : "px-3 pt-2.5 pb-1.5",
+            )}
           >
-            <span className="text-sm font-semibold text-foreground">Email Draft</span>
-            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-background/60 px-2 py-1 text-[11px] font-medium text-foreground/80">
-              <Pencil className="h-3 w-3" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground-subtle">
+              Email draft
+            </span>
+            <span
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+              aria-hidden="true"
+            >
+              <Pencil className="h-3 w-3 shrink-0" />
               Edit
             </span>
           </div>
 
-          <div className={`space-y-2.5 ${embedded ? "" : "px-4 pb-3"}`}>
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-medium text-muted-foreground shrink-0 w-12">To:</span>
-              <span className="text-sm text-foreground">{data.to}</span>
-            </div>
+          <div className={cn("space-y-2", !embedded && "px-3 pb-3")}>
+            <h3 className="text-base font-semibold leading-snug tracking-tight text-foreground">
+              {subject}
+            </h3>
 
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-medium text-muted-foreground shrink-0 w-12">Subject:</span>
-              <span className="text-sm font-medium text-foreground">{subject}</span>
-            </div>
-
-            <div className="border-t border-border/40 pt-2.5">
+            <div>
               <div
-                className={`text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap ${
-                  showFull ? "" : "line-clamp-[10]"
-                }`}
+                className={cn(
+                  "text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap",
+                  !showFull && "line-clamp-[10]",
+                )}
               >
                 {body}
               </div>
@@ -152,10 +159,10 @@ export function EditableEmailDraft({
                     e.stopPropagation();
                     setShowFull((v) => !v);
                   }}
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-600 motion-safe:active:scale-[0.97]"
+                  className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-blue-600 motion-safe:active:scale-[0.97]"
                   aria-label={showFull ? "Show less" : "Show more"}
                 >
-                  {showFull ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showFull ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                   {showFull ? "Show less" : "Show more"}
                 </button>
               )}
@@ -165,11 +172,12 @@ export function EditableEmailDraft({
 
         {hasRegenerate && (
           <div
-            className={`flex flex-wrap items-center gap-1.5 ${
-              embedded ? "pt-1" : "px-4 pb-3 pt-1"
-            }`}
+            className={cn(
+              "flex flex-wrap items-center gap-1.5 border-t border-border/50 bg-muted/20",
+              embedded ? "pt-1" : "px-3 py-2.5",
+            )}
           >
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground-subtle">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground-subtle">
               <Sparkles className="h-3 w-3" />
               Regenerate
             </span>
@@ -178,7 +186,7 @@ export function EditableEmailDraft({
                 type="button"
                 onClick={() => regenerate("warmer")}
                 disabled={regenerating !== null}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] font-medium text-foreground/80 transition-colors hover:bg-muted disabled:opacity-50"
+                className={regenPillClass}
               >
                 {regenerating === "warmer" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                 Warmer
@@ -189,7 +197,7 @@ export function EditableEmailDraft({
                 type="button"
                 onClick={() => regenerate("shorter")}
                 disabled={regenerating !== null}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] font-medium text-foreground/80 transition-colors hover:bg-muted disabled:opacity-50"
+                className={regenPillClass}
               >
                 {regenerating === "shorter" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                 Shorter
@@ -199,11 +207,12 @@ export function EditableEmailDraft({
               <button
                 type="button"
                 onClick={onVoiceEdit}
-                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
                   voiceEditing
                     ? "border-destructive/40 bg-destructive/10 text-destructive animate-pulse"
-                    : "border-border bg-background/60 text-foreground/80 hover:bg-muted"
-                }`}
+                    : "border-border bg-background/70 text-foreground/80 hover:bg-muted",
+                )}
               >
                 <Mic className="h-3 w-3" />
                 {voiceEditing ? "Listening…" : "Say it"}

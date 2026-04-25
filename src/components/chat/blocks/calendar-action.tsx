@@ -58,7 +58,7 @@ export function CalendarAction({ data, embedded = false, onSendMessage }: Props)
           ? "bg-green-500/10 text-green-700 dark:text-green-400"
           : status === "declined"
             ? "bg-destructive/10 text-destructive"
-            : "bg-primary/10 text-primary"
+            : "bg-muted text-foreground"
       }`}
     >
       {status === "accepted" && <Check className="h-3.5 w-3.5" />}
@@ -76,8 +76,8 @@ export function CalendarAction({ data, embedded = false, onSendMessage }: Props)
     <div className={outerClass}>
       {statusBanner}
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-          <Calendar className="h-5 w-5 text-primary" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted">
+          <Calendar className="h-5 w-5 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground">{data.title}</p>

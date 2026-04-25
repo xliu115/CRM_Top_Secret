@@ -50,8 +50,8 @@ function MeetingContent({
 }) {
   return (
     <>
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/30">
-        <CalendarDays className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+        <CalendarDays className="h-5 w-5 text-muted-foreground" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-foreground">{data.title}</p>

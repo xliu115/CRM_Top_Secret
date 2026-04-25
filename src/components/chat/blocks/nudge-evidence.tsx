@@ -78,7 +78,7 @@ function EvidenceTypeGroup({
       }>
         <p className="text-sm font-semibold text-foreground">{group.label}</p>
         {hasMultiple && (
-          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold tabular-nums text-primary">
+          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
             {count}
           </span>
         )}

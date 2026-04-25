@@ -13,8 +13,8 @@ import {
   Megaphone,
   MessageSquare,
   TrendingUp,
+  History,
   LogOut,
-  Menu,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -22,6 +22,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { ActivateLogo } from "@/components/ui/activate-logo";
 
 const navItems = [
+  { href: "/mobile/history", label: "Chat history", icon: History },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/nudges", label: "Nudges", icon: Bell },
   { href: "/meetings", label: "Meetings", icon: Calendar },
@@ -44,32 +45,66 @@ export function MobileShell({
   const { data: session } = useSession();
 
   const deviceFrame = (
-    <div className="relative flex h-full flex-col bg-background">
-      {/* Compact header */}
+    <div
+      className="relative h-full bg-background"
+      style={
+        {
+          // Tall enough so the icon row sits in the top portion and the
+          // gradient fade zone (~36px) lives entirely *below* the controls.
+          "--mobile-header-h":
+            "max(92px, calc(80px + env(safe-area-inset-top)))",
+        } as React.CSSProperties
+      }
+    >
+      {/* Page content fills the entire frame so the scrollable feed below
+          can pass *under* the floating header — that's what gives the
+          frosted-glass blur something to act on. */}
+      <div className="absolute inset-0 flex flex-col">{children}</div>
+
+      {/* Compact header — iOS-style frosted glass with a gradient blur.
+          The frosted surface lives in an absolute background layer that's
+          masked from opaque (top) to transparent (bottom), so blur only
+          applies where the bar exists and content underneath progressively
+          de-blurs toward the bottom edge. The controls (logo + call button)
+          render in a sibling foreground layer so they stay fully solid and
+          are unaffected by the mask. */}
       <header
-        className="flex shrink-0 items-center justify-between border-b border-border bg-card px-4"
-        style={{ paddingTop: "max(12px, env(safe-area-inset-top))", height: "max(56px, calc(44px + env(safe-area-inset-top)))" }}
+        className="absolute top-0 inset-x-0 z-30 flex items-start justify-between px-4"
+        style={{
+          paddingTop: "max(12px, env(safe-area-inset-top))",
+          height: "var(--mobile-header-h)",
+        }}
       >
-        <Link href="/mobile" className="flex items-center gap-2">
-          <ActivateLogo size="sm" />
+        {/* Masked frosted-glass background — sits *behind* the controls and
+            extends a fade zone *below* them, so the gradient transition from
+            opaque-frosted to clear happens visibly under the icon row. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-white/80 backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/65 dark:bg-background/80 dark:supports-[backdrop-filter]:bg-background/60"
+          style={{
+            WebkitMaskImage:
+              "linear-gradient(to bottom, #000 0%, #000 calc(100% - 36px), transparent 100%)",
+            maskImage:
+              "linear-gradient(to bottom, #000 0%, #000 calc(100% - 36px), transparent 100%)",
+          }}
+        />
+
+        {/* Solid foreground controls — `relative` keeps them above the
+            absolute background and immune to the gradient mask. */}
+        <button
+          type="button"
+          onClick={() => setMenuOpen(true)}
+          className="relative flex items-center gap-2 -ml-1 rounded-lg px-1 py-1 transition-colors active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          aria-label="Open menu"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+        >
+          <ActivateLogo size="sm" tone="dark" />
           <span className="text-base font-bold text-foreground">Activate</span>
-        </Link>
+        </button>
 
-        <div className="flex items-center gap-2">
-          {headerAction}
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground-subtle transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Open menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-        </div>
+        <div className="relative flex items-center gap-2">{headerAction}</div>
       </header>
-
-      {/* Page content */}
-      <div className="flex-1 overflow-y-auto">{children}</div>
 
       {/* Slide-over menu */}
       {menuOpen && (
@@ -85,7 +120,7 @@ export function MobileShell({
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
               <div className="flex items-center gap-2">
-                <ActivateLogo size="sm" />
+                <ActivateLogo size="sm" tone="dark" />
                 <span className="text-base font-bold">Activate</span>
               </div>
               <button

@@ -25,7 +25,15 @@ export function ActivateIcon({ className }: { className?: string }) {
   );
 }
 
-export function ActivateLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+export function ActivateLogo({
+  size = "md",
+  tone = "brand",
+}: {
+  size?: "sm" | "md" | "lg";
+  // "brand" = the default blue chip (desktop / login).
+  // "dark" = black chip used by the mobile shell so blue is reserved for actions.
+  tone?: "brand" | "dark";
+}) {
   const sizeClasses = {
     sm: "h-8 w-8",
     md: "h-10 w-10",
@@ -41,10 +49,14 @@ export function ActivateLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
     md: "rounded-lg",
     lg: "rounded-2xl",
   };
+  const toneClasses = {
+    brand: "bg-[#2251FF] text-white",
+    dark: "bg-black text-white",
+  };
 
   return (
     <div
-      className={`flex items-center justify-center bg-[#2251FF] text-white ${sizeClasses[size]} ${roundedClasses[size]}`}
+      className={`flex items-center justify-center ${toneClasses[tone]} ${sizeClasses[size]} ${roundedClasses[size]}`}
     >
       <ActivateIcon className={iconSizes[size]} />
     </div>

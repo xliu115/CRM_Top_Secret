@@ -42,8 +42,8 @@ export function ConfirmationCard({
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-primary/10 p-2">
-            <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
+          <div className="mt-0.5 rounded-lg bg-muted p-2">
+            <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-foreground">{stripMarkdownToPlainText(data.title)}</p>

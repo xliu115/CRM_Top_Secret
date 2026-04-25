@@ -1,12 +1,15 @@
 import type { ActionBarBlock } from "@/lib/types/chat-blocks";
 import {
   SENTINEL_COPY_EMAIL,
-  SENTINEL_EDIT_EMAIL,
   SENTINEL_TOGGLE_BRIEF,
 } from "@/lib/services/chat-sentinels";
 
 type Bar = ActionBarBlock["data"];
 
+// Email-draft cluster bottom bar. The card header owns the Edit affordance
+// (whole card is tap-to-edit) and the regenerate row (Warmer/Shorter/Say-it)
+// lives inside the draft, so the bar is intentionally just send + copy:
+// outcome + portability, no duplicated micro-actions.
 export function buildEmailDraftActionBar(args: {
   contactName: string;
 }): Bar {
@@ -16,12 +19,8 @@ export function buildEmailDraftActionBar(args: {
       query: `Send the drafted email to ${args.contactName}.`,
       icon: "send",
     },
-    secondary: [
-      { label: "Edit", query: SENTINEL_EDIT_EMAIL, icon: "file" },
-    ],
+    secondary: [],
     tertiary: [
-      { label: "Warmer", query: `Make the email to ${args.contactName} warmer.`, icon: "sparkles" },
-      { label: "Shorter", query: `Make the email to ${args.contactName} shorter.`, icon: "scissors" },
       { label: "Copy", query: SENTINEL_COPY_EMAIL, icon: "copy" },
     ],
     variant: "default",

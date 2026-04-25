@@ -71,8 +71,8 @@ export function MeetingBrief({
     >
       <div className={embedded ? "" : "p-4"}>
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/30">
-            <CalendarDays className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <CalendarDays className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -85,25 +85,28 @@ export function MeetingBrief({
                 </span>
               )}
             </div>
-            {data.topOfMind ? (
-              <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/60 dark:border-indigo-900/50 dark:bg-indigo-950/20 p-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
-                    Top-of-Mind · {data.topOfMind.subjectName}
-                  </p>
-                </div>
-                <p className="text-[15px] leading-relaxed text-foreground/90">
-                  {data.topOfMind.content}
-                </p>
-              </div>
-            ) : (
-              <p className="mt-2 text-[15px] leading-relaxed text-foreground whitespace-pre-line">
-                {data.synthesis}
-              </p>
-            )}
           </div>
         </div>
+
+        {/* Top-of-mind / synthesis sits as a full-width sibling so it spans
+            the card edge-to-edge instead of being inset by the icon plate. */}
+        {data.topOfMind ? (
+          <div className="mt-3">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Top-of-Mind · {data.topOfMind.subjectName}
+              </p>
+            </div>
+            <p className="text-[15px] leading-relaxed text-foreground/90">
+              {data.topOfMind.content}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-[15px] leading-relaxed text-foreground whitespace-pre-line">
+            {data.synthesis}
+          </p>
+        )}
 
         <div ref={bottomActionBarRef} className="mt-3">
           <ActionBar data={actionBarData} onSendMessage={handleActionQuery} />

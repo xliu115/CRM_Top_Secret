@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { Send, Loader2, Sparkles, Mic, MicOff, Trash2, ChevronRight, Phone } from "lucide-react";
+import { Send, Loader2, Sparkles, Mic, MicOff, ChevronRight, ChevronDown, ChevronUp, Phone, Calendar, Mail, ListTodo, Users, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 import { useSession } from "next-auth/react";
 import { MobileShell } from "@/components/layout/mobile-shell";
 import { Button } from "@/components/ui/button";
@@ -26,20 +27,131 @@ type BriefingData = {
   };
 };
 
-function extractContactNames(data: BriefingData): string[] {
-  const names = new Set<string>();
+type ContactDraftTarget = {
+  name: string;
+  company?: string;
+  isFollowUp: boolean;
+};
+
+function extractContactDraftTargets(data: BriefingData): ContactDraftTarget[] {
+  // Walk nudges first so we capture ruleType context (FOLLOW_UP vs other),
+  // then top actions for any partner-specific outreach the briefing
+  // surfaces. We dedupe by full contact name and let the first occurrence
+  // win — nudges always run first because that's where ruleType lives.
+  const byName = new Map<string, ContactDraftTarget>();
+
+  data.structured?.nudges?.forEach((n) => {
+    if (n.company === "Campaign" || n.company === "Article Campaign") return;
+    if (
+      n.ruleType === "MEETING_PREP" ||
+      n.ruleType === "CAMPAIGN_APPROVAL" ||
+      n.ruleType === "ARTICLE_CAMPAIGN"
+    ) {
+      return;
+    }
+    if (!byName.has(n.contactName)) {
+      byName.set(n.contactName, {
+        name: n.contactName,
+        company: n.company || undefined,
+        isFollowUp: n.ruleType === "FOLLOW_UP",
+      });
+    }
+  });
+
   data.topActions?.forEach((a) => {
     if (a.company === "Campaign" || a.company === "Article Campaign") return;
     if (a.deeplink?.startsWith("/meetings") || a.deeplink?.startsWith("/campaigns")) return;
     if (/\bmeeting\b/i.test(a.actionLabel)) return;
-    names.add(a.contactName);
+    if (!byName.has(a.contactName)) {
+      // No ruleType on topActions — best-effort sniff at the action label.
+      byName.set(a.contactName, {
+        name: a.contactName,
+        company: a.company || undefined,
+        isFollowUp: /\bfollow[- ]?up\b/i.test(a.actionLabel),
+      });
+    }
   });
-  data.structured?.nudges?.forEach((n) => {
-    if (n.company === "Campaign" || n.company === "Article Campaign") return;
-    if (n.ruleType === "MEETING_PREP" || n.ruleType === "CAMPAIGN_APPROVAL" || n.ruleType === "ARTICLE_CAMPAIGN") return;
-    names.add(n.contactName);
+
+  return Array.from(byName.values()).slice(0, 3);
+}
+
+// Pre-action picker rows use a richer shape than the flat horizontal pill
+// row (which still renders QuickActionItem). Two-line layout: action verb
+// on top, subject context below, with leading icon and optional chip.
+type RichActionItem = {
+  query: string;
+  actionLine: string;
+  subjectLine?: string;
+  leadingIcon: LucideIcon;
+  trailingMeta?: string;
+};
+
+function formatMeetingTime(iso: string): string | undefined {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function getInitialPickerActions(data: BriefingData | null): RichActionItem[] {
+  const items: RichActionItem[] = [];
+  const hour = new Date().getHours();
+
+  // 1. Next meeting prep
+  if (data?.structured?.meetings?.length) {
+    const next = data.structured.meetings[0];
+    const time = formatMeetingTime(next.startTime);
+    items.push({
+      actionLine: "Prep client meeting",
+      subjectLine: time ? `${next.title} — ${time}` : next.title,
+      leadingIcon: Calendar,
+      query: `Prepare me for the ${next.title} meeting`,
+    });
+  }
+
+  // 2-3. Per-contact draft email rows
+  if (data) {
+    const targets = extractContactDraftTargets(data);
+    targets.slice(0, 2).forEach(({ name, company, isFollowUp }) => {
+      items.push({
+        actionLine: isFollowUp ? "View drafted follow-up email" : "View drafted email",
+        subjectLine: company ? `${name} · ${company}` : name,
+        leadingIcon: Mail,
+        trailingMeta: isFollowUp ? "Follow-up" : undefined,
+        query: isFollowUp
+          ? `Draft a follow up email to ${name}`
+          : `Draft an email to ${name}`,
+      });
+    });
+  }
+
+  // 4. Today's meetings (mornings only)
+  if (hour < 12) {
+    const meetings = data?.structured?.meetings ?? [];
+    const upcoming = meetings[0];
+    const subject =
+      meetings.length > 0 && upcoming
+        ? `${meetings.length} meeting${meetings.length === 1 ? "" : "s"}${
+            formatMeetingTime(upcoming.startTime)
+              ? ` · next ${formatMeetingTime(upcoming.startTime)}`
+              : ""
+          }`
+        : undefined;
+    items.push({
+      actionLine: "Today's meetings",
+      subjectLine: subject,
+      leadingIcon: ListTodo,
+      query: "Show my meetings today",
+    });
+  }
+
+  // 5. Who needs attention
+  items.push({
+    actionLine: "Who needs attention?",
+    leadingIcon: Users,
+    query: "Which contacts need attention?",
   });
-  return Array.from(names).slice(0, 3);
+
+  return items.slice(0, 5);
 }
 
 type QuickActionItem = { label: string; query: string };
@@ -57,12 +169,15 @@ function getInitialSuggestions(data: BriefingData | null): QuickActionItem[] {
   }
 
   if (data) {
-    const contacts = extractContactNames(data);
-    contacts.slice(0, 2).forEach((name) => {
-      const first = name.split(" ")[0] ?? name;
+    const contacts = extractContactDraftTargets(data);
+    contacts.slice(0, 2).forEach(({ name, isFollowUp }) => {
       suggestions.push({
-        label: `Draft email: ${first}`,
-        query: `Draft an email to ${name}`,
+        label: isFollowUp
+          ? `View drafted follow up email to ${name}`
+          : `View drafted email to ${name}`,
+        query: isFollowUp
+          ? `Draft a follow up email to ${name}`
+          : `Draft an email to ${name}`,
       });
     });
   }
@@ -71,7 +186,6 @@ function getInitialSuggestions(data: BriefingData | null): QuickActionItem[] {
     suggestions.push({ label: "My meetings today", query: "Show my meetings today" });
   }
 
-  suggestions.push({ label: "What should I do today?", query: "What should I do today?" });
   suggestions.push({ label: "Who needs attention?", query: "Which contacts need attention?" });
 
   return suggestions.slice(0, 5);
@@ -108,6 +222,7 @@ export default function MobilePage() {
   const { data: session } = useSession();
   const [briefingData, setBriefingData] = useState<BriefingData | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(true);
+  const [briefingExpanded, setBriefingExpanded] = useState(false);
   const briefingLoadedRef = useRef(false);
 
   const {
@@ -120,7 +235,6 @@ export default function MobilePage() {
     scrollRef,
     inputRef,
     handleSend,
-    handleClearChat,
     handleKeyDown,
     isListening,
     isTranscribing,
@@ -209,6 +323,23 @@ export default function MobilePage() {
     return deduplicateActions(combined, usedQueries).slice(0, 5);
   }, [messages, briefingData, usedQueries]);
 
+  // Pre-action state: only the briefing exists (no user turns yet). We
+  // surface every initial action inline as a vertical "Where do you want
+  // to act?" card so the partner picks a path before typing. Once they
+  // take any action, the inline card collapses and the existing
+  // horizontal pill row above the chat bar takes over (existing behavior).
+  const hasUserMessage = useMemo(
+    () => messages.some((m) => m.role === "user"),
+    [messages],
+  );
+
+  const initialActionCardActions = useMemo<RichActionItem[] | null>(() => {
+    if (hasUserMessage) return null;
+    if (!briefingData) return null;
+    const items = getInitialPickerActions(briefingData);
+    return items.length > 0 ? items : null;
+  }, [briefingData, hasUserMessage]);
+
   const [inputFocused, setInputFocused] = useState(false);
 
   const stickyTarget = useMemo(() => {
@@ -257,46 +388,40 @@ export default function MobilePage() {
     <button
       type="button"
       onClick={() => setMode("call")}
-      className="inline-flex min-h-[44px] items-center gap-1 -mr-1 rounded-md px-2 text-[15px] font-normal text-blue-600 motion-safe:transition-colors active:text-blue-800 dark:text-blue-400 dark:active:text-blue-300"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600/10 text-blue-600 transition-[transform,colors,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.96] active:bg-blue-50 dark:bg-blue-600/15 dark:text-blue-400 dark:active:bg-blue-950 dark:focus-visible:ring-blue-400/50"
       aria-label="Call Activate"
     >
-      <Phone className="h-4 w-4" />
-      Call Activate
+      <Phone className="h-5 w-5 pointer-events-none" strokeWidth={2.25} />
     </button>
   ) : null;
 
   return (
     <MobileShell headerAction={callMarvinButton}>
       <div className="flex h-full flex-col">
-        {/* Scrollable feed */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="space-y-5 px-4 py-4">
+        {/* Scrollable feed — top padding equals the floating header so the
+            first message sits below it on first paint, but content can rise
+            up under the frosted bar as the user scrolls. */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
+          <div
+            className="space-y-5 px-4 pb-4"
+            style={{ paddingTop: "calc(var(--mobile-header-h) + 12px)" }}
+          >
             {briefingLoading && !hasMessages && (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <Sparkles className="h-3 w-3 text-primary" />
-                  </div>
-                  <p className="text-xs font-medium text-muted-foreground-subtle">
-                    Activate
-                  </p>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/35 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/35 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/35 animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "300ms" }} />
-                  </div>
-                  <span className="text-[15px] text-muted-foreground-subtle">
-                    Preparing your briefing...
-                  </span>
-                </div>
+                <span className="text-[15px] text-muted-foreground-subtle">
+                  Preparing your briefing...
+                </span>
               </div>
             )}
 
             {!briefingLoading && !hasMessages && (
               <div className="flex flex-col items-center justify-center gap-4 pt-12">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-2xl">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-2xl">
                   🐦
                 </div>
                 <div className="text-center">
@@ -318,12 +443,8 @@ export default function MobilePage() {
                 data-msg-role={msg.role}
                 className="space-y-1.5 scroll-mt-4"
               >
-                <div className="flex items-center gap-2">
-                  {msg.role === "assistant" ? (
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[13px]">
-                      🐦
-                    </div>
-                  ) : (
+                {msg.role === "user" && (
+                  <div className="flex items-center gap-2">
                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                       {(session?.user?.name || "You")
                         .split(/\s+/)
@@ -332,18 +453,16 @@ export default function MobilePage() {
                         .toUpperCase()
                         .slice(0, 2)}
                     </div>
-                  )}
-                  <p className="text-xs font-medium text-muted-foreground-subtle">
-                    {msg.role === "assistant"
-                      ? "Activate"
-                      : session?.user?.name || "You"}
-                  </p>
-                </div>
+                    <p className="text-xs font-medium text-muted-foreground-subtle">
+                      {session?.user?.name || "You"}
+                    </p>
+                  </div>
+                )}
                 <div className="min-w-0">
                   <div
                     className={
                       msg.role === "user"
-                        ? "rounded-xl bg-primary/5 px-3.5 py-3 text-[15px] leading-relaxed text-foreground"
+                        ? "rounded-xl bg-gray-100 px-3.5 py-3 text-[15px] leading-relaxed text-foreground dark:bg-gray-800/60"
                         : ""
                     }
                   >
@@ -351,11 +470,11 @@ export default function MobilePage() {
                       msg.id.startsWith("briefing-") ? (
                         <div>
                           {briefingSpokenOpening && (
-                            <div className="mb-3 rounded-xl border border-primary/15 bg-primary/5 px-3.5 py-3">
-                              <p className="text-[11px] font-medium uppercase tracking-wider text-primary/80">
-                                At a glance · great for listening
+                            <div className="mb-3 rounded-xl bg-muted/40 px-3.5 py-3">
+                              <p className="text-[15px] font-semibold leading-relaxed text-foreground">
+                                Today at a glance
                               </p>
-                              <p className="mt-2 text-[15px] leading-relaxed text-foreground">
+                              <p className="mt-1.5 text-[15px] leading-relaxed text-foreground">
                                 {briefingSpokenOpening}
                               </p>
                             </div>
@@ -373,10 +492,30 @@ export default function MobilePage() {
                               onStop={briefingAudio.stop}
                             />
                           </div>
-                          <MarkdownContent
-                            content={msg.content}
-                            className="text-[15px] leading-relaxed text-foreground"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setBriefingExpanded((v) => !v)}
+                            aria-expanded={briefingExpanded}
+                            className="inline-flex items-center gap-1 text-[14px] font-medium text-primary hover:text-primary/80 active:opacity-90"
+                          >
+                            {briefingExpanded ? (
+                              <>
+                                <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                                Hide full morning brief
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                                View the full morning brief
+                              </>
+                            )}
+                          </button>
+                          {briefingExpanded && (
+                            <MarkdownContent
+                              content={msg.content}
+                              className="mt-3 text-[15px] leading-relaxed text-foreground"
+                            />
+                          )}
                         </div>
                       ) : (
                         <AssistantReply
@@ -396,22 +535,74 @@ export default function MobilePage() {
               </div>
             ))}
 
-            {loading && (
-              <div className="space-y-1.5">
+            {/* Pre-action picker: only renders before the user takes any
+                action. Lays out every suggested next step as a tappable
+                row so the partner picks a path before typing. */}
+            {initialActionCardActions && !loading && (
+              <div className="rounded-2xl border border-border bg-card px-4 py-4">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[13px]">
-                    🐦
-                  </div>
-                  <p className="text-xs font-medium text-muted-foreground-subtle">
-                    Activate
+                  <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <p className="text-[15px] font-semibold text-foreground">
+                    Where do you want to act?
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  <span className="text-[15px] text-muted-foreground-subtle">
-                    Searching your data & the web...
-                  </span>
+                <div className="mt-3 space-y-2">
+                  {initialActionCardActions.map((action) => {
+                    const Icon = action.leadingIcon;
+                    const hasSubject = Boolean(action.subjectLine);
+                    return (
+                      <button
+                        key={action.query}
+                        type="button"
+                        onClick={() => handleSend(action.query)}
+                        className={cn(
+                          "group flex w-full min-h-[44px] items-center gap-3 rounded-xl border border-border bg-card px-3.5 text-left transition-colors",
+                          hasSubject ? "py-2.5" : "py-3",
+                          "hover:bg-muted/60",
+                          "active:bg-muted active:scale-[0.99]",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                        )}
+                      >
+                        <span
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground"
+                          aria-hidden="true"
+                        >
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-baseline justify-between gap-2">
+                            <p className="min-w-0 flex-1 text-[15px] font-semibold leading-tight text-foreground line-clamp-1">
+                              {action.actionLine}
+                            </p>
+                            {action.trailingMeta && (
+                              <span className="shrink-0 truncate rounded-full border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                {action.trailingMeta}
+                              </span>
+                            )}
+                          </div>
+                          {hasSubject && (
+                            <p className="mt-0.5 text-[13px] font-normal leading-snug text-muted-foreground line-clamp-1">
+                              {action.subjectLine}
+                            </p>
+                          )}
+                        </div>
+                        <ChevronRight
+                          className="h-4 w-4 shrink-0 self-center text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
+            )}
+
+            {loading && (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="text-[15px] text-muted-foreground-subtle">
+                  Searching your data & the web...
+                </span>
               </div>
             )}
 
@@ -431,8 +622,10 @@ export default function MobilePage() {
           className="shrink-0 border-t border-border bg-card"
           style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
         >
-          {/* Quick action pills — unified, thread-aware */}
-          {activeQuickActions.length > 0 && !loading && (
+          {/* Quick action pills — unified, thread-aware. Hidden in the
+              pre-action state because the inline picker card above is
+              showing the same options as full-width rows. */}
+          {activeQuickActions.length > 0 && !loading && hasUserMessage && (
             <div className="flex gap-2 overflow-x-auto px-4 py-3 scrollbar-none">
               {activeQuickActions.map((action) => (
                 <button
@@ -450,18 +643,6 @@ export default function MobilePage() {
 
           {/* Input bar */}
           <div className="px-3 pb-1.5 pt-0.5">
-            {hasMessages && (
-              <div className="mb-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleClearChat}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] text-muted-foreground-subtle transition-colors active:bg-muted"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Clear
-                </button>
-              </div>
-            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
