@@ -56,7 +56,10 @@ export function ConfirmationCard({
           </div>
         </div>
       </div>
-      <div className="flex items-stretch gap-2 px-4 py-3 border-t border-border/60 bg-muted/20">
+      <div
+        data-cta-row
+        className="flex items-stretch gap-2 px-4 py-3 border-t border-border/60 bg-muted/20"
+      >
         <button type="button" onClick={handleConfirm} className={primaryClass}>
           <Icon className="h-4 w-4" aria-hidden="true" />
           <span>{data.confirmLabel}</span>

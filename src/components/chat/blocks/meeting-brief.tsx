@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarDays } from "lucide-react";
+import { useRef, useState } from "react";
+import { CalendarDays, Sparkles } from "lucide-react";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { ActionBar } from "./action-bar";
 import { buildMeetingBriefActionBar } from "@/lib/services/mobile-action-bars";
@@ -27,6 +27,39 @@ export function MeetingBrief({
 }) {
   const [expanded, setExpanded] = useState(false);
   const tempClass = data.temperature ? TEMPERATURE_STYLES[data.temperature] : "";
+  const expandedAnchorRef = useRef<HTMLDivElement>(null);
+  const bottomActionBarRef = useRef<HTMLDivElement>(null);
+
+  const actionBarData = buildMeetingBriefActionBar({
+    expanded,
+    firstAttendeeName: data.firstAttendeeName,
+  });
+
+  const handleActionQuery = (query: string) => {
+    if (query === SENTINEL_TOGGLE_BRIEF) {
+      const next = !expanded;
+      setExpanded(next);
+      // After expanding, anchor the start of the brief to the top of the
+      // viewport so users read top→bottom and meet the bottom action bar at
+      // the natural endpoint. After collapsing, re-anchor the (now-top) action
+      // bar so the user doesn't lose their place above the briefing card.
+      requestAnimationFrame(() => {
+        if (next) {
+          expandedAnchorRef.current?.scrollIntoView({
+            block: "start",
+            behavior: "smooth",
+          });
+        } else {
+          bottomActionBarRef.current?.scrollIntoView({
+            block: "nearest",
+            behavior: "smooth",
+          });
+        }
+      });
+      return;
+    }
+    onSendMessage?.(query);
+  };
 
   return (
     <div
@@ -52,35 +85,47 @@ export function MeetingBrief({
                 </span>
               )}
             </div>
-            <p className="mt-2 text-[15px] leading-relaxed text-foreground whitespace-pre-line">
-              {data.synthesis}
-            </p>
+            {data.topOfMind ? (
+              <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/60 dark:border-indigo-900/50 dark:bg-indigo-950/20 p-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                    Top-of-Mind · {data.topOfMind.subjectName}
+                  </p>
+                </div>
+                <p className="text-[15px] leading-relaxed text-foreground/90">
+                  {data.topOfMind.content}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-[15px] leading-relaxed text-foreground whitespace-pre-line">
+                {data.synthesis}
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="mt-3">
-          <ActionBar
-            data={buildMeetingBriefActionBar({
-              expanded,
-              firstAttendeeName: data.firstAttendeeName,
-            })}
-            onSendMessage={(query) => {
-              if (query === SENTINEL_TOGGLE_BRIEF) {
-                setExpanded((v) => !v);
-                return;
-              }
-              onSendMessage?.(query);
-            }}
-          />
+        <div ref={bottomActionBarRef} className="mt-3">
+          <ActionBar data={actionBarData} onSendMessage={handleActionQuery} />
         </div>
 
         {expanded && (
-          <div className="mt-4 border-t border-border pt-4">
-            <MarkdownContent
-              content={data.fullBrief}
-              className="text-[15px] leading-relaxed text-foreground"
-            />
-          </div>
+          <>
+            <div
+              ref={expandedAnchorRef}
+              className="mt-4 border-t border-border pt-4 scroll-mt-4"
+            >
+              <MarkdownContent
+                content={data.fullBrief}
+                className="text-[15px] leading-relaxed text-foreground"
+              />
+            </div>
+            {/* Mirror action bar at the end of the expanded brief so users can
+                act on what they just read without scrolling back up. */}
+            <div className="mt-4">
+              <ActionBar data={actionBarData} onSendMessage={handleActionQuery} />
+            </div>
+          </>
         )}
       </div>
     </div>

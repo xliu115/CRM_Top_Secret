@@ -20,6 +20,7 @@ import {
 import { buildDataDrivenSummaryMarkdown } from "@/lib/services/structured-briefing";
 import { synthesizeVoiceMemo } from "@/lib/services/voice-briefing-service";
 import { refreshNudgesForPartner, enrichNudgesWithInsights } from "@/lib/services/nudge-engine";
+import { pregenerateTopNudgeEmails } from "@/lib/services/nudge-email-cache";
 import { addDays, isBefore, format, differenceInDays } from "date-fns";
 
 export async function GET(_request: NextRequest) {
@@ -143,6 +144,18 @@ export async function GET(_request: NextRequest) {
       script,
       ...(deeplink ? { deeplink } : {}),
     }));
+
+    // Speculative pre-generation: warm the email-draft cache for the nudges
+    // shown in the brief. By the time the partner taps "Draft email" on a
+    // priority pill, the LLM call is already done. Fire-and-forget — never
+    // blocks the response, never throws.
+    const pregenIds = mergedNudges
+      .filter((n) => !n.generatedEmail)
+      .slice(0, 3)
+      .map((n) => n.id);
+    if (pregenIds.length > 0) {
+      pregenerateTopNudgeEmails(pregenIds);
+    }
 
     return NextResponse.json({
       briefing: result.narrative,

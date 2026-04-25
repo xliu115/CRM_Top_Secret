@@ -18,7 +18,11 @@ import {
   buildNudgeActionActionBar,
 } from "@/lib/services/mobile-action-bars";
 import { parseStructuredBrief, type StructuredBrief } from "@/lib/types/structured-brief";
-import { synthesizeBrief, synthesizeFromRaw } from "@/lib/utils/meeting-brief-synthesis";
+import {
+  extractTopOfMind,
+  synthesizeBrief,
+  synthesizeFromRaw,
+} from "@/lib/utils/meeting-brief-synthesis";
 import {
   buildSummaryFragments,
   type InsightData,
@@ -382,20 +386,40 @@ export async function POST(request: NextRequest) {
             };
           });
 
-          const briefRaw = await generateMeetingBrief({
-            meetingTitle: match.title,
-            meetingPurpose: match.purpose ?? "",
-            attendees,
-          });
-
-          const structured = parseStructuredBrief(briefRaw);
+          // Cache hit on `meeting.generatedBrief` skips a 2-4s LLM round-trip.
+          // We only trust the cached value when it parses cleanly as a
+          // StructuredBrief — partial / legacy markdown blobs regenerate.
+          let briefRaw: string;
+          let structured = match.generatedBrief
+            ? parseStructuredBrief(match.generatedBrief)
+            : null;
+          if (structured && match.generatedBrief) {
+            briefRaw = match.generatedBrief;
+          } else {
+            briefRaw = await generateMeetingBrief({
+              meetingTitle: match.title,
+              meetingPurpose: match.purpose ?? "",
+              attendees,
+            });
+            structured = parseStructuredBrief(briefRaw);
+            // Persist the freshly-generated brief; best-effort only.
+            void meetingRepo
+              .updateBrief(match.id, briefRaw)
+              .catch((err) =>
+                console.warn("[chat] meeting brief cache write failed:", err),
+              );
+          }
           const briefBody = structured
             ? structuredBriefToMarkdown(structured)
             : briefRaw;
 
-          const synthesis = structured
+          const synthesisAttempt = structured
             ? synthesizeBrief(structured)
             : synthesizeFromRaw(briefRaw);
+          const synthesis =
+            synthesisAttempt.trim().length > 0
+              ? synthesisAttempt
+              : `Limited public signal on this meeting yet — open the full brief for relationship history and prep notes.`;
 
           const meetingWhen = new Date(match.startTime).toLocaleDateString("en-US", {
             weekday: "long",
@@ -415,12 +439,15 @@ export async function POST(request: NextRequest) {
             ).slice(0, 1),
           ].filter(Boolean).join("\n\n");
 
+          const topOfMind = structured ? extractTopOfMind(structured) : null;
+
           const meetingBlocks: ChatBlock[] = [
             {
               type: "meeting_brief",
               data: {
                 meetingId: match.id,
                 meetingTitle: `${match.title} · ${meetingWhen}`,
+                ...(topOfMind ? { topOfMind } : {}),
                 synthesis,
                 fullBrief: briefBody,
                 temperature: structured?.relationshipHistory?.temperature,
@@ -845,7 +872,10 @@ export async function POST(request: NextRequest) {
               },
             ];
 
-            // Generate drafted email
+            // Generate drafted email — read cache when this is a fresh draft
+            // request. A "rewrite warmer/shorter/again" intent must always
+            // regenerate, so we bypass the cache when the user message
+            // signals a tone change.
             try {
               const contact = primary.contact;
               const company = contact.company;
@@ -857,15 +887,51 @@ export async function POST(request: NextRequest) {
                 nudgeReason = `${primary.reason}. Context: ${suggestedAction.context}`;
               }
 
-              const emailResult = await generateEmail({
-                partnerName,
-                contactName,
-                contactTitle: contact.title ?? "",
-                companyName: companyName,
-                nudgeReason,
-                recentInteractions: emailCtx.interactions.slice(0, 5).map((i) => `${i.type} on ${i.date}: ${i.summary}`),
-                signals: emailCtx.signals.slice(0, 3).map((s) => `${s.type}: ${s.content.slice(0, 100)}`),
-              });
+              const wantsRegenerate =
+                /\b(rewrite|warmer|shorter|longer|again|different|another|punchier|tighter|formal|casual)\b/i.test(
+                  message,
+                );
+
+              let emailResult: { subject: string; body: string } | null = null;
+              if (!wantsRegenerate && primary.generatedEmail) {
+                try {
+                  const cached = JSON.parse(primary.generatedEmail) as {
+                    subject?: unknown;
+                    body?: unknown;
+                  };
+                  if (
+                    typeof cached.subject === "string" &&
+                    typeof cached.body === "string" &&
+                    cached.subject.trim() &&
+                    cached.body.trim()
+                  ) {
+                    emailResult = { subject: cached.subject, body: cached.body };
+                  }
+                } catch {
+                  // malformed cache — fall through to fresh generation
+                }
+              }
+
+              if (!emailResult) {
+                emailResult = await generateEmail({
+                  partnerName,
+                  contactName,
+                  contactTitle: contact.title ?? "",
+                  companyName: companyName,
+                  nudgeReason,
+                  recentInteractions: emailCtx.interactions.slice(0, 5).map((i) => `${i.type} on ${i.date}: ${i.summary}`),
+                  signals: emailCtx.signals.slice(0, 3).map((s) => `${s.type}: ${s.content.slice(0, 100)}`),
+                });
+                // Persist for next time; best-effort.
+                void prisma.nudge
+                  .update({
+                    where: { id: primary.id },
+                    data: { generatedEmail: JSON.stringify(emailResult) },
+                  })
+                  .catch((err) =>
+                    console.warn("[chat] nudge email cache write failed:", err),
+                  );
+              }
 
               blocks.push({
                 type: "editable_email_draft",

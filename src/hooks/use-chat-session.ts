@@ -144,19 +144,31 @@ export function useChatSession() {
     }
   }, [isListening, isTranscribing, handleSend]);
 
+  // Anchor scroll to the latest USER message so the prompt sits at the top of
+  // the viewport and the assistant's response (and its action bar at the end)
+  // flows naturally below — making the freshly-triggered content always visible.
+  // Re-runs once the assistant reply lands so the cluster's start stays anchored.
+  const lastUserMessageId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i].id;
+    }
+    return null;
+  })();
+
   useEffect(() => {
-    // Prefer scrolling so the latest CTA row sits above the input/keyboard.
-    // Falls back to the trailing scroll sentinel when no action bar is in view.
     requestAnimationFrame(() => {
-      const ctaRows = document.querySelectorAll<HTMLElement>("[data-cta-row]");
-      const latestCta = ctaRows[ctaRows.length - 1];
-      if (latestCta) {
-        latestCta.scrollIntoView({ block: "end", behavior: "smooth" });
-      } else {
-        scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (lastUserMessageId) {
+        const userEl = document.querySelector<HTMLElement>(
+          `[data-msg-id="${lastUserMessageId}"]`,
+        );
+        if (userEl) {
+          userEl.scrollIntoView({ block: "start", behavior: "smooth" });
+          return;
+        }
       }
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     });
-  }, [messages, loading]);
+  }, [lastUserMessageId, loading]);
 
   useEffect(() => {
     inputRef.current?.focus();

@@ -117,6 +117,16 @@ export type MeetingBriefBlock = {
   data: {
     meetingId: string;
     meetingTitle: string;
+    /**
+     * Rich strategic paragraph about the primary attendee's current focus,
+     * mirroring the desktop "Top-of-Mind" panel. Surfaced prominently when
+     * non-generic content is available; otherwise falls back to `synthesis`.
+     */
+    topOfMind?: {
+      subjectName: string;
+      content: string;
+    };
+    /** Concise 2-3 paragraph summary used as fallback when no topOfMind. */
     synthesis: string;
     fullBrief: string;
     temperature?: "COLD" | "COOL" | "WARM" | "HOT";

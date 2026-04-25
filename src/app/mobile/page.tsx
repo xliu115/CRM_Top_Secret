@@ -312,7 +312,12 @@ export default function MobilePage() {
 
             {/* Messages */}
             {messages.map((msg) => (
-              <div key={msg.id} className="space-y-1.5">
+              <div
+                key={msg.id}
+                data-msg-id={msg.id}
+                data-msg-role={msg.role}
+                className="space-y-1.5 scroll-mt-4"
+              >
                 <div className="flex items-center gap-2">
                   {msg.role === "assistant" ? (
                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[13px]">
