@@ -864,12 +864,20 @@ export default function MobilePage() {
           </div>
         </div>
 
-        <LiveTranscriptPreview
-          transcript={liveTranscript}
-          isListening={isListening}
-          duration={voiceDuration}
-          audioLevel={voiceAudioLevel}
-        />
+        {/* Live transcript preview — floats above the footer */}
+        {isListening && (
+          <div
+            className="absolute inset-x-0 z-40"
+            style={{ bottom: `calc(${footerHeight}px + max(8px, env(safe-area-inset-bottom)))` }}
+          >
+            <LiveTranscriptPreview
+              transcript={liveTranscript}
+              isListening={isListening}
+              duration={voiceDuration}
+              audioLevel={voiceAudioLevel}
+            />
+          </div>
+        )}
 
         {/* Floating bottom area — pills + chat pill, frosted-glass mirror
             of the header. The frosted layer fades *upward* (transparent at

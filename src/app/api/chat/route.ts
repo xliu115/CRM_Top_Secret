@@ -39,7 +39,7 @@ const QUICK_360_INTENT =
 const COMPANY_360_INTENT =
   /\b(company ?360|company dossier|tell me about (?:the )?company|company intel(?:ligence)?)\b/i;
 const DRAFT_EMAIL_INTENT =
-  /\b(draft (?:an? )?(?:[\w-]+ ){0,4}email|write (?:an? )?(?:[\w-]+ ){0,4}email|email draft|compose (?:an? )?(?:[\w-]+ ){0,4}email|draft (?:a )?(?:follow[- ]?up|reply|check[- ]?in|thank[- ]?you|congrat\w*|intro(?:duction)?) to)\b/i;
+  /\b(draft (?:an? )?(?:[\w-]+ ){0,4}email|write (?:an? )?(?:[\w-]+ ){0,4}email|email draft|compose (?:an? )?(?:[\w-]+ ){0,4}email|draft (?:a )?(?:follow[- ]?up|reply|check[- ]?in|thank[- ]?you|congrat\w*|intro(?:duction)?) to|view (?:the )?(?:drafted |draft )?email|show (?:the )?(?:drafted |draft )?email)\b/i;
 const SHARE_DOSSIER_INTENT =
   /\b(share (?:the )?dossier|share (?:the )?360|send (?:the )?dossier)\b/i;
 const MEETING_PREP_INTENT =
@@ -101,11 +101,19 @@ function extractNameFromQuery(query: string): string {
   let cleaned = query;
   for (const re of ALL_INTENTS) cleaned = cleaned.replace(re, "");
   cleaned = cleaned
+    .replace(/[?.,!]/g, "")
+    .replace(/\b(?:from|at|and)\s+[\w\s]+$/i, "")
+    .replace(/^(?:we will|i want to|i'd like to|can you|could you|please|let's|let me|go ahead and|i need to|help me)\s+/i, "")
     .replace(/\bfor\b/i, "")
     .replace(/\bto\b/i, "")
-    .replace(/[?.,!]/g, "")
+    .replace(/\s{2,}/g, " ")
     .trim();
   return cleaned;
+}
+
+function extractCompanyFromQuery(query: string): string | null {
+  const m = query.match(/\b(?:from|at|and)\s+([\w\s]+?)\s*[?.,!]?\s*$/i);
+  return m ? m[1].trim() : null;
 }
 
 export async function POST(request: NextRequest) {
@@ -286,21 +294,12 @@ export async function POST(request: NextRequest) {
     else if (SNOOZE_NUDGE_INTENT.test(message)) regexIntent = "snooze_nudge";
     else if (SEND_EMAIL_INTENT.test(message)) regexIntent = "send_email";
 
-    if (classified && classified.confidence >= 0.5 && classified.intent !== "general_question") {
-      detectedIntent = classified.intent;
-      detectedEntity = classified.entity;
-    } else if (regexIntent !== "general_question") {
+    if (regexIntent !== "general_question") {
       detectedIntent = regexIntent;
       detectedEntity = extractNameFromQuery(message);
     } else if (classified && classified.confidence >= 0.5) {
       detectedIntent = classified.intent;
       detectedEntity = classified.entity;
-    }
-
-    // Regex override: if regex matched a specific intent but LLM said general_question, trust the regex
-    if (detectedIntent === "general_question" && regexIntent !== "general_question") {
-      detectedIntent = regexIntent;
-      detectedEntity = detectedEntity || extractNameFromQuery(message);
     }
 
     // ── Nudge-type-aware intent override ─────────────────────────────
@@ -905,7 +904,14 @@ export async function POST(request: NextRequest) {
 
         if (nudges.length === 0 && nameQuery) {
           const contacts = await contactRepo.search(nameQuery, partnerId);
-          const contact = contacts[0];
+          const companyHint = extractCompanyFromQuery(message);
+          let contact = contacts[0];
+          if (contacts.length > 1 && companyHint) {
+            const companyMatch = contacts.find(
+              (c) => c.company?.name?.toLowerCase().includes(companyHint.toLowerCase()),
+            );
+            if (companyMatch) contact = companyMatch;
+          }
           if (contact) {
             nudges = await nudgeRepo.findByContactId(contact.id);
             nudges = nudges.filter((n) => n.status === "OPEN");
@@ -1674,7 +1680,15 @@ export async function POST(request: NextRequest) {
           }
           if (!contact) {
             const contacts = await contactRepo.search(nameQuery, partnerId);
-            contact = contacts[0] ?? null;
+            const companyHint = extractCompanyFromQuery(message);
+            if (contacts.length > 1 && companyHint) {
+              const companyMatch = contacts.find(
+                (c) => (c as Record<string, unknown> & { company?: { name?: string } }).company?.name?.toLowerCase().includes(companyHint.toLowerCase()),
+              );
+              contact = companyMatch ?? contacts[0] ?? null;
+            } else {
+              contact = contacts[0] ?? null;
+            }
           }
           if (!contact) {
             return NextResponse.json({

@@ -202,13 +202,13 @@ export function MobileShell({
       </div>
 
       {/* On desktop: center a phone-sized frame with device chrome */}
-      <div className="hidden md:flex h-screen w-screen items-center justify-center bg-slate-100">
-        <div className="relative flex flex-col items-center gap-3">
+      <div className="hidden md:flex h-screen w-screen items-center justify-center overflow-auto bg-slate-100">
+        <div className="relative flex shrink-0 flex-col items-center gap-3">
           <p className="text-xs font-medium tracking-wide text-slate-400 uppercase">
             Mobile Preview
           </p>
           <div
-            className="relative overflow-hidden rounded-[2.5rem] border-[6px] border-slate-800 bg-slate-800 shadow-2xl"
+            className="relative shrink-0 overflow-hidden rounded-[2.5rem] border-[6px] border-slate-800 bg-slate-800 shadow-2xl"
             style={{ width: 390, height: 844 }}
           >
             {/* Notch */}
