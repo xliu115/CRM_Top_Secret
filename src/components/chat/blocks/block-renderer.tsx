@@ -18,6 +18,8 @@ import { NudgeEvidence } from "./nudge-evidence";
 import { NudgeSummaryShell } from "./nudge-summary-shell";
 import { StrategicInsight } from "./strategic-insight";
 import { ConfirmationCard } from "./confirmation-card";
+import { CampaignApproval } from "./campaign-approval";
+import { ArticleShare } from "./article-share";
 import { SENTINEL_EDIT_EMAIL } from "@/lib/services/chat-sentinels";
 import type { PendingAction, SendMessageFn } from "@/hooks/use-chat-session";
 
@@ -166,10 +168,12 @@ export function BlockRenderer({
   blocks,
   onSendMessage,
   onConfirmAction,
+  onActionCompleted,
 }: {
   blocks: ChatBlock[];
   onSendMessage?: SendMessageFn;
   onConfirmAction?: (action: PendingAction) => void;
+  onActionCompleted?: (query: string) => void;
 }) {
   if (blocks.length === 0) return null;
 
@@ -272,7 +276,7 @@ export function BlockRenderer({
             <BlockClusterShell
               key={gi}
               eyebrow={`${count} contact${count !== 1 ? "s" : ""} needing attention`}
-              body={<StaleContactsList data={list.data} embedded />}
+              body={<StaleContactsList data={list.data} embedded onSendMessage={onSendMessage} />}
               footer={action ? <ActionBar data={action.data} onSendMessage={onSendMessage} embedded /> : undefined}
             />
           );
@@ -336,7 +340,7 @@ export function BlockRenderer({
           case "meeting_brief":
             return <MeetingBrief key={gi} data={block.data} onSendMessage={onSendMessage} />;
           case "stale_contacts_list":
-            return <StaleContactsList key={gi} data={block.data} />;
+            return <StaleContactsList key={gi} data={block.data} onSendMessage={onSendMessage} />;
           case "nudge_evidence":
             return <NudgeEvidence key={gi} data={block.data} />;
           case "strategic_insight":
@@ -346,10 +350,20 @@ export function BlockRenderer({
               <ConfirmationCard
                 key={gi}
                 data={block.data}
-                onConfirm={onConfirmAction}
+                onConfirm={(action) => {
+                  onConfirmAction?.(action);
+                  if (action.type === "send_email" && action.contactName) {
+                    onActionCompleted?.(`draft an email to ${action.contactName}`);
+                    onActionCompleted?.(`draft a follow up email to ${action.contactName}`);
+                  }
+                }}
                 onCancel={() => onSendMessage?.("Cancelled.")}
               />
             );
+          case "campaign_approval":
+            return <CampaignApproval key={gi} data={block.data} onActionCompleted={onActionCompleted} />;
+          case "article_share":
+            return <ArticleShare key={gi} data={block.data} onActionCompleted={onActionCompleted} />;
           default: {
             const _exhaustive: never = block;
             void _exhaustive;

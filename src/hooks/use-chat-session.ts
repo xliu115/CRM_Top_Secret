@@ -156,7 +156,7 @@ export function useChatSession() {
   })();
 
   useEffect(() => {
-    requestAnimationFrame(() => {
+    const doScroll = () => {
       if (lastUserMessageId) {
         const userEl = document.querySelector<HTMLElement>(
           `[data-msg-id="${lastUserMessageId}"]`,
@@ -167,7 +167,8 @@ export function useChatSession() {
         }
       }
       scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-    });
+    };
+    requestAnimationFrame(() => requestAnimationFrame(doScroll));
   }, [lastUserMessageId, loading]);
 
   useEffect(() => {

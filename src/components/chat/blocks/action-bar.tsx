@@ -103,11 +103,11 @@ export function ActionBar({
   }
 
   const primaryClass = isDestructive
-    ? "relative inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 text-white px-4 text-sm font-semibold min-h-[44px] flex-1 motion-safe:transition-colors motion-safe:active:scale-[0.97] active:bg-red-800"
-    : "relative inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white px-4 text-sm font-semibold min-h-[44px] flex-1 motion-safe:transition-colors motion-safe:active:scale-[0.97] active:bg-blue-800";
+    ? "relative inline-flex items-center justify-center gap-2 rounded-lg bg-destructive text-destructive-foreground px-4 text-sm font-semibold min-h-[44px] flex-1 motion-safe:transition-colors motion-safe:active:scale-[0.97] active:bg-destructive/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    : "relative inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 text-sm font-semibold min-h-[44px] flex-1 motion-safe:transition-colors motion-safe:active:scale-[0.97] active:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
   const secondaryClass =
-    "inline-flex items-center justify-center gap-2 rounded-lg border border-blue-600/60 bg-transparent px-4 text-sm font-medium text-blue-600 min-h-[44px] flex-1 motion-safe:transition-colors motion-safe:active:scale-[0.97] active:bg-blue-50 dark:active:bg-blue-950";
+    "inline-flex items-center justify-center gap-2 rounded-lg border border-primary/60 bg-transparent px-4 text-sm font-medium text-primary min-h-[44px] flex-1 motion-safe:transition-colors motion-safe:active:scale-[0.97] active:bg-primary/10 dark:active:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
   const tertiaryClass =
     "inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1.5 text-xs font-medium text-muted-foreground min-h-[32px] motion-safe:transition-colors motion-safe:active:scale-[0.97] active:bg-muted/60";
@@ -129,7 +129,7 @@ export function ActionBar({
               <span
                 aria-hidden="true"
                 className={`motion-safe:animate-ping pointer-events-none absolute inset-0 rounded-lg ring-2 opacity-60 ${
-                  isDestructive ? "ring-red-400" : "ring-blue-400"
+                  isDestructive ? "ring-destructive/60" : "ring-primary/60"
                 }`}
               />
             )}

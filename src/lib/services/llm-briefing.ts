@@ -106,16 +106,17 @@ Principles:
 - **One breath per bullet.** Each bullet is ONE natural sentence (occasionally two). No fragments, bracketed data, or sub-bullets.
 - **Bold sparingly.** At most one or two anchors per bullet — usually the person's full name or the campaign/article title. Do NOT bold days-since phrases, dates, times, or generic words.
 
-Structure (markdown optimized for listening):
+Structure (markdown for mobile — must scan visually AND sound good read aloud):
 - Open with ONE plain-text headline sentence (no bold) that names the single most important thing to do today and why it matters. If a campaign approval is pending, lead with that; otherwise lead with the highest-priority contact or insight.
-- Below, group into short bullet sections. Each section label is one bold phrase on its own line. Only include sections that have data:
-  - **Campaign approvals** — campaign name, pending count, deadline.
-  - **Article campaigns** — article title and how many contacts are matched.
-  - **Priority contacts** — who to reach out to, led by the strategic reason it matters now; the days-since humanized phrase comes second.
-  - **Meetings** — what's on the calendar and a one-line prep angle if useful.
-  - **On the radar** — the one or two client signals worth knowing today.
+- Below, group into sections. Each section starts with a bold heading on its own line (e.g. "**Priority contacts**"). Under each heading, use markdown bullet points ("- ") — one bullet per person, meeting, or signal. Each bullet is ONE natural sentence (two max). NEVER write a paragraph of prose under a heading — always use "- " bullet syntax.
+  - **Campaign approvals** — one bullet per campaign: name, pending count, deadline.
+  - **Article campaigns** — one bullet per article: title and how many contacts are matched.
+  - **Priority contacts** — one bullet per contact: lead with the strategic reason it matters now; the days-since humanized phrase comes second.
+  - **Meetings** — one bullet per meeting: what's on the calendar and a one-line prep angle.
+  - **On the radar** — one bullet per signal worth knowing today.
 - Reference people by full name on first mention, first name after.
-- Total length: 90-140 words. Aim shorter if the signal is thin. This is a 45-second listen, not a dashboard.
+- Total length: 90-160 words. Aim shorter if the signal is thin. This is a 45-second listen, not a dashboard.
+- CRITICAL: Every item under a section heading MUST be a markdown bullet ("- "). No free-flowing paragraphs.
 
 After the briefing, output a JSON block with exactly 3 top actions in this format:
 ---ACTIONS---

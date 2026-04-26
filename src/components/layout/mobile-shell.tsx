@@ -76,16 +76,22 @@ export function MobileShell({
         }}
       >
         {/* Masked frosted-glass background — sits *behind* the controls and
-            extends a fade zone *below* them, so the gradient transition from
-            opaque-frosted to clear happens visibly under the icon row. */}
+            extends a long fade zone *below* them so the transition from
+            opaque-frosted to clear is imperceptible (no visible seam). Two
+            gradients work together: a vertical opacity ramp on the bg color
+            (so the tint dissolves smoothly into the page) and a matching
+            mask (so the backdrop-blur fades with it instead of cutting off
+            at a hard edge). */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-white/80 backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/65 dark:bg-background/80 dark:supports-[backdrop-filter]:bg-background/60"
+          className="pointer-events-none absolute inset-0 backdrop-blur-2xl backdrop-saturate-150"
           style={{
+            backgroundImage:
+              "linear-gradient(to bottom, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.78) 45%, rgba(255,255,255,0.35) 80%, rgba(255,255,255,0) 100%)",
             WebkitMaskImage:
-              "linear-gradient(to bottom, #000 0%, #000 calc(100% - 36px), transparent 100%)",
+              "linear-gradient(to bottom, #000 0%, #000 35%, rgba(0,0,0,0.55) 75%, transparent 100%)",
             maskImage:
-              "linear-gradient(to bottom, #000 0%, #000 calc(100% - 36px), transparent 100%)",
+              "linear-gradient(to bottom, #000 0%, #000 35%, rgba(0,0,0,0.55) 75%, transparent 100%)",
           }}
         />
 
@@ -115,7 +121,7 @@ export function MobileShell({
           />
 
           <div
-            className="relative ml-auto flex h-full w-72 flex-col bg-sidebar-bg text-sidebar-fg shadow-2xl animate-in slide-in-from-right duration-200"
+            className="relative mr-auto flex h-full w-72 flex-col bg-sidebar-bg text-sidebar-fg shadow-2xl animate-in slide-in-from-left duration-200"
             style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">

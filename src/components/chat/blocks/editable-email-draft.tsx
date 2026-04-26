@@ -105,7 +105,7 @@ export function EditableEmailDraft({
     <>
       <div
         className={cn(
-          !embedded && "rounded-lg border border-border bg-card overflow-hidden",
+          !embedded && "rounded-xl border border-border bg-card overflow-hidden shadow-sm",
         )}
       >
         <div
@@ -159,7 +159,7 @@ export function EditableEmailDraft({
                     e.stopPropagation();
                     setShowFull((v) => !v);
                   }}
-                  className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-blue-600 motion-safe:active:scale-[0.97]"
+                  className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary motion-safe:active:scale-[0.97]"
                   aria-label={showFull ? "Show less" : "Show more"}
                 >
                   {showFull ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}

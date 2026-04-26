@@ -27,8 +27,24 @@ export async function GET(_request: NextRequest) {
   try {
     const partnerId = await requirePartnerId();
 
-    await refreshNudgesForPartner(partnerId);
-    await enrichNudgesWithInsights(partnerId);
+    // Fire-and-forget: refreshing nudges + generating strategic insights for
+    // *every* open nudge is a 1–3 minute LLM-bound operation. Awaiting it
+    // here makes the morning brief feel like it never loads. We instead let
+    // these run in the background so this request renders fast against the
+    // current DB state; the next open of /mobile will see the freshened data.
+    // (`/api/nudges/refresh` and the cron job remain available for explicit
+    // refreshes.)
+    void (async () => {
+      try {
+        await refreshNudgesForPartner(partnerId);
+        await enrichNudgesWithInsights(partnerId);
+      } catch (bgErr) {
+        console.warn(
+          "[dashboard/briefing] background refresh/enrich failed:",
+          bgErr,
+        );
+      }
+    })();
 
     const [partner, openNudges, allUpcomingMeetings, clientNews] =
       await Promise.all([

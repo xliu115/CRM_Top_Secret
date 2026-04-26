@@ -128,6 +128,7 @@ export function AssistantReply({
   blocks,
   onSendMessage,
   onConfirmAction,
+  onActionCompleted,
   mobile = false,
 }: {
   content: string;
@@ -135,6 +136,7 @@ export function AssistantReply({
   blocks?: ChatBlock[];
   onSendMessage?: SendMessageFn;
   onConfirmAction?: (action: PendingAction) => void;
+  onActionCompleted?: (query: string) => void;
   mobile?: boolean;
 }) {
   const hasBlocks = Array.isArray(blocks) && blocks.length > 0;
@@ -260,7 +262,7 @@ export function AssistantReply({
       )}
 
       {hasBlocks && (
-        <BlockRenderer blocks={blocks!} onSendMessage={onSendMessage} onConfirmAction={onConfirmAction} />
+        <BlockRenderer blocks={blocks!} onSendMessage={onSendMessage} onConfirmAction={onConfirmAction} onActionCompleted={onActionCompleted} />
       )}
 
       {webSources.length > 0 && (

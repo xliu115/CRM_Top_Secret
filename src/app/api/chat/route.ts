@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
-import { contactRepo, partnerRepo, interactionRepo, signalRepo, meetingRepo, nudgeRepo, type NudgeWithRelations } from "@/lib/repositories";
+import { contactRepo, partnerRepo, interactionRepo, signalRepo, meetingRepo, nudgeRepo, campaignRepo, type NudgeWithRelations } from "@/lib/repositories";
 import { prisma } from "@/lib/db/prisma";
 import { retrieveContext, searchWeb } from "@/lib/services/rag-service";
 import { generateChatAnswer, generateEmail, generateMeetingBrief } from "@/lib/services/llm-service";
@@ -85,10 +85,17 @@ const SNOOZE_NUDGE_INTENT =
 // through to general_question.
 const SEND_EMAIL_INTENT =
   /\b(send (?:the |that |this )?(?:drafted |draft )?email|send it|go ahead (?:and )?send|yes,? send)\b/i;
+// CAMPAIGN_APPROVAL is the only nudge type whose primary surface is a
+// multi-recipient approval card rather than a per-contact insight + email.
+// Detected via regex (free-form ask) or a CAMPAIGN_APPROVAL nudgeId in context.
+const REVIEW_CAMPAIGN_INTENT =
+  /\b((?:review|approve|approvals?(?:\s+for)?)\s+(?:the\s+|my\s+)?campaign|campaign\s+approvals?|pending\s+(?:campaign\s+)?approvals?|what(?:'s| is)\s+(?:waiting\s+)?(?:for\s+)?my\s+approval)\b/i;
+const SHARE_ARTICLE_INTENT =
+  /\b(share\s+(?:the\s+|an?\s+|this\s+)?article|(?:newly\s+published\s+)?articles?\s+to\s+share|share\s+(?:this\s+)?content|newly\s+published\s+articles?)\b/i;
 const AFFIRMATIVE_RESPONSE =
   /^(yes|confirm|go ahead|do it|yep|yeah|sure|ok|okay)\b/i;
 
-const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT, NUDGE_SUMMARY_INTENT, FIRM_RELATIONSHIPS_INTENT, CLIENT_UPDATES_INTENT, WEEKLY_SUMMARY_INTENT, DISMISS_NUDGE_INTENT, SNOOZE_NUDGE_INTENT, SEND_EMAIL_INTENT];
+const ALL_INTENTS = [FULL_CONTACT_360_INTENT, QUICK_360_INTENT, COMPANY_360_INTENT, DRAFT_EMAIL_INTENT, SHARE_DOSSIER_INTENT, MEETING_PREP_INTENT, MEETINGS_TODAY_INTENT, DAILY_PRIORITIES_INTENT, NEEDS_ATTENTION_INTENT, NUDGE_SUMMARY_INTENT, FIRM_RELATIONSHIPS_INTENT, CLIENT_UPDATES_INTENT, WEEKLY_SUMMARY_INTENT, DISMISS_NUDGE_INTENT, SNOOZE_NUDGE_INTENT, SEND_EMAIL_INTENT, REVIEW_CAMPAIGN_INTENT, SHARE_ARTICLE_INTENT];
 
 function extractNameFromQuery(query: string): string {
   let cleaned = query;
@@ -299,9 +306,13 @@ export async function POST(request: NextRequest) {
     // ── Nudge-type-aware intent override ─────────────────────────────
     // When a nudgeId is provided (user clicked a specific nudge action),
     // check the nudge's ruleType to ensure correct routing:
-    // - Only MEETING_PREP nudges should route to the meeting brief path
+    // - MEETING_PREP nudges route to the meeting brief path
+    // - CAMPAIGN_APPROVAL nudges route to the in-chat campaign approval block
+    //   (multi-recipient approve/reject — handled below as a top-level branch)
     // - All other contact nudges route to strategic insights + drafted email
     let overrideNudge: NudgeWithRelations | null = null;
+    let isCampaignApproval = false;
+    let isArticleShare = false;
     if (ctx_ids.nudgeId) {
       const nudgeLookup = await prisma.nudge.findUnique({
         where: { id: ctx_ids.nudgeId },
@@ -310,7 +321,11 @@ export async function POST(request: NextRequest) {
 
       if (nudgeLookup) {
         overrideNudge = nudgeLookup as NudgeWithRelations;
-        if (nudgeLookup.ruleType !== "MEETING_PREP") {
+        if (nudgeLookup.ruleType === "CAMPAIGN_APPROVAL") {
+          isCampaignApproval = true;
+        } else if (nudgeLookup.ruleType === "ARTICLE_CAMPAIGN") {
+          isArticleShare = true;
+        } else if (nudgeLookup.ruleType !== "MEETING_PREP") {
           detectedIntent = "nudge_summary";
         }
       } else if (ctx_ids.contactId) {
@@ -319,7 +334,11 @@ export async function POST(request: NextRequest) {
         if (openFallback.length > 0) {
           const nonMeeting = openFallback.find((n) => n.ruleType !== "MEETING_PREP") ?? openFallback[0];
           overrideNudge = nonMeeting;
-          if (nonMeeting.ruleType !== "MEETING_PREP") {
+          if (nonMeeting.ruleType === "CAMPAIGN_APPROVAL") {
+            isCampaignApproval = true;
+          } else if (nonMeeting.ruleType === "ARTICLE_CAMPAIGN") {
+            isArticleShare = true;
+          } else if (nonMeeting.ruleType !== "MEETING_PREP") {
             detectedIntent = "nudge_summary";
           }
         } else {
@@ -328,6 +347,13 @@ export async function POST(request: NextRequest) {
       } else {
         detectedIntent = "nudge_summary";
       }
+    }
+    // Free-form "review my campaign approvals" — no nudgeId required.
+    if (!isCampaignApproval && REVIEW_CAMPAIGN_INTENT.test(message)) {
+      isCampaignApproval = true;
+    }
+    if (!isArticleShare && SHARE_ARTICLE_INTENT.test(message)) {
+      isArticleShare = true;
     }
 
     const isMeetingPrep = detectedIntent === "meeting_prep";
@@ -347,6 +373,57 @@ export async function POST(request: NextRequest) {
     const isDismissNudge = detectedIntent === "dismiss_nudge";
     const isSnoozeNudge = detectedIntent === "snooze_nudge";
     const isSendEmail = detectedIntent === "send_email";
+
+    // ── Campaign Approval (CENTRAL multi-recipient approve/reject) ───
+    // Triggered when a CAMPAIGN_APPROVAL nudge is the override OR the
+    // user free-form asks to review their campaign approvals. Emits a
+    // single `campaign_approval` block with rows defaulted to APPROVED;
+    // the partner flips rows they want to reject before tapping Confirm.
+    if (isCampaignApproval) {
+      try {
+        const blocks = await buildCampaignApprovalBlocks({
+          partnerId,
+          overrideNudge,
+        });
+        if (blocks) {
+          return NextResponse.json({
+            answer: "Here's the campaign waiting on your approval. Rows default to **Approved** — tap any row to flip it to **Rejected** before confirming.",
+            sources: [],
+            blocks,
+          });
+        }
+        return NextResponse.json({
+          answer: "You're all caught up — no campaigns are waiting on your approval right now.",
+          sources: [],
+        });
+      } catch (err) {
+        console.error("[chat] campaign approval intent failed:", err);
+      }
+    }
+
+    // ── Article Share (partner-initiated article campaign) ───────────
+    if (isArticleShare) {
+      try {
+        const blocks = await buildArticleShareBlocks({
+          partnerId,
+          overrideNudge,
+          cookieHeader: request.headers.get("cookie") ?? "",
+        });
+        if (blocks) {
+          return NextResponse.json({
+            answer: "Here's the newly published article to share — tap any contact to review their pre-drafted email, then confirm to send.",
+            sources: [],
+            blocks,
+          });
+        }
+        return NextResponse.json({
+          answer: "No newly published articles to share right now.",
+          sources: [],
+        });
+      } catch (err) {
+        console.error("[chat] article share intent failed:", err);
+      }
+    }
 
     // ── Meeting Prep ─────────────────────────────────────────────────
     if (isMeetingPrep) {
@@ -726,13 +803,16 @@ export async function POST(request: NextRequest) {
           sections.push("All your key contacts look well-maintained. Nice work keeping up with your relationships!");
         }
 
-        const contactNudges = openNudges.filter((n) =>
-          n.ruleType !== "MEETING_PREP" && n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN"
-        );
+        const priorityOrder: Record<string, number> = { CRITICAL: 0, URGENT: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
+        const contactNudges = openNudges
+          .filter((n) =>
+            n.ruleType !== "MEETING_PREP" && n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN"
+          )
+          .sort((a, b) => (priorityOrder[a.priority] ?? 5) - (priorityOrder[b.priority] ?? 5));
         const topContacts = [...contactNudges.slice(0, 2).map((n) => n.contact.name), ...additionalStale.slice(0, 1).map((c) => c.name)];
         const quickActions = topContacts.map((name) => ({
-          label: `Quick 360: ${name}`,
-          query: `Quick 360 for ${name}`,
+          label: `Draft email for ${name.split(" ")[0]}`,
+          query: `Draft an email to ${name}`,
         }));
         if (quickActions.length > 0) {
           sections.push(`<!--QUICK_ACTIONS:${JSON.stringify(quickActions)}-->`);
@@ -745,13 +825,40 @@ export async function POST(request: NextRequest) {
           const signal = c.signals[0]?.content?.slice(0, 60);
           return { name: c.name, company: c.company?.name ?? "", contactId: c.id, daysSince: days, signal };
         });
-        const nudgeListItems = contactNudges.slice(0, 5).map((n) => ({
-          name: n.contact.name,
-          company: n.contact.company?.name ?? "",
-          contactId: n.contactId,
-          daysSince: 0,
-          signal: n.reason.slice(0, 60),
-        }));
+        const nudgeListItems = contactNudges.slice(0, 5).map((n) => {
+          let insightPreview: string | undefined;
+          try {
+            const meta = n.metadata ? JSON.parse(n.metadata) : null;
+            const si = meta?.strategicInsight;
+            if (si?.oneLiner) {
+              insightPreview = si.oneLiner;
+            } else if (si?.narrative) {
+              insightPreview = si.narrative.split(/[.!?]/)[0]?.trim();
+            } else if (meta?.insights?.length) {
+              insightPreview = meta.insights
+                .slice(0, 2)
+                .map((ins: { reason?: string }) => ins.reason)
+                .filter(Boolean)
+                .join(". ");
+            }
+          } catch { /* metadata parse failed, fall back */ }
+          if (!insightPreview) {
+            const colonIdx = n.reason.indexOf(":");
+            insightPreview = colonIdx > 0 ? n.reason.slice(colonIdx + 1).trim() : n.reason;
+          }
+          if (insightPreview && insightPreview.length > 140) {
+            insightPreview = insightPreview.slice(0, 137) + "…";
+          }
+          return {
+            name: n.contact.name,
+            company: n.contact.company?.name ?? "",
+            contactId: n.contactId,
+            daysSince: 0,
+            priority: n.priority,
+            ruleType: n.ruleType,
+            insightPreview,
+          };
+        });
         const combinedStale = [...nudgeListItems, ...staleListItems];
         if (combinedStale.length > 0) {
           attentionBlocks.push({ type: "stale_contacts_list", data: { contacts: combinedStale } });
@@ -1947,9 +2054,9 @@ function structuredBriefToMarkdown(brief: StructuredBrief): string {
   const sections: string[] = [];
 
   sections.push(`### Meeting Goal`);
-  sections.push(brief.meetingGoal.statement);
+  sections.push(`- ${brief.meetingGoal.statement}`);
   if (brief.meetingGoal.successCriteria) {
-    sections.push(`\n*${brief.meetingGoal.successCriteria}*`);
+    sections.push(`- *${brief.meetingGoal.successCriteria}*`);
   }
 
   if (brief.primaryContactProfile.bullets.length > 0) {
@@ -1964,18 +2071,16 @@ function structuredBriefToMarkdown(brief: StructuredBrief): string {
 
   if (brief.conversationStarters.length > 0) {
     sections.push(`\n### Conversation Starters`);
-    for (let i = 0; i < brief.conversationStarters.length; i++) {
-      const s = brief.conversationStarters[i];
-      sections.push(`${i + 1}. *"${s.question}"*`);
-      if (s.tacticalNote) sections.push(`   ${s.tacticalNote}`);
+    for (const s of brief.conversationStarters) {
+      sections.push(`- *"${s.question}"*`);
+      if (s.tacticalNote) sections.push(`  - ${s.tacticalNote}`);
     }
   }
 
   if (brief.newsInsights.length > 0) {
     sections.push(`\n### News & Insights`);
     for (const n of brief.newsInsights) {
-      sections.push(`**${n.headline}**`);
-      sections.push(n.body);
+      sections.push(`- **${n.headline}** — ${n.body}`);
     }
   } else if (brief.newsEmptyReason) {
     sections.push(`\n### News & Insights`);
@@ -1984,14 +2089,14 @@ function structuredBriefToMarkdown(brief: StructuredBrief): string {
 
   if (brief.executiveProfile.bioSummary) {
     sections.push(`\n### Executive Profile`);
-    sections.push(brief.executiveProfile.bioSummary);
+    sections.push(`- ${brief.executiveProfile.bioSummary}`);
     if (brief.executiveProfile.topOfMind) {
-      sections.push(`\n**Top-of-Mind:** ${brief.executiveProfile.topOfMind}`);
+      sections.push(`\n> **Top-of-Mind**\n> ${brief.executiveProfile.topOfMind}`);
     }
     if (brief.executiveProfile.recentMoves.length > 0) {
       sections.push(`\n**Recent Moves:**`);
       for (const m of brief.executiveProfile.recentMoves) {
-        sections.push(`- ${m.date}: ${m.description}`);
+        sections.push(`- **${m.date}:** ${m.description}`);
       }
     }
     if (brief.executiveProfile.patternCallout) {
@@ -2001,7 +2106,7 @@ function structuredBriefToMarkdown(brief: StructuredBrief): string {
 
   const tempEmoji: Record<string, string> = { COLD: "Cold", COOL: "Cool", WARM: "Warm", HOT: "Hot" };
   sections.push(`\n### Relationship: ${tempEmoji[brief.relationshipHistory.temperature] ?? brief.relationshipHistory.temperature}`);
-  sections.push(brief.relationshipHistory.summary);
+  sections.push(`- ${brief.relationshipHistory.summary}`);
   if (brief.relationshipHistory.engagements.length > 0) {
     for (const e of brief.relationshipHistory.engagements) {
       sections.push(`- **${e.period}:** ${e.description}`);
@@ -2016,6 +2121,344 @@ function structuredBriefToMarkdown(brief: StructuredBrief): string {
   }
 
   return sections.join("\n");
+}
+
+/**
+ * Resolve the partner's most relevant ARTICLE_CAMPAIGN nudge, lazily
+ * create a draft campaign if one doesn't exist (via from-article), load
+ * the ContentItem + recipients, and return an `article_share` ChatBlock.
+ * Returns `null` when nothing is actionable.
+ */
+async function buildArticleShareBlocks({
+  partnerId,
+  overrideNudge,
+  cookieHeader,
+}: {
+  partnerId: string;
+  overrideNudge: NudgeWithRelations | null;
+  cookieHeader: string;
+}): Promise<ChatBlock[] | null> {
+  let contentItemId: string | null = null;
+
+  // 1. Try to extract contentItemId from the override nudge
+  if (overrideNudge?.ruleType === "ARTICLE_CAMPAIGN") {
+    try {
+      const meta = JSON.parse(overrideNudge.metadata ?? "{}");
+      if (typeof meta?.contentItemId === "string") {
+        contentItemId = meta.contentItemId;
+      }
+    } catch {
+      // malformed metadata — fall through to partner-level scan
+    }
+  }
+
+  // 2. Fall back to the most recent open ARTICLE_CAMPAIGN nudge
+  if (!contentItemId) {
+    const openArticleNudges = await prisma.nudge.findMany({
+      where: {
+        contact: { partnerId },
+        status: "OPEN",
+        ruleType: "ARTICLE_CAMPAIGN",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    for (const n of openArticleNudges) {
+      try {
+        const meta = JSON.parse(n.metadata ?? "{}");
+        if (typeof meta?.contentItemId === "string") {
+          contentItemId = meta.contentItemId;
+          break;
+        }
+      } catch {
+        // skip malformed entry
+      }
+    }
+  }
+
+  if (!contentItemId) return null;
+
+  // 3. Find (or lazily create) the backing draft campaign
+  const existingLink = await prisma.campaignContent.findFirst({
+    where: { contentItemId, campaign: { partnerId } },
+    include: { campaign: true },
+  });
+
+  let campaignId: string;
+  if (existingLink) {
+    campaignId = existingLink.campaignId;
+  } else {
+    // Lazily create via the from-article pipeline (generates template +
+    // per-recipient personalization). This mirrors the desktop "Share"
+    // button on the content library tab.
+    const origin = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const res = await fetch(`${origin}/api/campaigns/from-article`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+      },
+      body: JSON.stringify({ contentItemId }),
+    });
+    if (!res.ok) return null;
+    const created = await res.json();
+    if (!created?.campaignId) return null;
+    campaignId = created.campaignId;
+  }
+
+  // 4. Load campaign with recipients + content item
+  const campaign = await campaignRepo.findById(campaignId, partnerId);
+  if (!campaign) return null;
+
+  // Only show DRAFT campaigns — SENT / IN_PROGRESS already went out
+  if (campaign.status !== "DRAFT") return null;
+
+  const contentItem = campaign.contents?.[0]?.contentItem;
+  if (!contentItem) return null;
+
+  // 5. Filter to eligible recipients
+  const eligible = (campaign.recipients ?? []).filter(
+    (r) =>
+      (r.status === "PENDING" || r.status === "FAILED") &&
+      r.personalizedBody != null &&
+      r.contact != null,
+  );
+  if (eligible.length === 0) return null;
+
+  // 6. Build the block
+  const { format } = await import("date-fns");
+  const publishedAtLabel = contentItem.publishedAt
+    ? format(new Date(contentItem.publishedAt), "MMM d")
+    : undefined;
+
+  const block: ChatBlock = {
+    type: "article_share",
+    data: {
+      campaignId: campaign.id,
+      contentItemId: contentItem.id,
+      title: contentItem.title,
+      description: contentItem.description ?? undefined,
+      imageUrl: contentItem.imageUrl ?? undefined,
+      publishedAtLabel,
+      practice: contentItem.practice ?? undefined,
+      url: contentItem.url ?? undefined,
+      subject: campaign.subject ?? contentItem.title,
+      recipients: eligible.map((r) => ({
+        recipientId: r.id,
+        contactId: r.contact!.id,
+        contactName: r.contact!.name,
+        contactEmail: r.contact!.email ?? "",
+        company: r.contact!.company?.name ?? undefined,
+        personalizedSnippet: buildRecipientSnippet(
+          r.personalizedBody ?? "",
+          {
+            contactName: r.contact!.name ?? undefined,
+            companyName: r.contact!.company?.name ?? undefined,
+          },
+        ),
+        personalizedBody: r.personalizedBody!,
+        defaultIncluded: true as const,
+      })),
+      totalRecipients: eligible.length,
+      visibleLimit: 4,
+    },
+  };
+
+  return [block];
+}
+
+/**
+ * Resolve the right CENTRAL campaign for the partner and build a single
+ * `campaign_approval` ChatBlock. Returns `null` when there is nothing for
+ * the partner to act on (so the caller can render an empty-state answer).
+ *
+ * Resolution order:
+ *   1. If the override nudge carries a CAMPAIGN_APPROVAL ruleType, parse its
+ *      `metadata.campaignId`.
+ *   2. Otherwise, scan the partner's open CAMPAIGN_APPROVAL nudges and
+ *      pick the most urgent one (smallest deadline gap).
+ */
+async function buildCampaignApprovalBlocks({
+  partnerId,
+  overrideNudge,
+}: {
+  partnerId: string;
+  overrideNudge: NudgeWithRelations | null;
+}): Promise<ChatBlock[] | null> {
+  let campaignId: string | null = null;
+
+  if (overrideNudge?.ruleType === "CAMPAIGN_APPROVAL") {
+    try {
+      const meta = JSON.parse(overrideNudge.metadata ?? "{}");
+      if (typeof meta?.campaignId === "string") {
+        campaignId = meta.campaignId;
+      }
+    } catch {
+      // malformed metadata — fall through to partner-level scan
+    }
+  }
+
+  if (!campaignId) {
+    const openCampaignNudges = await prisma.nudge.findMany({
+      where: {
+        contact: { partnerId },
+        status: "OPEN",
+        ruleType: "CAMPAIGN_APPROVAL",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    for (const n of openCampaignNudges) {
+      try {
+        const meta = JSON.parse(n.metadata ?? "{}");
+        if (typeof meta?.campaignId === "string") {
+          campaignId = meta.campaignId;
+          break;
+        }
+      } catch {
+        // skip malformed entry
+      }
+    }
+  }
+
+  if (!campaignId) return null;
+
+  const campaign = await campaignRepo.findById(campaignId, partnerId);
+  if (!campaign) return null;
+
+  // Only show recipients assigned to this partner that still need a
+  // decision. The bulk-approve endpoint enforces the same filter
+  // server-side, but trimming here keeps the card honest.
+  const pending = (campaign.recipients ?? []).filter(
+    (r) =>
+      r.assignedPartnerId === partnerId &&
+      r.approvalStatus === "PENDING" &&
+      r.contact != null,
+  );
+  if (pending.length === 0) return null;
+
+  const description = buildCampaignDescription(
+    campaign.bodyTemplate ?? campaign.subject ?? "",
+  );
+
+  // Earliest deadline across remaining recipients — best signal of urgency.
+  let earliestDeadline: Date | null = null;
+  for (const r of pending) {
+    if (!r.approvalDeadline) continue;
+    const d = new Date(r.approvalDeadline);
+    if (Number.isNaN(d.getTime())) continue;
+    if (!earliestDeadline || d < earliestDeadline) earliestDeadline = d;
+  }
+
+  const block: ChatBlock = {
+    type: "campaign_approval",
+    data: {
+      campaignId: campaign.id,
+      name: campaign.name,
+      description,
+      ...(earliestDeadline ? { deadline: earliestDeadline.toISOString() } : {}),
+      recipients: pending.map((r) => ({
+        recipientId: r.id,
+        contactName: r.contact?.name ?? "Unknown contact",
+        company: r.contact?.company?.name ?? undefined,
+        contactId: r.contact?.id ?? undefined,
+        personalizedSnippet: buildRecipientSnippet(
+          r.personalizedBody ?? campaign.bodyTemplate ?? "",
+          {
+            contactName: r.contact?.name ?? undefined,
+            companyName: r.contact?.company?.name ?? undefined,
+          },
+        ),
+        defaultDecision: "APPROVED" as const,
+      })),
+      totalRecipients: pending.length,
+      visibleLimit: 3,
+    },
+  };
+
+  return [block];
+}
+
+/**
+ * Squash a campaign body template into a single one-line description. We
+ * strip salutations / line breaks / template tokens and clip to ~140 chars
+ * so the card header stays compact.
+ */
+function buildCampaignDescription(raw: string): string {
+  if (!raw) return "";
+  const flattened = normalizeTemplateText(raw);
+  // Drop a leading "Hi {{firstName}}," — common boilerplate before the pitch.
+  const stripped = flattened.replace(
+    /^(?:hi|hello|hey|dear)[^.!?]*[,.!?]\s*/i,
+    "",
+  );
+  const sentenceMatch = stripped.match(/^[^.!?]+[.!?]/);
+  const sentence = sentenceMatch ? sentenceMatch[0] : stripped;
+  return sentence.length > 140 ? `${sentence.slice(0, 137)}…` : sentence;
+}
+
+/**
+ * One-line preview of the per-contact email body. We *substitute* known
+ * tokens (first name, full name, company) with the recipient's actual values
+ * so possessives like `{{contact.firstName}}'s priorities` render cleanly as
+ * `Sarah's priorities`. Unknown tokens are stripped and surrounding
+ * whitespace + orphaned possessives are cleaned up. Clipped to ~80 chars.
+ */
+function buildRecipientSnippet(
+  raw: string,
+  ctx?: { contactName?: string; companyName?: string },
+): string {
+  if (!raw) return "";
+  const flattened = normalizeTemplateText(raw, ctx);
+  const stripped = flattened.replace(
+    /^(?:hi|hello|hey|dear)[^.!?]*[,.!?]\s*/i,
+    "",
+  );
+  return stripped.length > 80 ? `${stripped.slice(0, 77)}…` : stripped;
+}
+
+/**
+ * Replace template tokens with real values when known, otherwise strip
+ * them. Then clean up the artefacts deletion leaves behind: orphan
+ * possessives (`Given 's strategic …`), double spaces, and stray
+ * punctuation glued to a now-empty slot.
+ */
+function normalizeTemplateText(
+  raw: string,
+  ctx?: { contactName?: string; companyName?: string },
+): string {
+  const firstName = ctx?.contactName?.split(/\s+/)[0];
+  const fullName = ctx?.contactName;
+  const company = ctx?.companyName;
+
+  const replaced = raw.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_match, key: string) => {
+    const k = key.toLowerCase().replace(/[\s_]+/g, "");
+    // contact.firstName, firstName, contact.first
+    if (/^(contact\.)?first(name)?$/.test(k) && firstName) return firstName;
+    // contact.lastName, lastName
+    if (/^(contact\.)?last(name)?$/.test(k) && fullName) {
+      const parts = fullName.split(/\s+/);
+      return parts.length > 1 ? parts.slice(1).join(" ") : "";
+    }
+    // contact.name, contact.fullName, name, fullName
+    if (/^(contact\.)?(full)?name$/.test(k) && fullName) return fullName;
+    // contact.company, company, company.name, contact.companyName
+    if (/^(contact\.)?company(\.?name)?$/.test(k) && company) return company;
+    return "";
+  });
+
+  return (
+    replaced
+      .replace(/\s*\n\s*/g, " ")
+      // Orphan possessive after a deleted name token: "Given 's …" → "Given …".
+      .replace(/\s+'s\b/g, "")
+      .replace(/\s+'\s/g, " ")
+      // Stray punctuation pairs created by deletion: ", ," ", ." ", :"
+      .replace(/\s+,(?=\s)/g, ",")
+      .replace(/,\s*,/g, ",")
+      // " ," / " ." → "," / "."
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 function fragmentsToMarkdown(fragments: SentenceFragment[]): string {

@@ -66,7 +66,7 @@ export function MeetingBrief({
       className={
         embedded
           ? "py-1"
-          : "rounded-lg border border-border bg-card overflow-hidden"
+          : "rounded-xl border border-border bg-card overflow-hidden shadow-sm"
       }
     >
       <div className={embedded ? "" : "p-4"}>

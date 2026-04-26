@@ -107,13 +107,15 @@ export function EmailComposerModal({
       role="dialog"
       aria-modal="true"
       aria-label="Edit email"
-      className="absolute inset-0 z-[60] flex flex-col bg-background"
+      className="absolute inset-0 z-[60] flex flex-col bg-card"
       style={{
-        paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <header className="flex items-center justify-between border-b border-border bg-card px-3 py-2.5">
+      <header
+        className="flex items-center justify-between border-b border-border px-3 py-2.5"
+        style={{ paddingTop: "max(0.625rem, env(safe-area-inset-top))" }}
+      >
         <button
           type="button"
           onClick={onClose}
@@ -134,7 +136,7 @@ export function EmailComposerModal({
       </header>
 
       <div
-        className="flex flex-1 flex-col overflow-hidden"
+        className="flex flex-1 flex-col overflow-hidden bg-background"
         style={{ paddingBottom: keyboardOffset }}
       >
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">

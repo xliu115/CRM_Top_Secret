@@ -533,6 +533,49 @@ export async function refreshNudgesForPartner(partnerId: string) {
   }
 
   // --- Campaign Approval nudge (single most urgent campaign per partner) ---
+  // Dev-only retrigger: when iterating on the campaign-approval card we want
+  // it to reappear on every refresh, even after the partner Confirms. We
+  // reverse the two state changes Confirm produces — recipients
+  // APPROVED/REJECTED → PENDING, campaign IN_PROGRESS/CANCELLED →
+  // PENDING_APPROVAL — but only on campaigns where this partner has
+  // recipients. Disabled in production. Set CAMPAIGN_APPROVAL_DEV_RESET=0
+  // to opt out in dev when verifying real persistence.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.CAMPAIGN_APPROVAL_DEV_RESET !== "0"
+  ) {
+    const partnerCampaigns = await prisma.campaign.findMany({
+      where: {
+        recipients: { some: { assignedPartnerId: partnerId } },
+        // Anything *other* than DRAFT/SENT is a campaign whose approval
+        // round we're willing to replay. PENDING_APPROVAL stays as-is.
+        status: { in: ["IN_PROGRESS", "CANCELLED", "PENDING_APPROVAL"] },
+      },
+      select: { id: true, status: true },
+    });
+
+    const campaignIdsToReplay = partnerCampaigns
+      .filter((c) => c.status !== "PENDING_APPROVAL")
+      .map((c) => c.id);
+
+    if (campaignIdsToReplay.length > 0) {
+      await prisma.$transaction([
+        prisma.campaignRecipient.updateMany({
+          where: {
+            assignedPartnerId: partnerId,
+            campaignId: { in: campaignIdsToReplay },
+            approvalStatus: { in: ["APPROVED", "REJECTED"] },
+          },
+          data: { approvalStatus: "PENDING" },
+        }),
+        prisma.campaign.updateMany({
+          where: { id: { in: campaignIdsToReplay } },
+          data: { status: "PENDING_APPROVAL", sendStartedAt: null },
+        }),
+      ]);
+    }
+  }
+
   const pendingApprovalRecipients = await prisma.campaignRecipient.findMany({
     where: {
       assignedPartnerId: partnerId,

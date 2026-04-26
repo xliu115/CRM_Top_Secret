@@ -62,8 +62,7 @@ export function StickyActionBar({
         role="region"
         aria-live="polite"
         aria-label="Quick actions"
-        className="absolute inset-x-0 bottom-0 z-30 motion-safe:transition-opacity motion-safe:animate-in motion-safe:fade-in"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0) + 96px)" }}
+        className="inset-x-0 bottom-0 z-30 motion-safe:transition-opacity motion-safe:animate-in motion-safe:fade-in"
       >
         <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-border bg-card/95 backdrop-blur px-3 py-2 shadow-md">
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
@@ -73,7 +72,7 @@ export function StickyActionBar({
             <button
               type="button"
               onClick={target.primary.onClick}
-              className="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white motion-safe:active:scale-[0.97] active:bg-blue-800"
+              className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground motion-safe:active:scale-[0.97] active:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label={target.primary.label}
             >
               {target.primary.label}

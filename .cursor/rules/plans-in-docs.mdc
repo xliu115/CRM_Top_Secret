@@ -1,0 +1,48 @@
+---
+description: Plan markdown files live in the project's docs/plans folder, not the Cursor plans cache.
+alwaysApply: true
+---
+
+# Plan storage convention
+
+All implementation plan markdown files for this repository MUST be stored in
+`docs/plans/` (the project's design/plans folder), NOT in the default
+`~/.cursor/plans/` cache. The team treats these plans as project artifacts
+that get committed alongside code, reviewed in PRs, and referenced from
+other docs.
+
+## Naming
+
+Use the existing convention already established in `docs/plans/`:
+
+```
+docs/plans/<YYYY-MM-DD>-<short-slug>.md
+```
+
+- `<YYYY-MM-DD>` — the date the plan was first drafted, e.g. `2026-04-25`.
+- `<short-slug>` — kebab-case description, e.g. `mobile-campaign-approval-block`.
+
+Examples already in the repo:
+
+- `docs/plans/2026-04-02-central-campaign-approval-flow.md`
+- `docs/plans/2026-04-06-meeting-brief-enhancement.md`
+- `docs/plans/2026-03-25-voice-entry-for-chat.md`
+
+## When using Cursor's CreatePlan tool
+
+`CreatePlan` writes to `~/.cursor/plans/` by default. After creating a plan
+that way, immediately move (or duplicate) it into `docs/plans/<date>-<slug>.md`
+so the plan is part of the workspace and survives across machines/sessions.
+Subsequent edits should happen on the `docs/plans/` copy.
+
+If a plan was created in `~/.cursor/plans/` in error, relocate it to
+`docs/plans/` and treat the workspace copy as the canonical version.
+
+## Cross-references
+
+When linking from other docs (READMEs, design notes, PRs), reference the
+`docs/plans/...` path so the link is portable:
+
+```markdown
+See [campaign approval block plan](../docs/plans/2026-04-25-mobile-campaign-approval-block.md).
+```

@@ -42,6 +42,11 @@ export function MarkdownContent({
           ),
           p: ({ children }) => <p className="text-foreground">{children}</p>,
           li: ({ children }) => <li className="text-foreground">{children}</li>,
+          blockquote: ({ children }) => (
+            <blockquote className="not-prose my-3 rounded-lg border-l-[3px] border-primary/40 bg-primary/[0.04] py-2.5 px-3.5 text-[15px] leading-relaxed text-foreground/90 [&_p]:my-1 [&_strong]:text-foreground">
+              {children}
+            </blockquote>
+          ),
         }}
       >
         {content}

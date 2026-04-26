@@ -16,6 +16,7 @@ export async function PATCH(
       personalizedBody?: string;
       approvalStatus?: string;
       reassignToPartnerId?: string;
+      status?: string;
     } = {};
     try {
       body = await request.json();
@@ -49,6 +50,10 @@ export async function PATCH(
     if (typeof body.reassignToPartnerId === "string") {
       updateData.assignedPartnerId = body.reassignToPartnerId;
       updateData.approvalStatus = "PENDING";
+    }
+
+    if (body.status === "SKIPPED" || body.status === "PENDING") {
+      updateData.status = body.status;
     }
 
     if (Object.keys(updateData).length === 0) {

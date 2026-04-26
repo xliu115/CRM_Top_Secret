@@ -143,6 +143,9 @@ export type StaleContactsListBlock = {
       contactId: string;
       daysSince: number;
       signal?: string;
+      priority?: string;
+      ruleType?: string;
+      insightPreview?: string;
     }[];
   };
 };
@@ -192,6 +195,68 @@ export type ConfirmationCardBlock = {
   };
 };
 
+/**
+ * In-chat campaign approval surface for CENTRAL campaigns. Each recipient
+ * row defaults to APPROVED (matching the partner-friendly "review by
+ * exception" model); a tap on a row's chip flips it to REJECTED. There is
+ * no campaign-level edit affordance — for CENTRAL campaigns the partner's
+ * only edit surface is per-contact (planned follow-up).
+ */
+export type CampaignApprovalBlock = {
+  type: "campaign_approval";
+  data: {
+    campaignId: string;
+    name: string;
+    description: string;
+    /** ISO string for the soonest approval deadline among recipients, if any. */
+    deadline?: string;
+    recipients: {
+      recipientId: string;
+      contactName: string;
+      company?: string;
+      contactId?: string;
+      personalizedSnippet?: string;
+      defaultDecision: "APPROVED" | "REJECTED";
+    }[];
+    totalRecipients: number;
+    /** How many rows to render before collapsing under "+N more contacts". */
+    visibleLimit: number;
+  };
+};
+
+/**
+ * In-chat article-share surface. Shows the article hero (image, title,
+ * description) with a per-recipient list. Each row is a tap target that
+ * opens the EmailComposerModal; a side toggle lets the partner Skip
+ * individual contacts. Confirm sends to included contacts.
+ */
+export type ArticleShareBlock = {
+  type: "article_share";
+  data: {
+    campaignId: string;
+    contentItemId: string;
+    title: string;
+    description?: string;
+    imageUrl?: string;
+    publishedAtLabel?: string;
+    practice?: string;
+    url?: string;
+    subject: string;
+    recipients: {
+      recipientId: string;
+      contactId: string;
+      contactName: string;
+      contactEmail: string;
+      company?: string;
+      personalizedSnippet?: string;
+      personalizedBody: string;
+      defaultIncluded: true;
+    }[];
+    totalRecipients: number;
+    visibleLimit: number;
+  };
+};
+
 export type ChatBlock =
   | ContactCardBlock
   | ActionBarBlock
@@ -205,4 +270,6 @@ export type ChatBlock =
   | StaleContactsListBlock
   | NudgeEvidenceBlock
   | StrategicInsightBlock
-  | ConfirmationCardBlock;
+  | ConfirmationCardBlock
+  | CampaignApprovalBlock
+  | ArticleShareBlock;
