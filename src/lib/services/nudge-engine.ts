@@ -476,15 +476,12 @@ export async function refreshNudgesForPartner(partnerId: string) {
     candidates.push(candidate);
   }
 
-  // --- Article Campaign nudge (best single article per partner) ---
+  // --- Article Campaign nudges (one per eligible recent article) ---
   if (config.articleCampaignEnabled) {
     const recentArticles = await prisma.contentItem.findMany({
       where: { type: "ARTICLE", publishedAt: { gte: subDays(now, 14) } },
       orderBy: { publishedAt: "desc" },
     });
-
-    let bestArticleNudge: typeof candidates[number] | null = null;
-    let bestScore = -1;
 
     for (const article of recentArticles) {
       const scored = scoreContactsForArticle({
@@ -500,17 +497,13 @@ export async function refreshNudgesForPartner(partnerId: string) {
       });
       if (scored.length === 0) continue;
 
-      const totalScore = scored.reduce((sum, s) => sum + s.score, 0);
-      if (totalScore <= bestScore) continue;
-      bestScore = totalScore;
-
       const hasCritical = scored.some((s) =>
         contacts.find((c) => c.id === s.contactId)?.importance === "CRITICAL"
       );
       const priority = hasCritical ? "HIGH" : "MEDIUM";
       const reason = `New article "${article.title}" published — ${scored.length} contact${scored.length !== 1 ? "s" : ""} matched based on industry and engagement`;
 
-      bestArticleNudge = {
+      candidates.push({
         contactId: scored[0].contactId,
         ruleType: "ARTICLE_CAMPAIGN",
         reason,
@@ -524,11 +517,7 @@ export async function refreshNudgesForPartner(partnerId: string) {
           articleDescription: article.description ?? "",
           articlePractice: article.practice ?? "",
         }),
-      };
-    }
-
-    if (bestArticleNudge) {
-      candidates.push(bestArticleNudge);
+      });
     }
   }
 

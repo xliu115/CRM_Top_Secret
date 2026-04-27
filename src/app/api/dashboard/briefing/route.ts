@@ -76,6 +76,7 @@ export async function GET(_request: NextRequest) {
     const otherNudges = sortedNudges.filter((n) => !reservedTypes.has(n.ruleType));
     const seen = new Set<string>();
     const dedupedReserved = reserved.filter((n) => {
+      if (n.ruleType === "ARTICLE_CAMPAIGN") return true;
       if (seen.has(n.ruleType)) return false;
       seen.add(n.ruleType);
       return true;

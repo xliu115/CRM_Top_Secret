@@ -216,7 +216,7 @@ function getInitialPickerActions(data: BriefingData | null): RichActionItem[] {
 
   // Always end with the universal catch-all. Trim the rest so the picker
   // stays a tight glanceable list while guaranteeing the catch-all renders.
-  const trimmed = items.slice(0, 5);
+  const trimmed = items.slice(0, 6);
   trimmed.push({
     actionLine: "Who needs attention?",
     leadingIcon: Users,
