@@ -16,6 +16,8 @@ import { prepareBriefingForTTS } from "@/lib/utils/tts-prepare";
 import { LiveTranscriptPreview } from "@/components/voice/live-transcript-preview";
 import { CallMarvinOverlay } from "@/components/voice/call-marvin-overlay";
 import { StickyActionBar } from "@/components/chat/sticky-action-bar";
+import { StrategicInsight } from "@/components/chat/blocks/strategic-insight";
+import type { StrategicInsightBlock as StrategicInsightBlockType } from "@/lib/types/chat-blocks";
 
 /**
  * Post-process a morning brief narrative so every section body uses markdown
@@ -63,6 +65,7 @@ function ensureBriefBullets(raw: string): string {
 
 type BriefingData = {
   briefing: string;
+  dataDrivenSummary?: string;
   topActions: { contactName: string; company: string; actionLabel: string; detail: string; deeplink: string; contactId?: string }[];
   structured: {
     nudges: {
@@ -73,10 +76,13 @@ type BriefingData = {
       // Server already returns these for every top nudge; declared here so
       // `getInitialPickerActions` can mine them for the campaign-approval row
       // (e.g., parse the campaign name from `reason`, count pending from
-      // `metadata.pendingCount`).
+      // `metadata.pendingCount`) and the morning-brief contact rows can
+      // surface `metadata.strategicInsight` + `metadata.insights`.
       reason?: string;
       metadata?: string;
       nudgeId?: string;
+      priority?: string;
+      daysSince?: number;
     }[];
     meetings: { title: string; startTime: string; meetingId: string }[];
     news?: { content: string; contactName?: string; company?: string }[];
@@ -129,6 +135,60 @@ function extractContactDraftTargets(data: BriefingData): ContactDraftTarget[] {
   });
 
   return Array.from(byName.values()).slice(0, 3);
+}
+
+/**
+ * Parse a nudge's serialized `metadata` blob into the two pieces the morning
+ * brief renders: the `strategicInsight` synthesis (narrative + bold beats)
+ * and the raw `insights` list that powers "Show Evidence (N signals)".
+ *
+ * Both are written by the nudge engine — `insights` at creation time and
+ * `strategicInsight` later by `enrichNudgesWithInsights` — so a freshly
+ * created nudge may have one without the other.
+ */
+function parseNudgeInsightMetadata(metadataStr: string | undefined): {
+  insights: StrategicInsightBlockType["data"]["insights"];
+  strategicInsight?: { narrative: string; oneLiner?: string };
+} {
+  if (!metadataStr) return { insights: [] };
+  try {
+    const parsed = JSON.parse(metadataStr) as {
+      insights?: StrategicInsightBlockType["data"]["insights"];
+      strategicInsight?: { narrative: string; oneLiner?: string };
+    };
+    return {
+      insights: Array.isArray(parsed?.insights) ? parsed.insights : [],
+      strategicInsight: parsed?.strategicInsight,
+    };
+  } catch {
+    return { insights: [] };
+  }
+}
+
+/**
+ * Split the morning-brief markdown around the "**Who to contact:**" section
+ * so the mobile view can interleave React contact rows in their natural
+ * spot — after the "Good morning…" opener and before Meetings / Campaign
+ * approvals / Articles to share / Signals & news.
+ *
+ * Section boundary: the morning-brief markdown separates sections with a
+ * single blank line followed by another `**Heading:**` line. We splice from
+ * the contacts header to the next section header (or end-of-string).
+ *
+ * If the markdown has no contacts block, `before` holds the whole input and
+ * `after` is empty — the React contact list renders below it as a fallback.
+ */
+function splitMarkdownAroundContacts(markdown: string): {
+  before: string;
+  after: string;
+} {
+  const start = markdown.search(/\*\*Who to contact:\*\*/);
+  if (start === -1) return { before: markdown, after: "" };
+  const before = markdown.slice(0, start).trimEnd();
+  const tail = markdown.slice(start);
+  const nextHeader = tail.search(/\n\n\*\*[^*]+:\*\*/);
+  const after = nextHeader === -1 ? "" : tail.slice(nextHeader + 2).trim();
+  return { before, after };
 }
 
 // Pre-action picker rows use a richer shape than the flat horizontal pill
@@ -387,6 +447,85 @@ function deduplicateActions(
     result.push(a);
   }
   return result;
+}
+
+/**
+ * "Who to contact:" section of the morning brief, rendered as React rows so
+ * each contact can surface the same synthesized strategic insight + evidence
+ * expander the desktop nudge cards show. Falls back to the engine's
+ * `oneLiner` (or raw `reason`) until `enrichNudgesWithInsights` finishes.
+ *
+ * Excludes campaign/article rows — those have dedicated picker actions.
+ */
+function MorningBriefContactList({
+  nudges,
+}: {
+  nudges: NonNullable<BriefingData["structured"]["nudges"]>;
+}) {
+  const contactNudges = nudges.filter(
+    (n) =>
+      n.ruleType !== "CAMPAIGN_APPROVAL" &&
+      n.ruleType !== "ARTICLE_CAMPAIGN" &&
+      n.company !== "Campaign" &&
+      n.company !== "Article Campaign",
+  );
+
+  if (contactNudges.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-[15px] font-semibold text-foreground">
+        Important Clients to follow up:
+      </h3>
+      <ul className="space-y-3">
+        {contactNudges.slice(0, 5).map((n) => {
+          const { insights, strategicInsight } = parseNudgeInsightMetadata(n.metadata);
+
+          const touchPart = (() => {
+            if (typeof n.daysSince === "number") {
+              return `${n.daysSince} day${n.daysSince === 1 ? "" : "s"} since last outreach`;
+            }
+            return "Needs attention";
+          })();
+
+          // Insight data: prefer the synthesized narrative, then oneLiner, then
+          // raw reason. We always render the StrategicInsight block so the
+          // evidence expander shows up whenever insights exist, regardless of
+          // whether the strategic synthesis has finished generating.
+          const narrative =
+            strategicInsight?.narrative ??
+            strategicInsight?.oneLiner ??
+            (n.reason ?? "");
+
+          return (
+            <li
+              key={n.nudgeId ?? `${n.contactId}-${n.contactName}`}
+              className="space-y-1.5"
+            >
+              <p className="text-[15px] leading-snug text-foreground">
+                <span className="font-semibold">{n.contactName}</span>
+                {n.company ? (
+                  <>
+                    {" · "}
+                    <span className="font-semibold">{n.company}</span>
+                  </>
+                ) : null}
+                {" — "}
+                {touchPart}.
+              </p>
+              {narrative ? (
+                <StrategicInsight
+                  data={{ narrative, insights }}
+                  embedded
+                  density="comfortable"
+                />
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
 }
 
 export default function MobilePage() {
@@ -737,14 +876,36 @@ export default function MobilePage() {
                               </>
                             )}
                           </button>
-                          {briefingExpanded && (
-                            <div className="mt-3 border-t border-border/40 pt-3">
-                              <MarkdownContent
-                                content={ensureBriefBullets(msg.content)}
-                                className="text-[15px] leading-relaxed text-foreground"
-                              />
-                            </div>
-                          )}
+                          {briefingExpanded && (() => {
+                            const rawMarkdown = briefingData?.dataDrivenSummary || msg.content;
+                            const { before, after } = splitMarkdownAroundContacts(
+                              ensureBriefBullets(rawMarkdown),
+                            );
+                            const hasContactNudges = Boolean(
+                              briefingData?.structured?.nudges?.length,
+                            );
+                            return (
+                              <div className="mt-3 space-y-4 border-t border-border/40 pt-3">
+                                {before ? (
+                                  <MarkdownContent
+                                    content={before}
+                                    className="text-[15px] leading-relaxed text-foreground"
+                                  />
+                                ) : null}
+                                {hasContactNudges ? (
+                                  <MorningBriefContactList
+                                    nudges={briefingData!.structured.nudges}
+                                  />
+                                ) : null}
+                                {after ? (
+                                  <MarkdownContent
+                                    content={after}
+                                    className="text-[15px] leading-relaxed text-foreground"
+                                  />
+                                ) : null}
+                              </div>
+                            );
+                          })()}
                         </div>
                         {initialActionCardActions && (
                           <div className="mt-3 rounded-2xl border border-border bg-card px-4 py-4">

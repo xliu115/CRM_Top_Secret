@@ -75,8 +75,14 @@ export function buildDataDrivenSummaryMarkdown(ctx: NarrativeBriefingContext): s
 
   blocks.push(`Good morning, **${ctx.partnerName}** — here's your snapshot from your CRM.\n`);
 
-  if (ctx.nudges.length > 0) {
-    const bullets = ctx.nudges.slice(0, 5).map((n) => {
+  const campaignNudges = ctx.nudges.filter((n) => n.ruleType === "CAMPAIGN_APPROVAL");
+  const articleNudges = ctx.nudges.filter((n) => n.ruleType === "ARTICLE_CAMPAIGN");
+  const contactNudges = ctx.nudges.filter(
+    (n) => n.ruleType !== "CAMPAIGN_APPROVAL" && n.ruleType !== "ARTICLE_CAMPAIGN"
+  );
+
+  if (contactNudges.length > 0) {
+    const bullets = contactNudges.slice(0, 5).map((n) => {
       const touchPart = (() => {
         if (n.lastContactedLabel && n.lastContactedLabel !== "No logged touch") {
           return `Last touch **${n.lastContactedLabel}**${
@@ -129,6 +135,32 @@ export function buildDataDrivenSummaryMarkdown(ctx: NarrativeBriefingContext): s
         `- **${m.title}** — ${m.startTime} with ${m.attendeeNames.join(", ")}.`
     );
     blocks.push("**Meetings:**\n\n" + lines.join("\n\n"));
+  }
+
+  if (campaignNudges.length > 0) {
+    const lines = campaignNudges.map((n) => {
+      const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
+      const campName = nameMatch?.[1] ?? "A campaign";
+      return `- **${campName}** — pending your approval.`;
+    });
+    blocks.push("**Campaign approvals:**\n\n" + lines.join("\n\n"));
+  }
+
+  if (articleNudges.length > 0) {
+    const lines = articleNudges.map((n) => {
+      const titleMatch = n.reason.match(/article "([^"]+)"/);
+      const artTitle = titleMatch?.[1] ?? "New article";
+      let matchCount = 0;
+      try {
+        const meta = JSON.parse(n.metadata ?? "{}");
+        matchCount = meta.matchCount ?? 0;
+      } catch { /* ignore */ }
+      const who = matchCount > 0
+        ? `${matchCount} contact${matchCount === 1 ? "" : "s"} matched`
+        : "contacts matched";
+      return `- **"${artTitle}"** — ${who}.`;
+    });
+    blocks.push("**Articles to share:**\n\n" + lines.join("\n\n"));
   }
 
   if (ctx.clientNews.length > 0) {

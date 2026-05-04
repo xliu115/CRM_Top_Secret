@@ -44,15 +44,55 @@ function groupByType(insights: Insight[]): { type: string; label: string; items:
     .sort((a, b) => (TYPE_ORDER[a.type] ?? 99) - (TYPE_ORDER[b.type] ?? 99));
 }
 
+/**
+ * Visual density of the insight rendering.
+ *
+ * - `compact` (default): chat-block typography — 13 px narrative, 12 px
+ *   evidence — tuned for the dense chat feed.
+ * - `comfortable`: bumps everything up one tier (15 px / 13 px) so the
+ *   block sits flush with body copy in surfaces like the morning brief
+ *   where the surrounding text is already 15 px.
+ */
+type StrategicInsightDensity = "compact" | "comfortable";
+
+const DENSITY_CLASSES: Record<
+  StrategicInsightDensity,
+  {
+    narrative: string;
+    evidenceToggle: string;
+    evidenceLabel: string;
+    evidenceBody: string;
+    evidenceLink: string;
+  }
+> = {
+  compact: {
+    narrative: "text-[13px]",
+    evidenceToggle: "text-xs",
+    evidenceLabel: "text-xs",
+    evidenceBody: "text-xs",
+    evidenceLink: "text-xs",
+  },
+  comfortable: {
+    narrative: "text-[15px]",
+    evidenceToggle: "text-[13px]",
+    evidenceLabel: "text-[13px]",
+    evidenceBody: "text-[13px]",
+    evidenceLink: "text-[13px]",
+  },
+};
+
 export function StrategicInsight({
   data,
   embedded = false,
+  density = "compact",
 }: {
   data: StrategicInsightBlock["data"];
   embedded?: boolean;
+  density?: StrategicInsightDensity;
 }) {
   const [showEvidence, setShowEvidence] = useState(false);
   const insights = data.insights;
+  const sizes = DENSITY_CLASSES[density];
 
   return (
     <div className={embedded ? "space-y-3" : "rounded-xl border border-border bg-muted/30 px-5 py-4 space-y-3"}>
@@ -63,7 +103,7 @@ export function StrategicInsight({
         </div>
       )}
 
-      <div className="text-[13px] text-foreground/80 leading-relaxed">
+      <div className={`${sizes.narrative} text-foreground/80 leading-relaxed`}>
         <p>{renderNarrativeWithBold(data.narrative)}</p>
       </div>
 
@@ -72,7 +112,7 @@ export function StrategicInsight({
           <button
             type="button"
             onClick={() => setShowEvidence(!showEvidence)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className={`inline-flex items-center gap-1.5 ${sizes.evidenceToggle} font-medium text-muted-foreground hover:text-foreground transition-colors`}
           >
             {showEvidence ? (
               <ChevronUp className="h-3.5 w-3.5" />
@@ -87,7 +127,7 @@ export function StrategicInsight({
               {groupByType(insights).map((group) => (
                 <div key={group.type}>
                   <div className="flex items-baseline gap-2 mb-1">
-                    <p className="text-xs font-semibold text-foreground">{group.label}</p>
+                    <p className={`${sizes.evidenceLabel} font-semibold text-foreground`}>{group.label}</p>
                     {group.items.length > 1 && (
                       <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
                         {group.items.length}
@@ -96,7 +136,7 @@ export function StrategicInsight({
                   </div>
                   <div className="space-y-1.5">
                     {group.items.map((ins, i) => (
-                      <div key={`${group.type}-${i}`} className="text-xs text-foreground/70 leading-relaxed">
+                      <div key={`${group.type}-${i}`} className={`${sizes.evidenceBody} text-foreground/70 leading-relaxed`}>
                         <p>
                           {ins.signalContent
                             ? ins.signalContent.length > 200
@@ -109,7 +149,7 @@ export function StrategicInsight({
                             href={ins.signalUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 mt-0.5 text-xs font-medium text-primary hover:underline"
+                            className={`inline-flex items-center gap-1 mt-0.5 ${sizes.evidenceLink} font-medium text-primary hover:underline`}
                           >
                             <ExternalLink className="h-3 w-3" />
                             View source

@@ -109,10 +109,10 @@ Principles:
 Structure (markdown for mobile — must scan visually AND sound good read aloud):
 - Open with ONE plain-text headline sentence (no bold) that names the single most important thing to do today and why it matters. If a campaign approval is pending, lead with that; otherwise lead with the highest-priority contact or insight.
 - Below, group into sections. Each section starts with a bold heading on its own line (e.g. "**Priority contacts**"). Under each heading, use markdown bullet points ("- ") — one bullet per person, meeting, or signal. Each bullet is ONE natural sentence (two max). NEVER write a paragraph of prose under a heading — always use "- " bullet syntax.
-  - **Campaign approvals** — one bullet per campaign: name, pending count, deadline.
-  - **Article campaigns** — one bullet per article: title and how many contacts are matched.
   - **Priority contacts** — one bullet per contact: lead with the strategic reason it matters now; the days-since humanized phrase comes second.
   - **Meetings** — one bullet per meeting: what's on the calendar and a one-line prep angle.
+  - **Campaign approvals** — one bullet per campaign: name, pending count, deadline.
+  - **Article campaigns** — one bullet per article: title and how many contacts are matched.
   - **On the radar** — one bullet per signal worth knowing today.
 - Reference people by full name on first mention, first name after.
 - Total length: 90-160 words. Aim shorter if the signal is thin. This is a 45-second listen, not a dashboard.
@@ -473,40 +473,6 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
     lines.push(`${opener}${tail}`);
   }
 
-  // Campaign approvals
-  if (campaignNudges.length > 0) {
-    lines.push("");
-    lines.push("**Campaign approvals**");
-    for (const n of campaignNudges) {
-      const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
-      const campName = nameMatch?.[1] ?? "A campaign";
-      lines.push(
-        `- **${campName}** is waiting on your sign-off before it can go out on your behalf.`
-      );
-    }
-  }
-
-  // Article campaigns
-  if (articleCampaignNudges.length > 0) {
-    lines.push("");
-    lines.push("**Article campaigns**");
-    for (const n of articleCampaignNudges) {
-      const titleMatch = n.reason.match(/article "([^"]+)"/);
-      const artTitle = titleMatch?.[1] ?? "New article";
-      let matchCount = 0;
-      try {
-        const meta = JSON.parse(n.metadata ?? "{}");
-        matchCount = meta.matchCount ?? 0;
-      } catch { /* ignore */ }
-      const who = matchCount > 0
-        ? `${matchCount} contact${matchCount === 1 ? "" : "s"} we've flagged as a good fit`
-        : "a handful of contacts we think are a good fit";
-      lines.push(
-        `- **"${artTitle}"** is ready to share with ${who} — give it a quick review and send.`
-      );
-    }
-  }
-
   // Active follow-ups
   if (followUpNudges.length > 0) {
     lines.push("");
@@ -561,6 +527,40 @@ function generateNarrativeTemplate(ctx: NarrativeBriefingContext): NarrativeBrie
     }
     if (ctx.meetings.length > 2) {
       lines.push(`- Plus ${ctx.meetings.length - 2} more on the calendar this week.`);
+    }
+  }
+
+  // Campaign approvals
+  if (campaignNudges.length > 0) {
+    lines.push("");
+    lines.push("**Campaign approvals**");
+    for (const n of campaignNudges) {
+      const nameMatch = n.reason.match(/Campaign "([^"]+)"/);
+      const campName = nameMatch?.[1] ?? "A campaign";
+      lines.push(
+        `- **${campName}** is waiting on your sign-off before it can go out on your behalf.`
+      );
+    }
+  }
+
+  // Article campaigns
+  if (articleCampaignNudges.length > 0) {
+    lines.push("");
+    lines.push("**Article campaigns**");
+    for (const n of articleCampaignNudges) {
+      const titleMatch = n.reason.match(/article "([^"]+)"/);
+      const artTitle = titleMatch?.[1] ?? "New article";
+      let matchCount = 0;
+      try {
+        const meta = JSON.parse(n.metadata ?? "{}");
+        matchCount = meta.matchCount ?? 0;
+      } catch { /* ignore */ }
+      const who = matchCount > 0
+        ? `${matchCount} contact${matchCount === 1 ? "" : "s"} we've flagged as a good fit`
+        : "a handful of contacts we think are a good fit";
+      lines.push(
+        `- **"${artTitle}"** is ready to share with ${who} — give it a quick review and send.`
+      );
     }
   }
 
@@ -625,7 +625,7 @@ Tone and content (scripts only — this is what they HEAR):
 
 Rules:
 - Exactly 5 to 7 segments (fewer only if the context has almost nothing to cover).
-- Order: greet the partner by first name in segment 1, then highest-priority nudges, then meetings, then client news and pipeline-style priorities.
+- Order: greet the partner by first name in segment 1, then highest-priority contact nudges, then meetings, then campaign approvals and article campaigns, then client news/signals.
 - headline: tap list (who to contact, meeting prep, news).
 - script: TTS only; be specific with names, times, days-since, and dates when the data provides them.
 - contactName/company: include when the segment is about a specific person so the app can deep-link; omit for general segments.

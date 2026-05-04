@@ -87,14 +87,6 @@ export function buildBriefingSpokenOpening(
       `${qty(contactReach)} ${contactReach === 1 ? "contact" : "contacts"} to reach out to`,
     );
   }
-  if (campaigns > 0) {
-    bits.push(`${qty(campaigns)} ${campaigns === 1 ? "campaign" : "campaigns"} to approve`);
-  }
-  if (articles > 0) {
-    bits.push(
-      `${qty(articles)} ${articles === 1 ? "article" : "articles"} to share with your network`,
-    );
-  }
   if (followUps > 0) {
     bits.push(
       `${qty(followUps)} follow-up${followUps === 1 ? "" : "s"} waiting on a reply from you`,
@@ -103,6 +95,14 @@ export function buildBriefingSpokenOpening(
   if (meetingCount > 0) {
     bits.push(
       `${qty(meetingCount)} ${meetingCount === 1 ? "meeting" : "meetings"} on your calendar`,
+    );
+  }
+  if (campaigns > 0) {
+    bits.push(`${qty(campaigns)} ${campaigns === 1 ? "campaign" : "campaigns"} to approve`);
+  }
+  if (articles > 0) {
+    bits.push(
+      `${qty(articles)} ${articles === 1 ? "article" : "articles"} to share with your network`,
     );
   }
   if (newsCount > 0) {
