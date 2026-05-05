@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePartnerId } from "@/lib/auth/get-current-partner";
 import {
@@ -23,24 +24,94 @@ import { refreshNudgesForPartner, enrichNudgesWithInsights } from "@/lib/service
 import { pregenerateTopNudgeEmails } from "@/lib/services/nudge-email-cache";
 import { addDays, isBefore, format, differenceInDays } from "date-fns";
 
+// Per-partner timestamps of the last destructive nudge refresh. Lives in the
+// process; resets on dev restart, which is fine — the goal is just to keep
+// concurrent / rapid brief loads from stomping on each other's email cache.
+const REFRESH_THROTTLE_MS = 5 * 60 * 1000;
+const lastRefreshAt = new Map<string, number>();
+
+// Per-partner full-response cache. Building a brief involves three serial
+// LLM/TTS calls (narrative, voice script, voice synthesis) that together run
+// 25–40 seconds. The output only changes when the underlying nudge set
+// changes, so we cache the full JSON keyed by (partnerId, nudge-set-hash)
+// for the configured TTL. This makes browser reloads during the demo
+// instant; the first load (or one triggered by the prewarm script) pays the
+// generation cost.
+const BRIEFING_TTL_MS = (() => {
+  const raw = Number(process.env.BRIEFING_CACHE_TTL_MIN);
+  const minutes = Number.isFinite(raw) && raw > 0 ? raw : 60;
+  return minutes * 60 * 1000;
+})();
+type CachedBriefing = {
+  expiresAt: number;
+  nudgeHash: string;
+  body: unknown;
+};
+const briefingCache = new Map<string, CachedBriefing>();
+
+function hashNudgeSet(
+  nudges: { id: string; status: string; metadata: string | null }[],
+): string {
+  const h = createHash("sha1");
+  for (const n of nudges) {
+    h.update(n.id);
+    h.update("|");
+    h.update(n.status);
+    h.update("|");
+    h.update(n.metadata ?? "");
+    h.update("\n");
+  }
+  return h.digest("hex");
+}
+
+function shouldRunRefresh(partnerId: string): boolean {
+  // Hard-disable for demos. When set, refresh only happens via the explicit
+  // /api/nudges/refresh endpoint, the cron job, or the prewarm script. This
+  // keeps the email-draft and strategic-insight caches stable across browser
+  // reloads, which makes the action-card tap feel instant.
+  if (process.env.BRIEFING_DISABLE_AUTO_REFRESH === "1") return false;
+  const last = lastRefreshAt.get(partnerId) ?? 0;
+  if (Date.now() - last < REFRESH_THROTTLE_MS) return false;
+  lastRefreshAt.set(partnerId, Date.now());
+  return true;
+}
+
 export async function GET(_request: NextRequest) {
   try {
     const partnerId = await requirePartnerId();
 
-    // Fire-and-forget: refreshing nudges + generating strategic insights for
-    // *every* open nudge is a 1–3 minute LLM-bound operation. Awaiting it
-    // here makes the morning brief feel like it never loads. We instead let
-    // these run in the background so this request renders fast against the
-    // current DB state; the next open of /mobile will see the freshened data.
-    // (`/api/nudges/refresh` and the cron job remain available for explicit
-    // refreshes.)
+    // Fire-and-forget background refresh — and crucially, throttle the
+    // *destructive* part of it.
+    //
+    // refreshNudgesForPartner deletes every OPEN nudge and recreates them with
+    // fresh IDs. If we run that on every brief load, in-flight email/insight
+    // pregeneration from the previous load lands on stale IDs (Prisma P2025
+    // "record not found" spam) and the email-draft cache never sticks — every
+    // tap of "View drafted email" triggers a fresh ~10s LLM call.
+    //
+    // Instead we throttle the refresh to once per REFRESH_THROTTLE_MS per
+    // partner. Enrichment + email pregeneration stay non-throttled because
+    // they are idempotent (each skips items that are already cached) and
+    // cheap to repeat. `/api/nudges/refresh` and the cron job remain the
+    // explicit-refresh paths.
+    if (shouldRunRefresh(partnerId)) {
+      void (async () => {
+        try {
+          await refreshNudgesForPartner(partnerId);
+        } catch (bgErr) {
+          console.warn(
+            "[dashboard/briefing] background refresh failed:",
+            bgErr,
+          );
+        }
+      })();
+    }
     void (async () => {
       try {
-        await refreshNudgesForPartner(partnerId);
         await enrichNudgesWithInsights(partnerId);
       } catch (bgErr) {
         console.warn(
-          "[dashboard/briefing] background refresh/enrich failed:",
+          "[dashboard/briefing] background enrich failed:",
           bgErr,
         );
       }
@@ -53,6 +124,19 @@ export async function GET(_request: NextRequest) {
         meetingRepo.findUpcomingByPartnerId(partnerId),
         signalRepo.findRecentByPartnerId(partnerId, 10),
       ]);
+
+    // Cache lookup — keyed by partner + nudge-set hash so a refresh
+    // automatically busts it. The DB queries above are <100ms total; the
+    // expensive part is everything below.
+    const nudgeHash = hashNudgeSet(openNudges);
+    const cached = briefingCache.get(partnerId);
+    if (
+      cached &&
+      cached.expiresAt > Date.now() &&
+      cached.nudgeHash === nudgeHash
+    ) {
+      return NextResponse.json(cached.body);
+    }
 
     const partnerName = partner?.name ?? "there";
     const now = new Date();
@@ -81,7 +165,18 @@ export async function GET(_request: NextRequest) {
       seen.add(n.ruleType);
       return true;
     });
-    const remainingSlots = Math.max(0, 5 - dedupedReserved.length);
+    // Always reserve a slot for the top URGENT/HIGH non-reserved nudge (e.g.
+    // a fresh JOB_CHANGE / executive transition or escalated stale contact)
+    // so a wave of article campaigns can't squeeze a high-priority signal
+    // out of the brief. Falls back to the original "fill up to 5" behavior
+    // when no high-priority other nudges exist.
+    const hasHighPriorityOther = otherNudges.some(
+      (n) => n.priority === "URGENT" || n.priority === "HIGH",
+    );
+    const remainingSlots = Math.max(
+      hasHighPriorityOther ? 1 : 0,
+      5 - dedupedReserved.length,
+    );
     const mergedNudges = [...dedupedReserved, ...otherNudges.slice(0, remainingSlots)];
 
     const topNudges = mergedNudges.map((n) => {
@@ -162,19 +257,25 @@ export async function GET(_request: NextRequest) {
       ...(deeplink ? { deeplink } : {}),
     }));
 
-    // Speculative pre-generation: warm the email-draft cache for the nudges
-    // shown in the brief. By the time the partner taps "Draft email" on a
-    // priority pill, the LLM call is already done. Fire-and-forget — never
-    // blocks the response, never throws.
+    // Speculative pre-generation: warm the email-draft cache for every
+    // contact nudge in the brief (CAMPAIGN_APPROVAL / ARTICLE_CAMPAIGN are
+    // picker-driven and don't open a single drafted email, so we skip them).
+    // By the time the partner taps "View drafted email" on any contact, the
+    // LLM call is already done. Fire-and-forget — never blocks the response,
+    // never throws.
     const pregenIds = mergedNudges
-      .filter((n) => !n.generatedEmail)
-      .slice(0, 3)
+      .filter(
+        (n) =>
+          !n.generatedEmail &&
+          n.ruleType !== "CAMPAIGN_APPROVAL" &&
+          n.ruleType !== "ARTICLE_CAMPAIGN",
+      )
       .map((n) => n.id);
     if (pregenIds.length > 0) {
-      pregenerateTopNudgeEmails(pregenIds);
+      pregenerateTopNudgeEmails(pregenIds, { concurrency: 3 });
     }
 
-    return NextResponse.json({
+    const responseBody = {
       briefing: result.narrative,
       topActions: result.topActions,
       voiceMemo,
@@ -185,7 +286,13 @@ export async function GET(_request: NextRequest) {
         meetings: nearMeetings,
         news: newsWithUrls,
       },
+    };
+    briefingCache.set(partnerId, {
+      expiresAt: Date.now() + BRIEFING_TTL_MS,
+      nudgeHash,
+      body: responseBody,
     });
+    return NextResponse.json(responseBody);
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

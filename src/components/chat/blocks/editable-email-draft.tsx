@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Pencil,
   Sparkles,
@@ -64,6 +64,79 @@ export function EditableEmailDraft({
     setShowFull(false);
   }
 
+  // iOS-sheet-style scroll preservation around the composer modal.
+  //
+  // The composer locks `document.body.style.overflow = "hidden"` while open,
+  // which on iOS Safari (and sometimes the desktop phone-frame container)
+  // resets the chat's scroll position to 0. Animating back down with
+  // `scrollIntoView({ behavior: "smooth" })` then plays the entire trip past
+  // every prior message — visually busy and slow.
+  //
+  // Instead we capture the chat's scroll position when the modal opens and
+  // restore it the frame the modal unmounts. The card never appears to move;
+  // the composer just slides away. Only if restoration somehow leaves the
+  // card off-screen do we fall back to an INSTANT scroll into view (no smooth
+  // animation, so there's no "trip" feeling either way).
+  const cardRef = useRef<HTMLDivElement>(null);
+  const wasEditingRef = useRef(editing);
+  const savedScrollRef = useRef<{
+    container: HTMLElement | null;
+    containerTop: number;
+    windowY: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!wasEditingRef.current && editing) {
+      // OPENING — snapshot the scroll position so we can restore it on close.
+      let scrollContainer: HTMLElement | null = null;
+      let el: HTMLElement | null = cardRef.current?.parentElement ?? null;
+      while (el && el !== document.body) {
+        const style = window.getComputedStyle(el);
+        if (
+          /(auto|scroll)/.test(style.overflowY) &&
+          el.scrollHeight > el.clientHeight
+        ) {
+          scrollContainer = el;
+          break;
+        }
+        el = el.parentElement;
+      }
+      savedScrollRef.current = {
+        container: scrollContainer,
+        containerTop: scrollContainer?.scrollTop ?? 0,
+        windowY: window.scrollY,
+      };
+    } else if (wasEditingRef.current && !editing) {
+      // CLOSING — restore on the next frame so the modal is fully unmounted
+      // and the body scroll-lock has been released before we touch scroll.
+      const id = requestAnimationFrame(() => {
+        const saved = savedScrollRef.current;
+        if (saved?.container) {
+          saved.container.scrollTop = saved.containerTop;
+        }
+        if (typeof saved?.windowY === "number") {
+          window.scrollTo(0, saved.windowY);
+        }
+        // Sanity fallback: if the card somehow ended up off-screen
+        // (rare — happens if the chat re-rendered new blocks above while the
+        // modal was open), snap it into view INSTANTLY rather than animating.
+        const rect = cardRef.current?.getBoundingClientRect();
+        if (
+          rect &&
+          (rect.bottom < 0 || rect.top > window.innerHeight)
+        ) {
+          cardRef.current?.scrollIntoView({
+            behavior: "auto",
+            block: "center",
+          });
+        }
+      });
+      wasEditingRef.current = editing;
+      return () => cancelAnimationFrame(id);
+    }
+    wasEditingRef.current = editing;
+  }, [editing]);
+
   function handleSave(next: { subject: string; body: string }) {
     setSubject(next.subject);
     setBody(next.body);
@@ -104,6 +177,7 @@ export function EditableEmailDraft({
   return (
     <>
       <div
+        ref={cardRef}
         className={cn(
           !embedded && "rounded-xl border border-border bg-card overflow-hidden shadow-sm",
         )}

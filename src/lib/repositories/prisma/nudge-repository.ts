@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { INudgeRepository } from "../interfaces/nudge-repository";
 
@@ -80,9 +81,24 @@ export class PrismaNudgeRepository implements INudgeRepository {
   }
 
   async updateMetadata(id: string, metadata: string) {
-    await prisma.nudge.update({
-      where: { id },
-      data: { metadata },
-    });
+    try {
+      await prisma.nudge.update({
+        where: { id },
+        data: { metadata },
+      });
+    } catch (err) {
+      // Lost a refresh race — the nudge was deleted between when we read it
+      // and when we tried to write its enriched metadata back. This is a
+      // benign and frequent outcome of background enrichment colliding with
+      // refreshNudgesForPartner; we never want it to spam dev logs or surface
+      // to callers. Anything else still throws.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2025"
+      ) {
+        return;
+      }
+      throw err;
+    }
   }
 }

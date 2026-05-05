@@ -6,6 +6,7 @@ import { retrieveContext, searchWeb } from "@/lib/services/rag-service";
 import { generateChatAnswer, generateEmail, generateMeetingBrief } from "@/lib/services/llm-service";
 import { generateNote } from "@/lib/services/llm-email";
 import { generateStrategicInsight } from "@/lib/services/llm-insight";
+import { readCachedDraft } from "@/lib/services/nudge-email-cache";
 import {
   generateQuick360,
   generateContact360,
@@ -269,12 +270,7 @@ export async function POST(request: NextRequest) {
     let detectedIntent: IntentType = "general_question";
     let detectedEntity: string | null = null;
 
-    const classified = await classifyIntent(message, body.history).catch((err) => {
-      console.error("[chat] LLM intent classification failed, using regex fallback:", err);
-      return null;
-    });
-
-    // Regex always runs — produces a definitive signal when pattern matches.
+    // Regex first — produces a definitive signal when pattern matches.
     // Order matters: more specific intents checked before broader ones (e.g., weekly_summary before quick_360 to prevent "recap" collision).
     let regexIntent: IntentType = "general_question";
     if (FULL_CONTACT_360_INTENT.test(message)) regexIntent = "full_360";
@@ -295,11 +291,27 @@ export async function POST(request: NextRequest) {
     else if (SEND_EMAIL_INTENT.test(message)) regexIntent = "send_email";
 
     if (regexIntent !== "general_question") {
+      // Fast path: regex matched, skip the LLM intent classifier entirely.
+      // Every quick-action tap from the action bar (e.g. "View drafted email
+      // to X.") goes through here, so this saves ~2–4s of dead air on the
+      // user's most frequent path.
       detectedIntent = regexIntent;
       detectedEntity = extractNameFromQuery(message);
-    } else if (classified && classified.confidence >= 0.5) {
-      detectedIntent = classified.intent;
-      detectedEntity = classified.entity;
+    } else {
+      // Slow path: free-form message. Fall back to the LLM classifier.
+      const classified = await classifyIntent(message, body.history).catch(
+        (err) => {
+          console.error(
+            "[chat] LLM intent classification failed, using regex fallback:",
+            err,
+          );
+          return null;
+        },
+      );
+      if (classified && classified.confidence >= 0.5) {
+        detectedIntent = classified.intent;
+        detectedEntity = classified.entity;
+      }
     }
 
     // ── Nudge-type-aware intent override ─────────────────────────────
@@ -942,23 +954,38 @@ export async function POST(request: NextRequest) {
             allInsights = allInsights.concat(insights);
           }
 
-          // If strategic insight hasn't been enriched yet, generate on the fly
+          // Strategic insights are warmed in the background by the briefing
+          // endpoint. If the cache is cold here (rare — only on the very
+          // first interaction after a fresh refresh) we fall back to
+          // primary.reason as the narrative and kick off the LLM call in the
+          // background so the *next* tap renders the rich insight. Blocking
+          // the action card on a 2–4s LLM call is the worst trade — silence
+          // is more painful than a slightly less polished first paint.
           if (!strategicNarrative && primary.ruleType !== "MEETING_PREP") {
-            try {
-              const partner = await partnerRepo.findById(partnerId);
-              const pName = partner?.name ?? "Partner";
-              const insight = await generateStrategicInsight(primary, allInsights, pName);
-              if (insight) {
-                strategicNarrative = insight.narrative;
-                strategicOneLiner = insight.oneLiner;
-                suggestedAction = insight.suggestedAction;
+            const primaryId = primary.id;
+            const cachedInsights = allInsights;
+            void (async () => {
+              try {
+                const partner = await partnerRepo.findById(partnerId);
+                const pName = partner?.name ?? "Partner";
+                const insight = await generateStrategicInsight(
+                  primary,
+                  cachedInsights,
+                  pName,
+                );
+                if (!insight) return;
                 const meta = JSON.parse(primary.metadata ?? "{}");
                 meta.strategicInsight = insight;
-                nudgeRepo.updateMetadata(primary.id, JSON.stringify(meta)).catch(() => {});
+                await nudgeRepo
+                  .updateMetadata(primaryId, JSON.stringify(meta))
+                  .catch(() => {});
+              } catch (err) {
+                console.error(
+                  "[chat] background insight generation failed:",
+                  err,
+                );
               }
-            } catch (err) {
-              console.error("[chat] on-the-fly insight generation failed:", err);
-            }
+            })();
           }
 
           // Unified block-based response for all non-meeting nudge summaries
@@ -997,13 +1024,6 @@ export async function POST(request: NextRequest) {
             try {
               const contact = primary.contact;
               const company = contact.company;
-              const emailCtx = await buildContactContext(contact, company ? { name: company.name, industry: company.industry ?? undefined, employeeCount: company.employeeCount ?? undefined, website: company.website ?? undefined } : undefined, partnerId);
-              emailCtx.partnerName = partnerName;
-
-              let nudgeReason = primary.reason;
-              if (suggestedAction?.context) {
-                nudgeReason = `${primary.reason}. Context: ${suggestedAction.context}`;
-              }
 
               const wantsRegenerate =
                 /\b(rewrite|warmer|shorter|longer|again|different|another|punchier|tighter|formal|casual)\b/i.test(
@@ -1031,6 +1051,28 @@ export async function POST(request: NextRequest) {
               }
 
               if (!emailResult) {
+                // Cache miss / forced regenerate — only now do we pay for
+                // buildContactContext (which fans out to interactions, signals,
+                // meetings, related firm contacts, AND a live web search).
+                // On the cached-draft hot path this saves ~3–5s of wall time
+                // on every action-card tap.
+                let nudgeReason = primary.reason;
+                if (suggestedAction?.context) {
+                  nudgeReason = `${primary.reason}. Context: ${suggestedAction.context}`;
+                }
+                const emailCtx = await buildContactContext(
+                  contact,
+                  company
+                    ? {
+                        name: company.name,
+                        industry: company.industry ?? undefined,
+                        employeeCount: company.employeeCount ?? undefined,
+                        website: company.website ?? undefined,
+                      }
+                    : undefined,
+                  partnerId,
+                );
+                emailCtx.partnerName = partnerName;
                 emailResult = await generateEmail({
                   partnerName,
                   contactName,
@@ -1699,7 +1741,111 @@ export async function POST(request: NextRequest) {
           if (contact) {
             const company = (contact as Record<string, unknown>).company as { name: string; industry?: string; employeeCount?: number; website?: string } | undefined;
 
-            // Build shared contact context
+            // ── Draft Email FAST PATH (cache hit) ─────────────────────────
+            // The action-bar pill on the morning brief sends this exact
+            // intent. We've already pre-generated the email at briefing time
+            // (see /api/dashboard/briefing → pregenerateTopNudgeEmails) and
+            // persisted it on the nudge. Skip buildContactContext (which
+            // does a live web search!) and skip generateEmail entirely so
+            // the action card paints instantly.
+            if (isDraftEmail) {
+              const wantsRegenerate =
+                /\b(rewrite|warmer|shorter|longer|again|different|another|punchier|tighter|formal|casual)\b/i.test(
+                  message,
+                );
+              if (!wantsRegenerate) {
+                // Prefer the most recent OPEN nudge for this contact, but
+                // fall back to any nudge with a cached draft if all are
+                // closed (e.g. partner already sent the email earlier in
+                // the session — re-tapping the contact should still paint
+                // the previously generated draft instantly rather than
+                // burning another LLM call).
+                //
+                // NOTE: do NOT use a single query with `orderBy: { status:
+                // "asc" }` here. SQLite/Prisma sort statuses as strings, and
+                // "DONE" < "OPEN" alphabetically, which would cause a stale
+                // DONE nudge to outrank a fresh OPEN one. Two-step query
+                // keeps the priority ordering explicit.
+                const ruleTypeFilter = {
+                  notIn: ["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"],
+                } as const;
+                let cachedNudge = await prisma.nudge
+                  .findFirst({
+                    where: {
+                      contactId: contact.id,
+                      status: "OPEN",
+                      generatedEmail: { not: null },
+                      ruleType: ruleTypeFilter,
+                    },
+                    orderBy: [
+                      { priority: "asc" },
+                      { createdAt: "desc" },
+                    ],
+                    select: { id: true, generatedEmail: true },
+                  })
+                  .catch(() => null);
+                if (!cachedNudge) {
+                  cachedNudge = await prisma.nudge
+                    .findFirst({
+                      where: {
+                        contactId: contact.id,
+                        generatedEmail: { not: null },
+                        ruleType: ruleTypeFilter,
+                      },
+                      orderBy: [
+                        { priority: "asc" },
+                        { createdAt: "desc" },
+                      ],
+                      select: { id: true, generatedEmail: true },
+                    })
+                    .catch(() => null);
+                }
+                const cached = readCachedDraft(cachedNudge?.generatedEmail ?? null);
+                if (cached && cachedNudge) {
+                  console.log(`[chat] draft-email FAST PATH hit for ${contact.name} (nudge ${cachedNudge.id})`);
+                  const cleanEmailAnswer = `## Draft Email to ${contact.name}\n\nHere's a draft you can copy and edit before sending.`;
+                  const blocks: ChatBlock[] = [
+                    {
+                      type: "contact_card",
+                      data: {
+                        name: contact.name,
+                        title: contact.title ?? undefined,
+                        company: company?.name ?? undefined,
+                        contactId: contact.id,
+                      },
+                    },
+                    {
+                      type: "editable_email_draft",
+                      data: {
+                        draftId: `draft-${cachedNudge.id}`,
+                        to: contact.name,
+                        subject: cached.subject,
+                        body: cached.body,
+                        contactId: contact.id,
+                        nudgeId: cachedNudge.id,
+                        regenerate: {
+                          warmer: `Rewrite the email to ${contact.name} in a warmer, more personal tone.`,
+                          shorter: `Rewrite the email to ${contact.name} to be shorter — 3 sentences max.`,
+                        },
+                      },
+                    },
+                    {
+                      type: "action_bar",
+                      data: buildEmailDraftActionBar({ contactName: contact.name }),
+                    },
+                  ];
+                  return NextResponse.json({
+                    answer: cleanEmailAnswer,
+                    sources: [],
+                    blocks,
+                  });
+                }
+              }
+            }
+
+            // Build shared contact context (slow — interactions + signals +
+            // meetings + live web search). All slow-path branches below need
+            // it; the fast path above must return before we get here.
             const ctx = await buildContactContext(contact, company, partnerId);
             ctx.partnerName = partnerName;
 
