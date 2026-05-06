@@ -47,18 +47,32 @@ export function ArticleShare({ data, onActionCompleted }: { data: ArticleShareBl
   const [localBodies, setLocalBodies] = useState<Record<string, string>>({});
   const prevEditingId = useRef<string | null>(null);
 
-  // Auto-scroll back to the card when the modal closes
+  // Anchor the user back on this card whenever they finish an action that
+  // originated from it — closing the email composer (Save or Cancel) or
+  // sending the campaign. We use `behavior: "auto"` so the card is in the
+  // correct position the instant the modal/action resolves, rather than the
+  // viewport sitting at some other scroll offset and then animating down.
   useEffect(() => {
     if (prevEditingId.current != null && editingId == null) {
       requestAnimationFrame(() => {
         cardRef.current?.scrollIntoView({
           block: "center",
-          behavior: "smooth",
+          behavior: "auto",
         });
       });
     }
     prevEditingId.current = editingId;
   }, [editingId]);
+
+  useEffect(() => {
+    if (!confirmed) return;
+    requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "auto",
+      });
+    });
+  }, [confirmed]);
 
   const visibleLimit = Math.max(1, data.visibleLimit ?? 4);
   const hiddenCount = Math.max(0, data.recipients.length - visibleLimit);

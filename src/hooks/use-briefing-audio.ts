@@ -2,6 +2,28 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 
+/**
+ * Mobile briefing playback is intentionally faster than the model's natural
+ * pace — the morning brief is dense and partners want to skim it audibly.
+ * 1.25× hits a sweet spot where it feels energetic but stays intelligible.
+ * `preservesPitch` keeps the voice on-pitch so it doesn't go chipmunky.
+ */
+const BRIEFING_PLAYBACK_RATE = 1.25;
+
+type AudioWithPitch = HTMLAudioElement & {
+  preservesPitch?: boolean;
+  mozPreservesPitch?: boolean;
+  webkitPreservesPitch?: boolean;
+};
+
+function applyBriefingPlaybackRate(audio: HTMLAudioElement) {
+  const a = audio as AudioWithPitch;
+  a.preservesPitch = true;
+  a.mozPreservesPitch = true;
+  a.webkitPreservesPitch = true;
+  a.playbackRate = BRIEFING_PLAYBACK_RATE;
+}
+
 type UseBriefingAudioReturn = {
   play: (text: string) => Promise<void>;
   pause: () => void;
@@ -100,7 +122,7 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
       if (voices.length > 0) {
         utterance.voice = voices[0];
       }
-      utterance.rate = 1.0;
+      utterance.rate = BRIEFING_PLAYBACK_RATE;
       utterance.pitch = 1.0;
 
       utterance.onstart = () => {
@@ -147,6 +169,7 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
       const audio = new Audio();
       audioRef.current = audio;
       audio.src = url;
+      applyBriefingPlaybackRate(audio);
 
       let playbackStarted = false;
 
@@ -199,6 +222,7 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
                 setIsLoading(false);
                 setIsPlaying(true);
                 startTimer();
+                applyBriefingPlaybackRate(audio);
                 audio.play().catch(() => {});
               }
             }
@@ -240,6 +264,7 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
 
       const audio = new Audio(url);
       audioRef.current = audio;
+      applyBriefingPlaybackRate(audio);
 
       audio.onloadedmetadata = () => {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
@@ -251,6 +276,7 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
         setIsLoading(false);
         setIsPlaying(true);
         startTimer();
+        applyBriefingPlaybackRate(audio);
         audio.play();
       };
 
