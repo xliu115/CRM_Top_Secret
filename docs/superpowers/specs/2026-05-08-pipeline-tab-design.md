@@ -8,7 +8,7 @@
 
 ## 1. Goals
 
-- Give partners a **single place** to see and manage **pipeline** (study-level) and **client portfolio** (client-level) without exposing methodology, targets-vs-actuals, or internal documentation on the surface.
+- Give partners a **single place** to see and manage **pipeline** (study-level) and **client portfolio** (client-level) without exposing methodology, explicit target comparisons, or internal documentation on the surface. **Tab labels show live board counts** (see §3.1); steady-state **2-4-8 / 4-8-16** exist **only behind the scenes** for recommendations and ranking.
 - Support **monthly** pipeline review in-product; align with **quarterly** ritual via entry points elsewhere (e.g. dashboard link) without teaching prose on this page.
 - Allow **capture** through recommendations, **voice**, **uploads**, and **manual** entry, with confirmation before persisted changes affect official lists.
 
@@ -22,12 +22,18 @@
 
 ### 3.1 Tabs
 
-| Tab label (user-visible) | Lens |
-|---------------------------|------|
-| **Pipeline (2-4-8)** | Study-level: active engagements, LOPs in discussion, serious discussions. **Digits in the tab name are labels only** — not paired with “target” UI on the page. |
-| **Clients (4-8-16)** | Client-level: active clients, warm relationships, clients under cultivation. Same rule: **no vs-target** presentation. |
+Tabs have a **fixed name** plus a **live numeric triple** that always reflects **this partner’s current board** (confirmed rows only — same rules as lane totals).
 
-- **URL:** Persist selected lens, e.g. `?lens=pipeline|clients` (implementation may use stable slugs; labels above are canonical for UI).
+| Tab | Lens | Triple order (left → right) |
+|-----|------|-----------------------------|
+| **Pipeline** `(a · b · c)` | Study-level | **a** = active engagements, **b** = LOPs in discussion, **c** = serious discussions |
+| **Clients** `(x · y · z)` | Client-level | **x** = active clients, **y** = warm relationships, **z** = under cultivation |
+
+- **Numbers on the tab are always actual counts**, e.g. `Pipeline (1 · 3 · 5)` or `Clients (2 · 6 · 11)`. They are **not** the steady-state targets 2-4-8 or 4-8-16; those targets drive **backend** behavior only (e.g. what to recommend), never as fixed display digits on the tab.
+- **Separator:** Use a clear neutral separator (e.g. middle dot ` · `) so the triple is not mistaken for a single number (e.g. not `248`).
+- **Zeros:** Show `0` in each position when empty (e.g. `Pipeline (0 · 0 · 0)`) so the tab stays truthful and scannable.
+- **Accessibility:** Expose the triple in the tab’s accessible name (e.g. “Pipeline, 1 active, 3 LOPs, 5 serious discussions”) so screen readers do not read “one three five” without context.
+- **URL:** Persist selected lens, e.g. `?lens=pipeline|clients` (implementation may use stable slugs).
 
 ### 3.2 Shared header (above tabs)
 
@@ -47,13 +53,13 @@
 
 ## 4. Tab content (lanes)
 
-### 4.1 Pipeline (2-4-8)
+### 4.1 Pipeline lens
 
 - **Three lanes** (sections): active engagements · LOPs in discussion · serious discussions.
 - Each lane: **sortable list** of rows (e.g. client, working title, next step, last touch). No aggregate “2/4/8” vs-target row in v1.
 - Rows support **linked attachments** and provenance: `manual` | `system` | `voice` | `upload` for audit.
 
-### 4.2 Clients (4-8-16)
+### 4.2 Clients lens
 
 - **Three lanes:** active clients · warm relationships · under cultivation.
 - Same list, attachment, and provenance behavior; copy tuned to **relationship / account** language, not methodology.
@@ -96,10 +102,10 @@ Primary **Add** affordance per tab opens a **chooser**:
 
 ## 9. Testing (acceptance-oriented)
 
-- Lens switching + URL persistence.
+- Lens switching + URL persistence; tab triples **update when board counts change** and match sum of confirmed rows per lane.
 - Independent `lastViewedAt` per tab; highlight content differs when switching lenses after time passes.
 - Add flows: manual, voice (confirm), upload (confirm), system (confirm); unconfirmed drafts never inflate lane counts used for summaries if any summary exists.
-- No UI copy asserting playbook names, iron laws, or “target” framing; snapshot tests for sensitive routes optional.
+- Tab label triples **equal** confirmed row counts per lane (regression guard against drift).
 
 ## 10. Relationship to dashboard
 
@@ -119,4 +125,4 @@ Primary **Add** affordance per tab opens a **chooser**:
 - **Placeholders:** Open decisions listed in §11; none left as “TBD” inside locked scope without a home.
 - **Consistency:** Surface avoids playbook and vs-target; backend may use playbook-shaped logic only for ranking/recommendations — stated explicitly.
 - **Scope:** Single feature area (Pipeline page + capture + highlights); dashboard and briefing are touchpoints only.
-- **Ambiguity:** “Digits in tab names are labels only” clarifies that 2-4-8 / 4-8-16 appear as **names**, not live target meters.
+- **Ambiguity:** Tab digits are **live counts** per partner per lane order; **2-4-8 / 4-8-16** are **not** shown on tabs — they remain internal targets for recommendations only.
