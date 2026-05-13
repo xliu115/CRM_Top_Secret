@@ -45,6 +45,48 @@ Tabs have a **fixed name** plus a **live numeric triple** that always reflects *
   - **Dismiss:** Collapse or “Got it”; highlights are informational, not blocking.
 - **First visit:** No highlights; concise empty guidance in **operational** language only (e.g. “Add your first item”).
 
+### 3.3 Recommendations — logic, presentation, partner actions
+
+#### How recommendations are produced (behind the scenes)
+
+- The engine consumes **partner-scoped signals**: current **confirmed** board (both lenses), **change history**, and product data the rest of ClientIQ already has (e.g. companies, contacts, meetings, touches, nudges — exact wiring in implementation plan). Optional **LLM** may phrase a short reason or next step; **no** playbook names, iron laws, or “2-4-8” language in user-visible strings.
+- **Internal weights** (not shown) may encode steady-state funnel shape, recency, staleness, and confidence so the system ranks what to surface first. Outputs are only **plain-language** suggestions (e.g. “Move to LOP when ready,” “Check if this is still active”).
+- Each surfaced item is a **suggestion** with a stable id, type, payload (target row id or draft row), and **status**: `pending` → `accepted` | `dismissed` | `snoozed` until expired.
+
+#### Types of suggestions (v1 scope)
+
+| Type | Meaning |
+|------|--------|
+| **New draft row** | System proposes a **new** pipeline/client row in a given stage (pre-filled from CRM context). Does **not** count in tab triples until **accepted**. |
+| **Stage move** | Proposes moving an existing confirmed row to a different stage within the same lens. |
+| **Hygiene** | Proposes archiving, merging duplicates, or marking “inactive” when stale — partner confirms. |
+
+Additional types (e.g. “schedule a touch”) stay **out of v1** unless product expands.
+
+#### How they appear with “since last view” (visual)
+
+- **Container:** A single **panel** directly under the tab strip: light **tinted background** (e.g. subtle brand-tinted or neutral `muted` panel), **rounded** corners, **clear heading**: “Since your last visit” + **relative timestamp** (this tab’s `lastViewedAt` reference).
+- **Ordering:** (1) **Suggestions** first, sorted by rank; (2) **Activity** lines (rows added/removed, stage changes, drop-off reason if logged) after. Cap **5–7** lines; **“Show more”** reveals the rest in-panel or on a simple full-list view.
+- **Per line — suggestions:** Small **“Suggested”** pill (or icon) + **one-line title** + optional **subtitle** (client, study name). Do not use scary reds for normal suggestions; reserve **warning** styling only for hygiene that implies data loss (archive), with confirm anyway.
+- **Per line — activity:** Neutral icon or dot; factual copy (“Jamie Lee moved to LOPs,” “Acme study removed”).
+- **Dismiss bar:** **“Got it”** collapses the whole panel for this visit; individual lines can still be acted on from **Add → Recommendations** if needed.
+
+#### Partner actions (per suggestion line)
+
+| Action | Effect |
+|--------|--------|
+| **Review / Open** | Opens a **confirmation sheet** or inline expand with editable fields (stage, title, next step). **No** change to confirmed board until confirmed. |
+| **Accept** | Persists the suggestion (new row or stage move or archive). Tab triples and lanes update; suggestion marked `accepted` and leaves the highlight list. |
+| **Edit & accept** | Same as accept after partner adjusts fields. |
+| **Dismiss** | Marks `dismissed`; removes from this panel; system should not re-show the **same** suggestion id unless underlying data changes materially (implementation defines “material”). |
+| **Snooze** | Marks `snoozed` until chosen interval; hidden from band until then. |
+
+**“Add → Recommendations for me”** opens the **same** ranked list (or filtered view) so partners can work suggestions even after collapsing the band.
+
+#### Relationship to tab counts
+
+- Suggestions and unconfirmed drafts **never** increment the **Pipeline (a · b · c)** / **Clients (x · y · z)** tab numbers until **accepted** (per §6.2).
+
 ## 4. Tab content (lanes)
 
 ### 4.1 Pipeline lens
@@ -97,6 +139,7 @@ Primary **Add** affordance per tab opens a **chooser**:
 
 - Lens switching + URL persistence; tab triples **update when board counts change** and match sum of confirmed rows per lane.
 - Independent `lastViewedAt` per tab; highlight content differs when switching lenses after time passes.
+- Suggestion lifecycle: `pending` → accept / dismiss / snooze; dismissed ids not resurfaced without material data change (per §3.3).
 - Add flows: manual, voice (confirm), upload (confirm), system (confirm); unconfirmed drafts never inflate lane counts used for summaries if any summary exists.
 - Tab label triples **equal** confirmed row counts per lane (regression guard against drift).
 
@@ -117,4 +160,4 @@ Primary **Add** affordance per tab opens a **chooser**:
 - **Placeholders:** Open decisions listed in §11; none left as “TBD” inside locked scope without a home.
 - **Consistency:** Surface avoids playbook and vs-target; backend may use playbook-shaped logic only for ranking/recommendations — stated explicitly.
 - **Scope:** Single feature area (Pipeline page + capture + highlights); dashboard and briefing are touchpoints only.
-- **Ambiguity:** Tab digits are **live counts** per partner per lane order; **2-4-8 / 4-8-16** are **not** shown on tabs — they remain internal targets for recommendations only.
+- **Ambiguity:** Tab digits are **live counts** per partner per lane order; **2-4-8 / 4-8-16** are **not** shown on tabs — they remain internal targets for recommendations only. **§3.3** ties recommendation UX to the highlight band and Add flow.
