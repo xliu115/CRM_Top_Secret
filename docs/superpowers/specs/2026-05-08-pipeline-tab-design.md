@@ -93,12 +93,14 @@ Additional types (e.g. “schedule a touch”) stay **out of v1** unless product
 
 - **Three lanes** (sections): active engagements · LOPs in discussion · serious discussions.
 - Each lane: **sortable list** of rows (e.g. client, working title, next step, last touch). No aggregate “2/4/8” vs-target row in v1.
+- **Lane filters:** Filters scoped to this lens (e.g. institution, practice, search, optional **theme / workstream tags**) so large boards stay usable—addresses recurring Activate feedback on **filtering**, **business-unit scope**, and **theme** grouping without sounding methodological.
+- **Stage moves:** Partners can move a row **forward or backward** between stages with the same **confirm** affordance as today; consider **undo last move** within a short window when feasible (Activate: “move back in funnel,” reduce rigid rules).
 - Rows support **linked attachments** and provenance: `manual` | `system` | `voice` | `upload` for audit.
 
 ### 4.2 Clients lens
 
 - **Three lanes:** active clients · warm relationships · under cultivation.
-- Same list, attachment, and provenance behavior; copy tuned to **relationship / account** language, not methodology.
+- Same list, attachment, provenance, **filter**, and **bidirectional stage move** behavior as §4.1 where applicable; copy tuned to **relationship / account** language, not methodology.
 
 ## 5. Rhythm in the product
 
@@ -133,6 +135,7 @@ Primary **Add** affordance per tab opens a **chooser**:
 ## 8. Privacy and compliance
 
 - Voice and files are **partner-scoped**; access control matches rest of ClientIQ.
+- **Roles:** Define who may **view**, **edit**, **confirm suggestions**, and **see attachments** on a row (partner, delegate, EA, practice admin) so “non-owner update” and **EA coverage** patterns from Activate field feedback do not regress—exact matrix in implementation plan.
 - Retention and export rules follow org policy (detail in implementation plan).
 
 ## 9. Testing (acceptance-oriented)
@@ -152,6 +155,24 @@ Primary **Add** affordance per tab opens a **chooser**:
 - Exact **idle threshold** for updating `lastViewedAt`.
 - **Voice** capture reuse vs new component; ASR error handling and PII in transcripts.
 - **Upload** allowed MIME types, max size, storage backend, and malware scanning.
+- **Scope model** for “whose rows appear by default” (e.g. mine vs broader team) and **export** of the current lens for CST meetings (CSV/snapshot)—priority post-v1 unless pilot demands sooner.
+
+## 12. Crosswalk — Activate ad-hoc feedback tracker (2026-05-09)
+
+Source workbook: `Activate Ad-hoc feedback tracker_20260509.xlsx` (Activate / Salesforce-era CST pilot). Not ClientIQ-specific, but **themes** below should inform Pipeline so we do not repeat the same friction.
+
+| Theme in tracker | Implication for ClientIQ Pipeline (this spec) |
+|------------------|-----------------------------------------------|
+| **Pipeline prominence** (“make opportunity pipeline more prominent”; “click funnel → detail”) | Keep **Pipeline** in primary nav; dashboard/home widgets should **deep-link** to `/pipeline` + lens (§10). |
+| **Kanban / funnel loved but rigid** | Lanes are the analog of Kanban; **backward moves + undo** (§4.1) reduce “stuck in wrong stage” pain. |
+| **Filtering & overload** (BU, status, themes, “50+ opps”) | **Lane filters + tags** (§4.1); optional **default scope** (“mine”) in open decisions §11. |
+| **Non-owner / delegate edits** | **Role matrix** for edit/confirm (§8). |
+| **Themes spanning multiple deals** | **Theme / workstream tags** on rows (§4.1). |
+| **Skepticism: fluid pipeline, won’t maintain** | Double down on **voice, upload, low-friction add, confirm** (§6); consider **batch quick-capture** later in implementation plan. |
+| **“Too formal” for early-stage ideas** | Use **lighter visual weight** for earlier lanes only if research confirms—copy stays operational, no playbook. |
+| **CST snapshot / Excel export** | Tracked as **export** in §11; not required for v1 MVP. |
+| **Financial / metric display bugs ($0)** | If Pipeline shows **value** fields later, only when **data-complete**; never placeholder zeros that read as truth. |
+| **Link todos to engagements** | Implementation: allow **tasks/nudges** elsewhere to **link** to a pipeline row id when product supports it. |
 
 ---
 
@@ -160,4 +181,4 @@ Primary **Add** affordance per tab opens a **chooser**:
 - **Placeholders:** Open decisions listed in §11; none left as “TBD” inside locked scope without a home.
 - **Consistency:** Surface avoids playbook and vs-target; backend may use playbook-shaped logic only for ranking/recommendations — stated explicitly.
 - **Scope:** Single feature area (Pipeline page + capture + highlights); dashboard and briefing are touchpoints only.
-- **Ambiguity:** Tab digits are **live counts** per partner per lane order; **2-4-8 / 4-8-16** are **not** shown on tabs — they remain internal targets for recommendations only. **§3.3** ties recommendation UX to the highlight band and Add flow.
+- **Ambiguity:** Tab digits are **live counts** per partner per lane order; **2-4-8 / 4-8-16** are **not** shown on tabs — they remain internal targets for recommendations only. **§3.3** ties recommendation UX to the highlight band and Add flow. **§12** maps legacy Activate pilot feedback.
