@@ -9,7 +9,6 @@
 ## 1. Goals
 
 - Give partners a **single place** to see and manage **pipeline** (study-level) and **client portfolio** (client-level) without exposing methodology, explicit target comparisons, or internal documentation on the surface. **Tab labels show live board counts** (see §3.1); steady-state **2-4-8 / 4-8-16** exist **only behind the scenes** for recommendations and ranking.
-- Support **monthly** pipeline review in-product; align with **quarterly** ritual via entry points elsewhere (e.g. dashboard link) without teaching prose on this page.
 - Allow **capture** through recommendations, **voice**, **uploads**, and **manual** entry, with confirmation before persisted changes affect official lists.
 
 ## 2. Non-goals (v1)
@@ -35,16 +34,11 @@ Tabs have a **fixed name** plus a **live numeric triple** that always reflects *
 - **Accessibility:** Expose the triple in the tab’s accessible name (e.g. “Pipeline, 1 active, 3 LOPs, 5 serious discussions”) so screen readers do not read “one three five” without context.
 - **URL:** Persist selected lens, e.g. `?lens=pipeline|clients` (implementation may use stable slugs).
 
-### 3.2 Shared header (above tabs)
-
-- **Monthly review** entry: start or resume the short monthly review flow (checkpoint, “what moved,” etc.). Copy is operational, not methodological.
-- **Portfolio balance** (qualitative): surface **categories** — moonshots, strong candidates, good engagements — as **buckets or filters**, without numeric “you should have 1–2” coaching on the page. Backend may still use playbook-shaped logic for **recommendations only**.
-
-### 3.3 “Since last view” (per tab)
+### 3.2 “Since last view” (per tab)
 
 - Each tab maintains its own **`lastViewedAt`** (and optionally `lastLens` is implicit per tab).
 - **Update policy:** Set `lastViewedAt` when the user **leaves** `/pipeline` or after **idle** (configurable threshold) so switching tabs inside the page does not clear highlights prematurely.
-- **Highlight band** under shared chrome / above tab content:
+- **Highlight band** directly **above the tab panels / lane content** (below the tab strip):
   - **Since your last visit** (relative time) for **this tab only**.
   - Content mix: **recommendations** (system-ranked using behind-the-scenes rules) + **factual deltas** (adds, removes, stage changes, drop-off reasons if captured).
   - **Ordering:** Recommendations first, then changes; cap visible items with **“Show more”** to avoid inbox fatigue.
@@ -69,8 +63,7 @@ Tabs have a **fixed name** plus a **live numeric triple** that always reflects *
 | Cadence | Behavior |
 |---------|----------|
 | **Daily / weekly** | Do **not** push pipeline-building framing on relationship-first surfaces by default (briefing nudges optional and conservative). |
-| **Monthly** | `/pipeline` is the home for the **short review** (with EA prep affordance if applicable). |
-| **Quarterly** | External habit row or dashboard can **deep-link** into `/pipeline` with lens query; page does not host playbook tutorial. |
+| **Monthly / quarterly** | Partners use `/pipeline` when they choose; external reminders or dashboard links may deep-link with `?lens=…`. No dedicated review wizard or playbook tutorial on this page in v1. |
 
 ## 6. Adding and updating data
 
@@ -116,7 +109,6 @@ Primary **Add** affordance per tab opens a **chooser**:
 - Exact **idle threshold** for updating `lastViewedAt`.
 - **Voice** capture reuse vs new component; ASR error handling and PII in transcripts.
 - **Upload** allowed MIME types, max size, storage backend, and malware scanning.
-- Whether **portfolio balance** buckets show **counts only** (no targets) or **presence** indicators only.
 
 ---
 
