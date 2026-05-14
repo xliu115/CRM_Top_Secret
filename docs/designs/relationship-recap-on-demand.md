@@ -70,7 +70,7 @@ Every major competitor in the relationship intelligence space offers some form o
 - **Dreamteam** — Rachel provides pre-meeting intelligence
 - **Attio** — Relationship mapping with interaction history
 
-Activate's Contact 360 goes further by combining CRM data with live web intelligence, firm-wide relationship mapping, and actionable talking points — delivering strategic briefings rather than simple summaries.
+ClientIQ's Contact 360 goes further by combining CRM data with live web intelligence, firm-wide relationship mapping, and actionable talking points — delivering strategic briefings rather than simple summaries.
 
 
 

@@ -450,7 +450,7 @@ export default function CompanyDetailPage() {
   const [events, setEvents] = useState<EventRegistration[]>([]);
   const [articles, setArticles] = useState<ArticleEngagement[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOutreach[]>([]);
-  const [activateCampaigns, setActivateCampaigns] = useState<
+  const [clientIQCampaigns, setClientIQCampaigns] = useState<
     { id: string; name: string; status: string; sentAt: string | null; recipientCount: number }[]
   >([]);
   const [meetings, setMeetings] = useState<CompanyMeeting[]>([]);
@@ -524,7 +524,7 @@ export default function CompanyDetailPage() {
         setEvents(data.engagements?.events ?? []);
         setArticles(data.engagements?.articles ?? []);
         setCampaigns(data.engagements?.campaigns ?? []);
-        setActivateCampaigns(data.campaignActivity?.campaigns ?? []);
+        setClientIQCampaigns(data.campaignActivity?.campaigns ?? []);
         setMeetings(data.meetings ?? []);
         setFirmRelData(data.firmRelationships ?? null);
       } catch (err) {
@@ -1459,7 +1459,7 @@ export default function CompanyDetailPage() {
               </CardContent>
             </Card>
 
-            {activateCampaigns.length > 0 && (
+            {clientIQCampaigns.length > 0 && (
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-2">
@@ -1468,7 +1468,7 @@ export default function CompanyDetailPage() {
                     </div>
                     <div>
                       <CardTitle className="text-base">
-                        Campaigns ({activateCampaigns.length})
+                        Campaigns ({clientIQCampaigns.length})
                       </CardTitle>
                       <CardDescription>Campaigns that included contacts at this company</CardDescription>
                     </div>
@@ -1476,7 +1476,7 @@ export default function CompanyDetailPage() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y divide-border/30">
-                    {activateCampaigns.map((c) => (
+                    {clientIQCampaigns.map((c) => (
                       <Link
                         key={c.id}
                         href={`/campaigns/${c.id}`}

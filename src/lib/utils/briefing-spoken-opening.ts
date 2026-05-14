@@ -78,7 +78,7 @@ export function buildBriefingSpokenOpening(
 
   const name = partnerFirstName.trim() || "there";
 
-  const headline = `${name}, here's your morning briefing from Activate.`;
+  const headline = `${name}, here's your morning briefing from ClientIQ.`;
 
   const bits: string[] = [];
 

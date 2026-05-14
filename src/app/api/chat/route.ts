@@ -1767,8 +1767,8 @@ export async function POST(request: NextRequest) {
                 // DONE nudge to outrank a fresh OPEN one. Two-step query
                 // keeps the priority ordering explicit.
                 const ruleTypeFilter = {
-                  notIn: ["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"],
-                } as const;
+                  notIn: ["CAMPAIGN_APPROVAL", "ARTICLE_CAMPAIGN"] as string[],
+                };
                 let cachedNudge = await prisma.nudge
                   .findFirst({
                     where: {

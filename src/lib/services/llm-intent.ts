@@ -26,7 +26,7 @@ export type IntentResult = {
   confidence: number;
 };
 
-const INTENT_SYSTEM_PROMPT = `You are an intent classifier for a CRM assistant called Activate. Given a user message (and optional conversation history), classify the intent and extract the relevant entity (person name, company name, or meeting title).
+const INTENT_SYSTEM_PROMPT = `You are an intent classifier for a CRM assistant called ClientIQ. Given a user message (and optional conversation history), classify the intent and extract the relevant entity (person name, company name, or meeting title).
 
 Return JSON with exactly these keys:
 - "intent": one of the values below

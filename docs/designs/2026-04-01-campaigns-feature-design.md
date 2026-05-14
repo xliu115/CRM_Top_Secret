@@ -13,9 +13,9 @@ Partners at McKinsey collectively refer to any bulk share of content — article
 
 | Decision | Choice | Reasoning |
 |----------|--------|-----------|
-| Sending model | Hybrid — send from Activate + import external campaigns via API | Partners need both: Activate-sent for new campaigns, imported for historical/external data |
+| Sending model | Hybrid — send from ClientIQ + import external campaigns via API | Partners need both: ClientIQ-sent for new campaigns, imported for historical/external data |
 | Content library | System-managed, read-only for Partners | Articles fetched from mckinsey.com via Tavily web search (v1); events from seed data. Future: API integration with firm's content/event platforms |
-| Tracking | Automatic open/click for Activate-sent; imported data for external | Tracking pixel + link wrapping for Activate campaigns; external campaigns bring their own engagement data |
+| Tracking | Automatic open/click for ClientIQ-sent; imported data for external | Tracking pixel + link wrapping for ClientIQ campaigns; external campaigns bring their own engagement data |
 | Contact selection | Manual pick + smart segments, reviewable before send | Full flexibility — pick individuals or define criteria, always review the final list |
 | Email personalization | Base template with AI-personalized opening per recipient | Consistent core message with a personal touch using relationship context |
 | Landing page | Campaign list view with sub-tabs for Articles and Events | Partners think "my campaigns" as the primary view, with content browsing as a secondary entry point |
@@ -120,7 +120,7 @@ Indexes: `@@index([campaignId])`, `@@index([contactId])`, `@@index([campaignId, 
 Constraint: `@@unique([campaignId, contactId])` (when `contactId` is non-null — prevents same contact twice in one campaign)
 Table: `@@map("campaign_recipients")`
 
-When a campaign includes an event content item, each recipient gets a unique `rsvpToken` generated at send time. The event card in the email includes a personalized RSVP link: `/api/track/rsvp/[rsvpToken]`. This gives Activate native registration tracking for event invites.
+When a campaign includes an event content item, each recipient gets a unique `rsvpToken` generated at send time. The event card in the email includes a personalized RSVP link: `/api/track/rsvp/[rsvpToken]`. This gives ClientIQ native registration tracking for event invites.
 
 ### CampaignEngagement — Tracking events per recipient
 
@@ -303,7 +303,7 @@ Generates engagement-aware follow-up draft:
 New exports added to the existing email service (not a separate file):
 
 - **`buildCampaignEmailHtml(recipient, campaign, contentItems)`** — Constructs the full HTML email: personalized opening, content item cards (article: title + description + "Read Article" CTA; event: name + date + location + personalized "RSVP" button pointing to `/api/track/rsvp/[rsvpToken]`), tracking pixel `<img>`, article URLs wrapped through `/api/track/click/` redirect.
-- **`sendCampaignEmail(recipient, html)`** — Sends via Resend. Uses `llm-core.ts` `callLLM` for personalization (consistent with other LLM service modules). `from` address is the Partner's configured email or the default Activate sender. `reply-to` is always the Partner's email.
+- **`sendCampaignEmail(recipient, html)`** — Sends via Resend. Uses `llm-core.ts` `callLLM` for personalization (consistent with other LLM service modules). `from` address is the Partner's configured email or the default ClientIQ sender. `reply-to` is always the Partner's email.
 
 ## 5. Error Handling & Edge Cases
 

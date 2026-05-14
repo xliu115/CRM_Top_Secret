@@ -1,4 +1,4 @@
-# Activate CRM — Dashboard Conversational Layout Design
+# ClientIQ CRM — Dashboard Conversational Layout Design
 
 **Date:** 2026-03-19  
 **Status:** Option D implemented (2026-03-19)  
@@ -8,7 +8,7 @@
 
 ## Overview
 
-Exploration of dashboard layout options that elevate **Ask Activate** (conversational assistant) to the top of the dashboard. Core tension: *Answer questions fast* vs *surface operational counts at a glance* vs *preserve scan patterns for Today's Nudges / Meeting Prep / News*.
+Exploration of dashboard layout options that elevate **Ask ClientIQ** (conversational assistant) to the top of the dashboard. Core tension: *Answer questions fast* vs *surface operational counts at a glance* vs *preserve scan patterns for Today's Nudges / Meeting Prep / News*.
 
 **Current state (2026-03-25):** Option D layout with unified "Today's Top Nudges" feed (outreach nudges + meeting prep cards sorted by priority), client news grouped by company and ranked by contact importance. See [Current Implementation](#current-implementation-2026-03-25) for full details.
 
@@ -30,7 +30,7 @@ Exploration of dashboard layout options that elevate **Ask Activate** (conversat
 
 | Before | After |
 |--------|-------|
-| 3 stat cards in a row | Single chat bar (Ask Activate input + suggested prompts) |
+| 3 stat cards in a row | Single chat bar (Ask ClientIQ input + suggested prompts) |
 | Metrics at a glance | Conversational entry point |
 
 ### Layout sketch
@@ -40,7 +40,7 @@ Exploration of dashboard layout options that elevate **Ask Activate** (conversat
 │ Sidebar    │  Dashboard                                                   │
 │            │  Welcome back, Taylor Brooks. Here's what's happening today. │
 │ Nudges (28)├─────────────────────────────────────────────────────────────┤
-│ Meetings (9)│  Ask Activate                                                │
+│ Meetings (9)│  Ask ClientIQ                                                │
 │ Contacts (29)│  ┌─────────────────────────────────────────────────────┐    │
 │ ...        │  │ Ask about clients, nudges, or meetings…        [→]  │    │
 │            │  └─────────────────────────────────────────────────────┘    │
@@ -85,7 +85,7 @@ Stats remain glanceable without competing with the chat bar. Sidebar nav items b
 User feedback: "Think we are all good with the top section of dashboard."
 
 - Header: "Dashboard" + "Welcome back, [Name]. Here's what's happening today."
-- Chat bar: Ask Activate input + suggested prompts
+- Chat bar: Ask ClientIQ input + suggested prompts
 - Stats: In sidebar nav (Nudges (28), Meetings (9), Contacts (29) )
 - Chat flow: First question → transition to Ask Anything tab
 
@@ -243,7 +243,7 @@ Three horizontal panels; user can scroll horizontally or use arrows.
 
 ### Option E — Floating Prompt (FAB)
 
-- "Ask Activate" pill bottom-right; expands to sheet
+- "Ask ClientIQ" pill bottom-right; expands to sheet
 
 ### Option F — Contextual Chat per Section
 
@@ -257,7 +257,7 @@ Three horizontal panels; user can scroll horizontally or use arrows.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Ask Activate                                                │
+│  Ask ClientIQ                                                │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │ Ask about clients, nudges, or meetings…        [→]  │    │
 │  └─────────────────────────────────────────────────────┘    │
@@ -268,14 +268,14 @@ Three horizontal panels; user can scroll horizontally or use arrows.
 
 ### Variant B — Compact pill → expands
 
-Resting: `[ 🔮 Ask Activate — questions about your book of business ]`  
+Resting: `[ 🔮 Ask ClientIQ — questions about your book of business ]`  
 Expanded: Same region grows to show input + chips
 
 ### Variant C — Split: chat left, stats right
 
 ```
 ┌──────────────────────────────┬──────────────────────────────┐
-│ Ask Activate                 │  Today at a glance            │
+│ Ask ClientIQ                 │  Today at a glance            │
 │ [ Input… ]                   │  ┌──────┐ ┌──────┐ ┌──────┐  │
 │ [chip] [chip] [chip]         │  │  12  │ │  3   │ │ 428  │  │
 └──────────────────────────────┴──────────────────────────────┘
@@ -285,7 +285,7 @@ Expanded: Same region grows to show input + chips
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Ask Activate                                                │
+│  Ask ClientIQ                                                │
 │  [ Input… ]                                                  │
 ├─────────────────────────────────────────────────────────────┤
 │  12 open nudges   ·   3 meetings (7d)   ·   428 contacts  →  │
@@ -327,7 +327,7 @@ This section documents the latest state of the Dashboard tab as implemented.
 │  "Good Morning, Taylor"                                            │
 │  "What's on your mind?"                                            │
 ├────────────────────────────────────────────────────────────────────┤
-│  Ask Activate  [ ✦ Ask AI a question or make a request… ] [Ask]    │
+│  Ask ClientIQ  [ ✦ Ask AI a question or make a request… ] [Ask]    │
 │  [✦ Summarize my week] [✦ Who needs follow-up?] [✦ Prep for…] ... │
 ├──────────────────────────────────┬─────────────────────────────────┤
 │  Today's Top Nudges (60%)        │  Client News (40%)              │
@@ -356,7 +356,7 @@ This section documents the latest state of the Dashboard tab as implemented.
 ### Top section (unchanged from earlier confirmation)
 
 - Centered greeting: "Good [Morning/Afternoon/Evening], [FirstName]" + "What's on your mind?" with gradient accent
-- Chat bar: Ask Activate input with sparkles icon + suggested question chips
+- Chat bar: Ask ClientIQ input with sparkles icon + suggested question chips
 - First question routes to `/chat?q=...` (Ask Anything tab)
 - Stats remain in sidebar nav
 

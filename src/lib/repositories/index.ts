@@ -9,6 +9,7 @@ import { PrismaEngagementRepository } from "./prisma/engagement-repository";
 import { PrismaNudgeRuleConfigRepository } from "./prisma/nudge-rule-config-repository";
 import { PrismaSequenceRepository } from "./prisma/sequence-repository";
 import { PrismaCampaignRepository } from "./prisma/campaign-repository";
+import { PrismaPipelineRepository } from "./prisma/pipeline-repository";
 
 export const partnerRepo = new PrismaPartnerRepository();
 export const contactRepo = new PrismaContactRepository();
@@ -21,6 +22,7 @@ export const engagementRepo = new PrismaEngagementRepository();
 export const nudgeRuleConfigRepo = new PrismaNudgeRuleConfigRepository();
 export const sequenceRepo = new PrismaSequenceRepository();
 export const campaignRepo = new PrismaCampaignRepository();
+export const pipelineRepo = new PrismaPipelineRepository();
 
 export type {
   IPartnerRepository,
@@ -45,4 +47,11 @@ export type {
   ICampaignRepository,
   CampaignWithStats,
   CampaignDetail,
+  IPipelineRepository,
+  PipelineRowDTO,
+  PipelineSuggestionDTO,
+  PipelineTabStateDTO,
+  PipelineEventDTO,
+  CreatePipelineRowInput,
+  UpsertSuggestionInput,
 } from "./interfaces";

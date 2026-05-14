@@ -1,4 +1,4 @@
-# Activate MDS Design System Rules
+# ClientIQ MDS Design System Rules
 
 Use this document when translating Figma designs from the McKinsey-style MDS library into this repo.
 

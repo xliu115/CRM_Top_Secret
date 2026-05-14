@@ -1,4 +1,4 @@
-export function ActivateIcon({ className }: { className?: string }) {
+export function ClientIQIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 100 100"
@@ -25,7 +25,7 @@ export function ActivateIcon({ className }: { className?: string }) {
   );
 }
 
-export function ActivateLogo({
+export function ClientIQLogo({
   size = "md",
   tone = "brand",
 }: {
@@ -58,7 +58,7 @@ export function ActivateLogo({
     <div
       className={`flex items-center justify-center ${toneClasses[tone]} ${sizeClasses[size]} ${roundedClasses[size]}`}
     >
-      <ActivateIcon className={iconSizes[size]} />
+      <ClientIQIcon className={iconSizes[size]} />
     </div>
   );
 }

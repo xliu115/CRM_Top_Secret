@@ -6,6 +6,11 @@ datasource db {
   provider = "sqlite"
 }
 
+enum PipelineLens {
+  PIPELINE
+  CLIENTS
+}
+
 model Partner {
   id              String   @id @default(uuid())
   email           String   @unique
@@ -21,6 +26,11 @@ model Partner {
   outreachSequences     OutreachSequence[]
   campaigns             Campaign[]
   assignedRecipients    CampaignRecipient[] @relation("AssignedRecipients")
+  pipelineRows          PipelineRow[]
+  pipelineSuggestions   PipelineSuggestion[]
+  pipelineTabStates      PipelineTabState[]
+  pipelineEvents         PipelineEvent[]
+  pipelineAttachments    PipelineAttachment[]
 
   @@map("partners")
 }
@@ -33,9 +43,10 @@ model Company {
   employeeCount Int    @map("employee_count")
   website       String
 
-  contacts Contact[]
-  signals  ExternalSignal[]
-  briefs   CompanyBrief[]
+  contacts      Contact[]
+  signals       ExternalSignal[]
+  briefs        CompanyBrief[]
+  pipelineRows  PipelineRow[]
 
   @@map("companies")
 }
@@ -68,6 +79,7 @@ model Contact {
   campaigns          CampaignOutreach[]
   campaignRecipients CampaignRecipient[]
   outreachSequences  OutreachSequence[]
+  pipelineRows       PipelineRow[]
 
   @@index([partnerId])
   @@index([companyId])
@@ -427,4 +439,108 @@ model NudgeRuleConfig {
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
   @@map("nudge_rule_configs")
+}
+
+model PipelineRow {
+  id                   String       @id @default(cuid())
+  partnerId            String       @map("partner_id")
+  lens                 PipelineLens
+  stage                String
+  confirmationStatus   String       @map("confirmation_status")
+  title                String
+  workingTitle         String?      @map("working_title")
+  companyId            String?      @map("company_id")
+  contactId            String?      @map("contact_id")
+  nextStep             String?      @map("next_step")
+  clientContact        String?      @map("client_contact")
+  lastTouchpoint       String?      @map("last_touchpoint")
+  milestoneDate        DateTime?    @map("milestone_date")
+  provenance           String
+  tags                 String       @default("[]")
+  dropOffReason        String?      @map("drop_off_reason")
+  archivedAt           DateTime?    @map("archived_at")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  partner      Partner               @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  company      Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact      Contact?              @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  attachments  PipelineAttachment[]
+  suggestionsAsTarget PipelineSuggestion[] @relation("SuggestionTargetRow")
+  events       PipelineEvent[]
+
+  @@index([partnerId, lens, confirmationStatus])
+  @@index([partnerId, lens, stage, confirmationStatus])
+  @@map("pipeline_rows")
+}
+
+model PipelineSuggestion {
+  id                   String    @id @default(cuid())
+  partnerId            String    @map("partner_id")
+  type                 String
+  targetRowId          String?   @map("target_row_id")
+  payload              String    @default("{}")
+  title                String
+  subtitle             String?
+  whyLine              String    @map("why_line")
+  rank                 Float     @default(0)
+  status               String    @default("pending")
+  snoozedUntil         DateTime? @map("snoozed_until")
+  dedupeKey            String?   @map("dedupe_key")
+  dismissedSnapshot    String?   @map("dismissed_snapshot")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  partner    Partner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  targetRow  PipelineRow? @relation("SuggestionTargetRow", fields: [targetRowId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, status])
+  @@map("pipeline_suggestions")
+}
+
+model PipelineTabState {
+  id                        String    @id @default(cuid())
+  partnerId                 String    @map("partner_id")
+  tabKey                    String    @map("tab_key")
+  lastViewedAt              DateTime? @map("last_viewed_at")
+  highlightCollapsedUntil   DateTime? @map("highlight_collapsed_until")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, tabKey])
+  @@map("pipeline_tab_states")
+}
+
+model PipelineEvent {
+  id         String    @id @default(cuid())
+  partnerId  String    @map("partner_id")
+  rowId      String?   @map("row_id")
+  eventType  String    @map("event_type")
+  payload    String    @default("{}")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  partner Partner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  row     PipelineRow? @relation(fields: [rowId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, createdAt])
+  @@map("pipeline_events")
+}
+
+model PipelineAttachment {
+  id         String   @id @default(cuid())
+  partnerId  String   @map("partner_id")
+  rowId      String   @map("row_id")
+  fileName   String   @map("file_name")
+  mimeType   String   @map("mime_type")
+  sizeBytes  Int      @map("size_bytes")
+  storageKey String   @map("storage_key")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  partner Partner     @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  row     PipelineRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
+
+  @@index([rowId])
+  @@map("pipeline_attachments")
 }

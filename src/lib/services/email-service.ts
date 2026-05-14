@@ -10,7 +10,7 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const NUDGE_RECIPIENT = process.env.NUDGE_EMAIL_TO || "";
-const FROM_ADDRESS = process.env.RESEND_FROM || "Activate <onboarding@resend.dev>";
+const FROM_ADDRESS = process.env.RESEND_FROM || "ClientIQ <onboarding@resend.dev>";
 
 const MAX_NUDGES_PER_EMAIL = 5;
 
@@ -215,7 +215,7 @@ function buildDigestHtml(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Activate — Nudge Digest</title>
+  <title>ClientIQ — Nudge Digest</title>
 </head>
 <body style="margin: 0; padding: 0; background: ${MDS.bgLight}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: ${MDS.bgLight};">
@@ -229,7 +229,7 @@ function buildDigestHtml(
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
                   <td>
-                    <div style="font-size: 14px; font-weight: 600; color: ${MDS.electricBlue}; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">Activate</div>
+                    <div style="font-size: 14px; font-weight: 600; color: ${MDS.electricBlue}; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">ClientIQ</div>
                     <div style="font-size: 22px; font-weight: 700; color: ${MDS.white}; letter-spacing: -0.3px; font-family: Georgia, 'Times New Roman', serif;">
                       Your Daily Nudge Digest
                     </div>
@@ -263,7 +263,7 @@ function buildDigestHtml(
           <tr>
             <td style="background: ${MDS.white}; padding: 24px 28px; text-align: center; border-top: 1px solid ${MDS.border};">
               <a href="${appUrl}/nudges" style="display: inline-block; padding: 12px 32px; background: ${MDS.deepBlue}; color: ${MDS.white}; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 3px; letter-spacing: -0.1px;">
-                Open Activate
+                Open ClientIQ
               </a>
             </td>
           </tr>
@@ -272,7 +272,7 @@ function buildDigestHtml(
           <tr>
             <td style="padding: 20px 28px; text-align: center;">
               <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
-                Automated digest from Activate &middot;
+                Automated digest from ClientIQ &middot;
                 <a href="${appUrl}/nudges/settings" style="color: ${MDS.blue}; text-decoration: none;">Manage preferences</a>
               </p>
             </td>
@@ -362,7 +362,7 @@ export function buildBriefingHtml(data: BriefingEmailData, appUrl: string): stri
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Activate — Morning Briefing</title>
+  <title>ClientIQ — Morning Briefing</title>
 </head>
 <body style="margin: 0; padding: 0; background: ${MDS.bgLight}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: ${MDS.bgLight};">
@@ -373,7 +373,7 @@ export function buildBriefingHtml(data: BriefingEmailData, appUrl: string): stri
           <!-- Header -->
           <tr>
             <td style="background: ${MDS.deepBlue}; padding: 32px 28px;">
-              <div style="font-size: 14px; font-weight: 600; color: ${MDS.electricBlue}; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">Activate</div>
+              <div style="font-size: 14px; font-weight: 600; color: ${MDS.electricBlue}; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">ClientIQ</div>
               <div style="font-size: 24px; font-weight: 700; color: ${MDS.white}; letter-spacing: -0.3px; font-family: Georgia, 'Times New Roman', serif;">
                 ${greeting}, ${firstName}
               </div>
@@ -413,7 +413,7 @@ export function buildBriefingHtml(data: BriefingEmailData, appUrl: string): stri
           <tr>
             <td style="background: ${MDS.white}; padding: 24px 28px; text-align: center; border-top: 1px solid ${MDS.border};">
               <a href="${appUrl}/dashboard" style="display: inline-block; padding: 12px 32px; background: ${MDS.deepBlue}; color: ${MDS.white}; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 3px;">
-                Open Activate
+                Open ClientIQ
               </a>
             </td>
           </tr>
@@ -462,8 +462,8 @@ export async function sendNudgeDigest(
   const urgentCount = nudges.filter((n) => n.priority === "URGENT").length;
   const subject =
     urgentCount > 0
-      ? `${urgentCount} urgent + ${nudges.length - urgentCount} more — Activate`
-      : `${nudges.length} nudge${nudges.length !== 1 ? "s" : ""} to review — Activate`;
+      ? `${urgentCount} urgent + ${nudges.length - urgentCount} more — ClientIQ`
+      : `${nudges.length} nudge${nudges.length !== 1 ? "s" : ""} to review — ClientIQ`;
 
   try {
     const { error } = await resend.emails.send({
@@ -630,7 +630,7 @@ export function buildContact360EmailHtml(
     .join("\n");
 
   const sharedBy = senderName
-    ? `<p style="margin: 0 0 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; color: ${MDS.textLight};">Shared by ${escHtml(senderName)} via Activate</p>`
+    ? `<p style="margin: 0 0 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; color: ${MDS.textLight};">Shared by ${escHtml(senderName)} via ClientIQ</p>`
     : "";
 
   return `<!DOCTYPE html>
@@ -661,7 +661,7 @@ export function buildContact360EmailHtml(
                 ${sectionRows}
               </table>
               <p style="margin: 24px 0 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; color: ${MDS.textLight}; text-align: center;">
-                Generated by Activate — Concierge Intelligence Platform
+                Generated by ClientIQ — Concierge Intelligence Platform
               </p>
             </td>
           </tr>

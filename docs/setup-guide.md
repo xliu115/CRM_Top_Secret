@@ -1,6 +1,6 @@
-# Activate -- Setup Guide
+# ClientIQ -- Setup Guide
 
-This guide walks you through getting the Activate platform running on your computer. No prior coding experience needed -- just follow each step in order.
+This guide walks you through getting the ClientIQ platform running on your computer. No prior coding experience needed -- just follow each step in order.
 
 ---
 

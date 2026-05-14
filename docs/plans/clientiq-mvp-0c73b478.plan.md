@@ -1,5 +1,5 @@
 ---
-name: CRM Nudge Platform MVP
+name: ClientIQ MVP
 overview: Build a full-stack TypeScript CRM platform with Next.js, Postgres/pgvector, featuring nudge generation, meeting briefs, and RAG-powered chat - all with seeded mock data and a clear path to Snowflake integration.
 todos:
   - id: phase-1-setup
@@ -38,7 +38,7 @@ todos:
 isProject: false
 ---
 
-# CRM Nudge Platform MVP Implementation Plan
+# ClientIQ MVP Implementation Plan
 
 ## Architecture Overview
 
@@ -87,7 +87,7 @@ graph TB
 ## Project Structure
 
 ```
-crm-nudge-platform/
+clientiq/
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/

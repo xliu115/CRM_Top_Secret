@@ -83,7 +83,7 @@ In `src/lib/services/email-service.ts`, add a new function alongside `buildDiges
 - **Narrative block:** Full-width prose section — the LLM narrative rendered as HTML paragraphs. This is the hero content, not a card grid.
 - **Top 3 Actions:** Compact action rows below the narrative — contact name, reason, one CTA button (deeplink to `/nudges?highlight={nudgeId}` or `/contacts/{id}`)
 - **Meeting preview:** If meetings today, one compact row per meeting with title + time + attendee count
-- **Footer:** "Open Activate" button + "Manage preferences" link + unsubscribe link
+- **Footer:** "Open ClientIQ" button + "Manage preferences" link + unsubscribe link
 - **Email-safe HTML:** 600px table layout, inline styles, no CSS (same pattern as existing `buildDigestHtml`)
 
 This is **not** the same as the existing nudge digest — it replaces it for briefing subscribers. The nudge digest remains available for Partners who prefer list format (future setting).
@@ -127,7 +127,7 @@ This is **not** the same as the existing nudge digest — it replaces it for bri
 │     [View Signal →]                              │
 │                                                  │
 ├──────────────────────────────────────────────────┤
-│              [Open Activate]                     │
+│              [Open ClientIQ]                     │
 ├──────────────────────────────────────────────────┤
 │  You're receiving this because briefings are     │
 │  enabled. Unsubscribe · Manage preferences       │
@@ -142,7 +142,7 @@ This is **not** the same as the existing nudge digest — it replaces it for bri
 | Tone | "Your most important move today is..." | Chief-of-staff voice. First-person address, first names after first mention |
 | Structure | Lead with #1 action, then context, then "on the radar" | Most important first — Partners stop reading after 30 seconds |
 | Action section | 3 compact rows, not full nudge cards | Narrative already explained the "why" — actions just need name + CTA |
-| CTA deeplinks | `/contacts/{id}?nudge={nudgeId}` or `/meetings/{id}` | Opens Activate with context pre-loaded. NOT server-side send (firm policy) |
+| CTA deeplinks | `/contacts/{id}?nudge={nudgeId}` or `/meetings/{id}` | Opens ClientIQ with context pre-loaded. NOT server-side send (firm policy) |
 | Palette | Same MDS as existing digest | Deep blue `#051C2C`, Electric Blue `#2251FF`, Georgia serif for greeting |
 | No meeting brief inline | Just time + link | Full brief is too long — keep email scannable |
 | Unsubscribe | Visible in footer, signed token link | Sets `briefingEnabled = false` on Partner model |
@@ -204,7 +204,7 @@ Update `src/app/api/dashboard/briefing/route.ts` and the dashboard page to use t
 
 ```
 ┌──────────────────────────────────┐
-│ ✦ Activate                       │
+│ ✦ ClientIQ                       │
 │ "Taylor, this morning your top   │
 │  priority is Sarah Chen at       │
 │  Apex — she hasn't heard from    │

@@ -265,7 +265,7 @@ async function main() {
   }
 
   lines.push("");
-  lines.push(`Open Activate: ${appUrl}/nudges`);
+  lines.push(`Open ClientIQ: ${appUrl}/nudges`);
 
   const body = lines.join("\n");
 

@@ -12,11 +12,11 @@ Repo: xliu115/CRM_Top_Secret
 
 ### 10x Check
 
-The 10x version of Activate isn't a CRM — it's a relationship intelligence agent that makes Partners look brilliant. Instead of "here are your nudges," it delivers a narrative morning briefing that weaves signals, meetings, news, and relationship context into a 2-minute read that feels like a personal chief of staff wrote it. After outreach, it automatically sequences follow-ups, adjusting the angle based on response (or lack thereof). Partners never think about relationship management — the system thinks for them.
+The 10x version of ClientIQ isn't a CRM — it's a relationship intelligence agent that makes Partners look brilliant. Instead of "here are your nudges," it delivers a narrative morning briefing that weaves signals, meetings, news, and relationship context into a 2-minute read that feels like a personal chief of staff wrote it. After outreach, it automatically sequences follow-ups, adjusting the angle based on response (or lack thereof). Partners never think about relationship management — the system thinks for them.
 
 ### Platonic Ideal
 
-If the best relationship manager in the world had perfect memory and unlimited time, they would: (1) read every article their contacts published or read, (2) know about every job change and company event, (3) coordinate with colleagues to avoid duplicate outreach, (4) follow up at precisely the right time with exactly the right message, and (5) track which approaches work with each person. Activate becomes this person — digitally, for every Partner simultaneously.
+If the best relationship manager in the world had perfect memory and unlimited time, they would: (1) read every article their contacts published or read, (2) know about every job change and company event, (3) coordinate with colleagues to avoid duplicate outreach, (4) follow up at precisely the right time with exactly the right message, and (5) track which approaches work with each person. ClientIQ becomes this person — digitally, for every Partner simultaneously.
 
 ## Scope Decisions
 
@@ -25,7 +25,7 @@ If the best relationship manager in the world had perfect memory and unlimited t
 | --- | ----------------------------------------- | ------ | -------- | -------------------------------------------------------------------------------- |
 | 1   | Narrative AI Morning Briefing             | S      | ACCEPTED | Highest-impact single feature — transforms nudge list into concierge narrative   |
 | 2   | Relationship Health Dashboard with Trends | M      | DEFERRED | Valuable but Phase 2 — core push/pull loop must prove out first                  |
-| 3   | Smart Nudge Sequencing (Cadence Engine)   | L      | ACCEPTED | Differentiates Activate from notification tools — creates relationship workflows |
+| 3   | Smart Nudge Sequencing (Cadence Engine)   | L      | ACCEPTED | Differentiates ClientIQ from notification tools — creates relationship workflows |
 | 4   | Firm-Wide Relationship Graph              | L      | DEFERRED | Different user (firm leadership) — partial exists on contact/institution pages   |
 | 5   | Nudge Effectiveness Analytics + ROI       | M      | DEFERRED | Important for proving value but not needed for pilot                             |
 | 6   | Voice-First Quick Actions                 | M      | DEFERRED | Voice infrastructure exists but command parsing is higher risk                   |

@@ -18,7 +18,7 @@ export interface KickoffParams {
   angleStrategy: string;
   initialSubject?: string;
   initialBody?: string;
-  /** When true, step 0 is marked as already sent (used by auto-sequence after "Send via Activate"). */
+  /** When true, step 0 is marked as already sent (used by auto-sequence after "Send via ClientIQ"). */
   alreadySent?: boolean;
 }
 

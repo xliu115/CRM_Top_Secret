@@ -26,6 +26,15 @@ export type VoiceMemoPayload = {
 
 export { computeSegmentOffsetsMs } from "@/lib/utils/voice-timeline";
 
+/**
+ * The opening segment is just a short greeting ("Hi Morgan…"). The default
+ * tts-1 cadence makes that intro feel a beat too slow before the substance
+ * starts, so we render only the first segment a touch faster. The body of
+ * the brief stays at natural pace.
+ */
+const GREETING_SPEED = 1.1;
+const BODY_SPEED = 1.0;
+
 async function getMp3DurationMs(buffer: Buffer): Promise<number> {
   try {
     const meta = await parseBuffer(buffer);
@@ -52,7 +61,13 @@ export async function synthesizeVoiceMemo(
   if (!openai || segments.length === 0) return null;
 
   const cacheKey = createHash("sha256")
-    .update(partnerId + "\n" + segments.map((s) => s.script).join("\0"))
+    .update(
+      partnerId +
+        "\n" +
+        `greet=${GREETING_SPEED};body=${BODY_SPEED}` +
+        "\n" +
+        segments.map((s) => s.script).join("\0")
+    )
     .digest("hex");
 
   const dir = path.join(process.cwd(), VOICE_BRIEFINGS_DIR);
@@ -83,11 +98,13 @@ export async function synthesizeVoiceMemo(
     const buffers: Buffer[] = [];
     const durationsMs: number[] = [];
 
-    for (const seg of segments) {
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
       const res = await openai.audio.speech.create({
         model: "tts-1",
         voice: "alloy",
         input: seg.script,
+        speed: i === 0 ? GREETING_SPEED : BODY_SPEED,
       });
       const buf = Buffer.from(await res.arrayBuffer());
       buffers.push(buf);

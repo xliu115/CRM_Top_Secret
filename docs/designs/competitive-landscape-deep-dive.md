@@ -21,7 +21,7 @@ From the initial CEO review, five competitors were analyzed:
 Three-layer synthesis:
 - **Layer 1 (tried and true):** Traditional CRMs (Salesforce, Dynamics 365, HubSpot) fail in consulting — Partners aren't salespeople and won't do data entry.
 - **Layer 2 (new and popular):** Clear 2026 shift toward AI-native relationship intelligence: automatic data capture, proactive nudges, warm intro discovery, meeting intelligence.
-- **Layer 3 (first principles):** Activate's consolidated one-card-per-contact model with concierge tone is genuinely better UX than the landscape. The gap: zero-effort data capture.
+- **Layer 3 (first principles):** ClientIQ's consolidated one-card-per-contact model with concierge tone is genuinely better UX than the landscape. The gap: zero-effort data capture.
 
 ---
 
@@ -34,23 +34,23 @@ Three-layer synthesis:
 
 ### Key Features
 
-| Feature | How It Works | Relevance to Activate |
+| Feature | How It Works | Relevance to ClientIQ |
 |---------|-------------|----------------------|
-| **Relationship Mapping** | Automatic connection strength analysis, mutual contact identification, engagement pattern recognition — all from email/calendar sync | Directly maps to Activate's cross-partner coordination. Attio does this at the individual level; Activate does it at the firm level |
-| **AI Research Agent** | Web research leveraging existing CRM data, auto-triggers workflows from findings | Similar to Activate's Tavily news ingestion but deeper — answers complex questions about prospects and feeds results into automations |
-| **"Ask Attio" (natural language)** | Search, update, and create CRM records through conversation. Meeting/call transcription and summarization | Activate already has "Ask Anything" RAG chat — Attio validates the direction. Attio adds write capability (create/update records via chat) |
-| **Churn Risk Monitoring** | Scans for leadership changes in customer orgs to proactively flag risk | Activate's `JOB_CHANGE_DETECTED` nudge type does exactly this — validates it matters |
-| **Auto-enrichment** | Fundraising data, revenue, employee count, LinkedIn profiles — continuous refresh | Activate doesn't have this yet. Would feed richer signals into the nudge engine |
-| **Custom Data Model** | Users define their own objects, attributes, and relationships | Activate is fixed-schema. Not needed for consulting use case but shows flexibility trend |
+| **Relationship Mapping** | Automatic connection strength analysis, mutual contact identification, engagement pattern recognition — all from email/calendar sync | Directly maps to ClientIQ's cross-partner coordination. Attio does this at the individual level; ClientIQ does it at the firm level |
+| **AI Research Agent** | Web research leveraging existing CRM data, auto-triggers workflows from findings | Similar to ClientIQ's Tavily news ingestion but deeper — answers complex questions about prospects and feeds results into automations |
+| **"Ask Attio" (natural language)** | Search, update, and create CRM records through conversation. Meeting/call transcription and summarization | ClientIQ already has "Ask Anything" RAG chat — Attio validates the direction. Attio adds write capability (create/update records via chat) |
+| **Churn Risk Monitoring** | Scans for leadership changes in customer orgs to proactively flag risk | ClientIQ's `JOB_CHANGE_DETECTED` nudge type does exactly this — validates it matters |
+| **Auto-enrichment** | Fundraising data, revenue, employee count, LinkedIn profiles — continuous refresh | ClientIQ doesn't have this yet. Would feed richer signals into the nudge engine |
+| **Custom Data Model** | Users define their own objects, attributes, and relationships | ClientIQ is fixed-schema. Not needed for consulting use case but shows flexibility trend |
 | **MCP Server** | Read and write CRM data via Model Context Protocol — AI-agent-friendly API | Forward-looking infrastructure for AI interoperability |
 
 ### Attio's Moat
 
 Flexible data model + builder-friendly APIs. They're betting that every company's CRM needs are different, so the CRM should be programmable.
 
-### Where Activate Wins Over Attio
+### Where ClientIQ Wins Over Attio
 
-Attio is horizontal (any startup). Activate is vertical (consulting firm Partners) with a concierge tone and firm-wide coordination that Attio doesn't attempt.
+Attio is horizontal (any startup). ClientIQ is vertical (consulting firm Partners) with a concierge tone and firm-wide coordination that Attio doesn't attempt.
 
 ---
 
@@ -63,22 +63,22 @@ Attio is horizontal (any startup). Activate is vertical (consulting firm Partner
 
 ### Key Features
 
-| Feature | How It Works | Relevance to Activate |
+| Feature | How It Works | Relevance to ClientIQ |
 |---------|-------------|----------------------|
-| **5 Specialized AI Teammates** | Frank (front office/inbound), Rachel (research), Sally (sales monitoring), Raj (RevOps/forecasting), Alex (CRM admin via conversation) | The "AI agent" pattern — each persona has a distinct role. Activate's "Ask Anything" chat could evolve toward specialized personas |
-| **Zero-Form Data Capture** | "No forms. Reps talk, the AI creates records." Extracts signals from every email, call, meeting automatically | Directly validates Activate's Premise #1 (zero-effort value delivery). Dreamteam builds the entire CRM around this principle |
-| **Sally: Pipeline Monitor** | Flags stalled deals, missed follow-ups, engagement drops BEFORE they cost the close | Exactly what Activate's nudge engine does — proactive surfacing of relationship risk. Dreamteam packages it as a "teammate" |
-| **Rachel: Pre-Meeting Briefs** | Stakeholder maps + competitive landscape + buying signals, delivered as a ready-to-use brief overnight | Almost identical to Activate's meeting briefs, but delivered proactively before each meeting rather than on-demand |
-| **Natural Language Configuration** | "Describe your sales process in plain English. Dreamteam interprets and creates workflows." | Admin UX innovation — no settings screens, just talk. Relevant for Activate's configurable nudge rules |
-| **Draft Card Pattern** | AI never auto-creates/modifies. Every action produces a "draft card" for human review before confirming | Smart trust pattern. Activate's email drafts already work this way (Partner must click "Send"). Could apply to all AI actions |
+| **5 Specialized AI Teammates** | Frank (front office/inbound), Rachel (research), Sally (sales monitoring), Raj (RevOps/forecasting), Alex (CRM admin via conversation) | The "AI agent" pattern — each persona has a distinct role. ClientIQ's "Ask Anything" chat could evolve toward specialized personas |
+| **Zero-Form Data Capture** | "No forms. Reps talk, the AI creates records." Extracts signals from every email, call, meeting automatically | Directly validates ClientIQ's Premise #1 (zero-effort value delivery). Dreamteam builds the entire CRM around this principle |
+| **Sally: Pipeline Monitor** | Flags stalled deals, missed follow-ups, engagement drops BEFORE they cost the close | Exactly what ClientIQ's nudge engine does — proactive surfacing of relationship risk. Dreamteam packages it as a "teammate" |
+| **Rachel: Pre-Meeting Briefs** | Stakeholder maps + competitive landscape + buying signals, delivered as a ready-to-use brief overnight | Almost identical to ClientIQ's meeting briefs, but delivered proactively before each meeting rather than on-demand |
+| **Natural Language Configuration** | "Describe your sales process in plain English. Dreamteam interprets and creates workflows." | Admin UX innovation — no settings screens, just talk. Relevant for ClientIQ's configurable nudge rules |
+| **Draft Card Pattern** | AI never auto-creates/modifies. Every action produces a "draft card" for human review before confirming | Smart trust pattern. ClientIQ's email drafts already work this way (Partner must click "Send"). Could apply to all AI actions |
 
 ### Dreamteam's Moat
 
 The "teammate" metaphor. Instead of a tool with AI features, it's AI agents that happen to live in a CRM.
 
-### Where Activate Wins Over Dreamteam
+### Where ClientIQ Wins Over Dreamteam
 
-Dreamteam is sales-focused (pipeline, deals, quota). Activate serves relationship-builders, not quota-carriers. Also, Dreamteam is pre-launch — Activate is already shipping.
+Dreamteam is sales-focused (pipeline, deals, quota). ClientIQ serves relationship-builders, not quota-carriers. Also, Dreamteam is pre-launch — ClientIQ is already shipping.
 
 ---
 
@@ -91,22 +91,22 @@ Dreamteam is sales-focused (pipeline, deals, quota). Activate serves relationshi
 
 ### Key Features
 
-| Feature | How It Works | Relevance to Activate |
+| Feature | How It Works | Relevance to ClientIQ |
 |---------|-------------|----------------------|
-| **Follow-up Assistant** | Scans email + WhatsApp conversations, detects inactive discussions with pending next steps, sends personalized follow-up suggestions **in your tone of voice** | **Directly competitive with Activate's nudge engine.** Folk detects staleness from real conversation data; Activate uses rule-based signals. Folk's tone-of-voice personalization is ahead |
-| **Recap Assistant** | AI-generated summary of your relationship with any person/company/deal. Scans emails, meetings, notes, WhatsApp, LinkedIn. Customizable to MEDDIC/BANT/custom methodologies | **Missing feature in Activate.** Before a meeting, Partners need "tell me everything about my relationship with this person." Activate has meeting briefs but not relationship recaps |
-| **Research Assistant** | Enriches company profiles + generates research notes using People Data Labs (enrichment) + Perplexity (research notes). Bulk or single-company. | Similar to Activate's Tavily news ingestion but broader — enrichment + research notes, not just news |
-| **Workflow Assistant** | Trigger-based email automation — send personalized email when a field changes or contact is created. AI personalization uses latest interactions and notes | Maps to Activate's cadence engine concept, but simpler (single-step triggers vs multi-step sequences) |
+| **Follow-up Assistant** | Scans email + WhatsApp conversations, detects inactive discussions with pending next steps, sends personalized follow-up suggestions **in your tone of voice** | **Directly competitive with ClientIQ's nudge engine.** Folk detects staleness from real conversation data; ClientIQ uses rule-based signals. Folk's tone-of-voice personalization is ahead |
+| **Recap Assistant** | AI-generated summary of your relationship with any person/company/deal. Scans emails, meetings, notes, WhatsApp, LinkedIn. Customizable to MEDDIC/BANT/custom methodologies | **Missing feature in ClientIQ.** Before a meeting, Partners need "tell me everything about my relationship with this person." ClientIQ has meeting briefs but not relationship recaps |
+| **Research Assistant** | Enriches company profiles + generates research notes using People Data Labs (enrichment) + Perplexity (research notes). Bulk or single-company. | Similar to ClientIQ's Tavily news ingestion but broader — enrichment + research notes, not just news |
+| **Workflow Assistant** | Trigger-based email automation — send personalized email when a field changes or contact is created. AI personalization uses latest interactions and notes | Maps to ClientIQ's cadence engine concept, but simpler (single-step triggers vs multi-step sequences) |
 | **folkX Chrome Extension** | Import leads from LinkedIn, auto-enrich without leaving the browser | Not applicable to consulting context, but shows zero-friction data capture pattern |
-| **Multi-channel data capture** | Email, WhatsApp, LinkedIn, calendar — all auto-captured into one relationship record | Validates the data freshness premise. Folk captures across channels; Activate is currently manual seed data |
+| **Multi-channel data capture** | Email, WhatsApp, LinkedIn, calendar — all auto-captured into one relationship record | Validates the data freshness premise. Folk captures across channels; ClientIQ is currently manual seed data |
 
 ### Folk's Moat
 
 Simplicity + the assistant model. Four focused assistants, each doing one thing well. Not trying to be an AI agent that does everything.
 
-### Where Activate Wins Over Folk
+### Where ClientIQ Wins Over Folk
 
-Folk is horizontal (any team, any use case). Activate is vertical with consulting-specific intelligence: firm-wide coordination, partner-level nudge types (alumni engagement, cross-sell, event follow-up), and the concierge narrative briefing.
+Folk is horizontal (any team, any use case). ClientIQ is vertical with consulting-specific intelligence: firm-wide coordination, partner-level nudge types (alumni engagement, cross-sell, event follow-up), and the concierge narrative briefing.
 
 ---
 
@@ -114,15 +114,15 @@ Folk is horizontal (any team, any use case). Activate is vertical with consultin
 
 ### Patterns All Eight Competitors Validate
 
-1. **Zero-effort data capture is table stakes.** All tools build around "the user never enters data." Attio syncs email/calendar. Dreamteam extracts from calls. Folk captures from WhatsApp/LinkedIn/email. Activate's manual seed data is the #1 gap to close.
+1. **Zero-effort data capture is table stakes.** All tools build around "the user never enters data." Attio syncs email/calendar. Dreamteam extracts from calls. Folk captures from WhatsApp/LinkedIn/email. ClientIQ's manual seed data is the #1 gap to close.
 
-2. **AI assistants > AI features.** Folk has 4 named assistants. Dreamteam has 5 named teammates. Attio has "Ask Attio." The trend is clear: users want to talk to their CRM, not click through it. Activate's "Ask Anything" chat is on this trajectory.
+2. **AI assistants > AI features.** Folk has 4 named assistants. Dreamteam has 5 named teammates. Attio has "Ask Attio." The trend is clear: users want to talk to their CRM, not click through it. ClientIQ's "Ask Anything" chat is on this trajectory.
 
-3. **Proactive follow-up intelligence is the killer feature.** Folk's Follow-up Assistant, Dreamteam's Sally, Attio's churn monitoring, Andsend's drift detection, and Nynch's action plans all do what Activate's nudge engine does. This validates the core product thesis.
+3. **Proactive follow-up intelligence is the killer feature.** Folk's Follow-up Assistant, Dreamteam's Sally, Attio's churn monitoring, Andsend's drift detection, and Nynch's action plans all do what ClientIQ's nudge engine does. This validates the core product thesis.
 
-4. **Relationship recaps before meetings.** Folk (Recap Assistant) and Dreamteam (Rachel's pre-meeting briefs) generate on-demand or proactive relationship summaries. Activate's meeting briefs are close but could be richer.
+4. **Relationship recaps before meetings.** Folk (Recap Assistant) and Dreamteam (Rachel's pre-meeting briefs) generate on-demand or proactive relationship summaries. ClientIQ's meeting briefs are close but could be richer.
 
-5. **The "draft card" trust pattern.** Dreamteam never auto-modifies — every AI action is a reviewable draft. Folk's assistants suggest, not execute. This "human-in-the-loop" pattern builds trust and matches Activate's email draft approach.
+5. **The "draft card" trust pattern.** Dreamteam never auto-modifies — every AI action is a reviewable draft. Folk's assistants suggest, not execute. This "human-in-the-loop" pattern builds trust and matches ClientIQ's email draft approach.
 
 6. **Natural language CRM interaction.** Attio's "Ask Attio," Dreamteam's Alex, and Folk's simplicity all point toward conversational CRM as the dominant interaction model.
 
@@ -138,13 +138,13 @@ Folk is horizontal (any team, any use case). Activate is vertical with consultin
 | **Centralize** | Auto | Missing decision-maker detection | Stakeholder maps | No | Partial | Enterprise sales |
 | **Nynch** | Auto | Weekly action plans | Say/Do Score | No | No | General |
 | **humAInly** | Full auto-capture | Proactive signals | No | No | No | General |
-| **Activate** | Manual seed data (gap) | 9 nudge types + narrative briefing | Meeting briefs (partial) | Ask Anything (RAG chat) | **YES — unique** | **Consulting firms** |
+| **ClientIQ** | Manual seed data (gap) | 9 nudge types + narrative briefing | Meeting briefs (partial) | Ask Anything (RAG chat) | **YES — unique** | **Consulting firms** |
 
 ---
 
 ## New Expansion Candidates (from this analysis)
 
-| # | Feature Idea | Inspired By | Impact on Activate | Effort |
+| # | Feature Idea | Inspired By | Impact on ClientIQ | Effort |
 |---|-------------|-------------|-------------------|--------|
 | A | **Relationship Recap on Demand** | Folk's Recap Assistant | "Tell me everything about my relationship with Sarah Chen" — pulls all interactions, meetings, nudge history, signals into a concise brief. Builds on existing RAG chat | S |
 | B | **Tone-of-Voice Personalization** | Folk's Follow-up Assistant | Draft emails that sound like the specific Partner, not generic AI. Learn from their sent emails | M |
@@ -155,9 +155,9 @@ Folk is horizontal (any team, any use case). Activate is vertical with consultin
 
 ---
 
-## Activate's Unique Differentiation
+## ClientIQ's Unique Differentiation
 
-None of these eight competitors do what Activate does:
+None of these eight competitors do what ClientIQ does:
 
 - **Firm-wide cross-partner coordination** — know who else at your firm knows this person
 - **9 consulting-specific signal types** — alumni engagement, cross-sell, event follow-up, etc.

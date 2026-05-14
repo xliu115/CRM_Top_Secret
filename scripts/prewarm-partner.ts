@@ -31,6 +31,8 @@ import {
   enrichNudgesWithInsights,
 } from "@/lib/services/nudge-engine";
 import { generateAndCacheNudgeEmail } from "@/lib/services/nudge-email-cache";
+import { prepareBriefingForTTS } from "@/lib/utils/tts-prepare";
+import { buildBriefingSpokenOpening } from "@/lib/utils/briefing-spoken-opening";
 
 type Args = {
   partnerId: string;
@@ -150,15 +152,17 @@ async function main() {
 
   if (args.briefing) {
     console.log(
-      `[4/4] Pre-warming morning brief response cache via ${args.baseUrl}/api/dashboard/briefing…`,
+      `[4/5] Pre-warming morning brief response cache via ${args.baseUrl}/api/dashboard/briefing…`,
     );
     const tBrief = Date.now();
+    let briefingJson: unknown = null;
     try {
       const res = await fetch(`${args.baseUrl}/api/dashboard/briefing`, {
         headers: { Cookie: `partner_id=${partner.id}` },
       });
       const ms = Date.now() - tBrief;
       if (res.ok) {
+        briefingJson = await res.json();
         console.log(`      ✓ briefing cached in ${(ms / 1000).toFixed(1)}s`);
       } else {
         console.log(
@@ -177,8 +181,70 @@ async function main() {
       );
     }
     console.log();
+
+    // [5/5] Mobile briefing TTS prewarm: build the exact text the mobile
+    // client would send to /api/tts (spoken opening + plain narrative + top
+    // actions, capped at MAX_WORDS), POST it, and let the route's disk cache
+    // catch it. First mobile "Play" tap then returns in <100ms instead of
+    // 5–10s.
+    if (briefingJson) {
+      console.log(`[5/5] Pre-warming mobile briefing TTS via ${args.baseUrl}/api/tts…`);
+      const tTts = Date.now();
+      try {
+        type BriefingShape = {
+          briefing: string;
+          topActions: {
+            contactName: string;
+            company: string;
+            actionLabel: string;
+            detail: string;
+            deeplink: string;
+          }[];
+          structured: Parameters<typeof buildBriefingSpokenOpening>[0]["structured"];
+        };
+        const data = briefingJson as BriefingShape;
+        const partnerFirst = partner.name.split(/\s+/)[0] ?? "there";
+        const opening = buildBriefingSpokenOpening(
+          { structured: data.structured },
+          partnerFirst,
+        );
+        const ttsText = prepareBriefingForTTS(
+          data.briefing,
+          data.topActions,
+          { spokenOpening: opening },
+        );
+        const res = await fetch(`${args.baseUrl}/api/tts`, {
+          method: "POST",
+          headers: {
+            Cookie: `partner_id=${partner.id}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ text: ttsText }),
+        });
+        const ms = Date.now() - tTts;
+        if (res.ok) {
+          const cacheStatus = res.headers.get("x-tts-cache") ?? "?";
+          const sizeKb = Math.round(Number(res.headers.get("content-length") ?? 0) / 1024);
+          console.log(
+            `      ✓ TTS cached in ${(ms / 1000).toFixed(1)}s (cache=${cacheStatus}, ${sizeKb}KB)`,
+          );
+        } else {
+          console.log(
+            `      ✗ TTS returned ${res.status} ${res.statusText} (after ${(ms / 1000).toFixed(1)}s)`,
+          );
+        }
+      } catch (err) {
+        console.log(
+          `      ✗ TTS prewarm failed: ${(err as Error).message}`,
+        );
+      }
+      console.log();
+    } else {
+      console.log("[5/5] Skipping TTS prewarm (no briefing payload)\n");
+    }
   } else {
-    console.log("[4/4] Skipping briefing prewarm (--no-briefing)\n");
+    console.log("[4/5] Skipping briefing prewarm (--no-briefing)");
+    console.log("[5/5] Skipping TTS prewarm (--no-briefing implies no source text)\n");
   }
 
   await prisma.$disconnect();

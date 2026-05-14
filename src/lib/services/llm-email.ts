@@ -72,13 +72,18 @@ function generateEmailTemplate(ctx: EmailContext): {
     opening = `It's been a while since we last connected, and I wanted to check in on how things are going.`;
   }
 
-  const lastInteraction = ctx.recentInteractions[0]
-    ? `\n\nLast time we spoke, ${ctx.recentInteractions[0].toLowerCase()}`
-    : "";
+  // Intentionally do NOT splice ctx.recentInteractions[0] into the body.
+  // Those strings are formatted as `${type} on ${date}: ${summary}` for the
+  // LLM prompt and contain proper nouns mid-sentence ("Craig is pushing...").
+  // Lowercasing the whole thing ("craig is pushing...") and tacking on
+  // "Last time we spoke, note on mar 24: ..." reads like a system log leak,
+  // which is exactly what shows up in front of users when the LLM call fails
+  // and we fall back here. Better to ship a slightly generic template than
+  // to leak raw note text into outbound mail.
 
   const body = `Hi ${firstName},
 
-${opening}${lastInteraction}
+${opening}
 
 I'd love to find some time to catch up and hear about what's top of mind for you and the team at ${ctx.companyName}. Would you have 30 minutes in the next couple of weeks?
 

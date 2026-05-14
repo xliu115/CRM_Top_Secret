@@ -377,7 +377,7 @@ function BriefingEmailView({
         <div className="border-b border-border bg-muted/50 px-4 py-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground-subtle">
             <Mail className="size-3.5" />
-            Morning briefing · Activate
+            Morning briefing · ClientIQ
           </div>
           <p className="mt-1 text-sm font-medium text-foreground">To: {MOCK_PARTNER_NAME}</p>
           <p className="text-xs text-muted-foreground-subtle">{MOCK_BRIEFING_DATE}</p>

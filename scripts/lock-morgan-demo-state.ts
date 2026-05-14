@@ -8,35 +8,92 @@
  * source of truth for the demo nudge layout.
  *
  * What it locks:
- *   1. Ted Sarandos (Netflix) — HIGH FOLLOW_UP, OPEN, with the
+ *   1. Two demo meetings pushed forward so they always live in the future:
+ *      - mtg-084 "Deal Review: Meta Platforms Expansion" (Mark Zuckerberg) → today
+ *      - mtg-085 "Apple Contract Renewal Discussion" (Eddy Cue + Sundar) → tomorrow
+ *      These drive the morning brief's "two meetings on your calendar"
+ *      spoken opening and the "Prep client meeting" action card.
+ *   2. Ted Sarandos (Netflix) — HIGH FOLLOW_UP, OPEN, with the
  *      InterPositive AI strategic-insight narrative, 56-day gap framing,
  *      and the hand-crafted Sven-voice email body
- *   2. Ted's Contact.lastContacted = 56 days ago (drives the brief's
+ *   3. Ted's Contact.lastContacted = 56 days ago (drives the brief's
  *      "X days since last outreach" line)
- *   3. Eddy Cue (Apple) — every nudge DONE, every cached email cleared
+ *   4. Eddy Cue (Apple) — every nudge DONE, every cached email cleared
  *      (he was noisy and we don't want him in the brief)
- *   4. camp-central-006 (Sustainability & ESG) — Morgan's 3 recipients
+ *   5. camp-central-006 (Sustainability & ESG) — Morgan's 3 recipients
  *      reset to PENDING so "Review my campaign approvals" surfaces them
- *   5. All DONE / SNOOZED nudges cluster-wide have generatedEmail nulled
+ *   6. All DONE / SNOOZED nudges cluster-wide have generatedEmail nulled
  *      so the chat fast-path can never serve a stale draft if the OPEN
  *      ordering hiccups
+ *
+ * Order of operations matters: we move meetings + age Ted's lastContacted
+ * BEFORE calling `refreshNudgesForPartner`, because the engine wipes all
+ * OPEN nudges and recreates from scratch. Patching Ted's canonical email
+ * onto a fixed nudge id is futile — the engine assigns a fresh id every
+ * refresh. So we run refresh first, then look up Ted's freshly-created
+ * FOLLOW_UP nudge by contact and patch it in place.
+ *
+ * Demo safety: `BRIEFING_DISABLE_AUTO_REFRESH=1` in `.env` keeps the
+ * briefing route from running another refresh that would clobber Ted.
  *
  * Usage:
  *   npx tsx scripts/lock-morgan-demo-state.ts
  *
- * Then prewarm to bust the briefing cache:
- *   npx tsx scripts/prewarm-partner.ts --partner=p-morgan-chen --no-refresh
- *
- * Or use the shorthand wrapper:
+ * Or, for end-to-end demo prep (lock + briefing cache + TTS prewarm):
  *   npx tsx scripts/demo-prep.ts
  */
 import { prisma } from "@/lib/db/prisma";
+import { refreshNudgesForPartner } from "@/lib/services/nudge-engine";
 
 const PARTNER_ID = "p-morgan-chen";
 
-// ── 1. Ted Sarandos canonical state ─────────────────────────────────
+// ── Meetings: keep these in the future on every run ─────────────────
+// We anchor on "today's local time" so re-running this script throughout
+// the day always lands the meetings at sensible "later today" / "tomorrow
+// morning" slots. If today's slot has already passed when the script
+// runs (e.g. lock at 6pm targeting a 5pm meeting), we bump to "now + 1h"
+// rounded up to the next half hour so it still reads as "today".
+const META_MEETING_ID = "mtg-084";
+const APPLE_MEETING_ID = "mtg-085";
+
+function nextHalfHour(d: Date): Date {
+  const out = new Date(d);
+  out.setSeconds(0, 0);
+  const m = out.getMinutes();
+  if (m === 0 || m === 30) {
+    out.setMinutes(m + 30);
+  } else if (m < 30) {
+    out.setMinutes(30);
+  } else {
+    out.setHours(out.getHours() + 1);
+    out.setMinutes(0);
+  }
+  return out;
+}
+
+function todayAt(hour: number, minute: number): Date {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
+function tomorrowAt(hour: number, minute: number): Date {
+  const d = todayAt(hour, minute);
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function pickTodayOrBumpForward(preferred: Date): Date {
+  const now = new Date();
+  if (preferred.getTime() > now.getTime() + 30 * 60 * 1000) return preferred;
+  const bumped = nextHalfHour(new Date(now.getTime() + 60 * 60 * 1000));
+  // Don't push past 7pm; if we'd cross that line, fall to tomorrow morning.
+  if (bumped.getHours() >= 19) return tomorrowAt(10, 0);
+  return bumped;
+}
+
+// ── Ted Sarandos canonical state ────────────────────────────────────
 const TED_TARGET_DAYS = 56;
-const TED_NUDGE_ID = "aaca87eb-1410-4250-bf43-82ce60886d0a";
 
 const TED_EMAIL = {
   subject: "InterPositive — and that dinner conversation",
@@ -115,14 +172,12 @@ const TED_INSIGHTS = [
 const TED_REASON =
   "Netflix's InterPositive AI acquisition + content slate — and 56 days since last outreach.";
 
-async function lockTed() {
+async function ageTedLastContacted() {
   const ted = await prisma.contact.findFirst({
     where: { name: "Ted Sarandos", partnerId: PARTNER_ID },
     select: { id: true },
   });
   if (!ted) throw new Error("Ted Sarandos not found");
-
-  // 1a — backdate lastContacted to 56 days + 1 hour ago (floor → 56)
   const targetDate = new Date(
     Date.now() - TED_TARGET_DAYS * 24 * 60 * 60 * 1000 - 60 * 60 * 1000,
   );
@@ -130,9 +185,24 @@ async function lockTed() {
     where: { id: ted.id },
     data: { lastContacted: targetDate },
   });
+  console.log(`  Ted lastContacted → ${TED_TARGET_DAYS} days ago`);
+}
 
-  // 1b — find or restore the canonical Ted nudge
-  let nudge = await prisma.nudge.findUnique({ where: { id: TED_NUDGE_ID } });
+/**
+ * Patch Ted's freshly-created OPEN FOLLOW_UP nudge with the canonical
+ * subject/body/metadata. Runs AFTER `refreshNudgesForPartner` so the
+ * engine has already created Ted's nudge with a fresh id.
+ *
+ * If somehow no Ted FOLLOW_UP open nudge exists (e.g. config disables
+ * the rule), we fall back to creating one — Ted is a demo centerpiece
+ * and must always show.
+ */
+async function patchTedNudge() {
+  const ted = await prisma.contact.findFirst({
+    where: { name: "Ted Sarandos", partnerId: PARTNER_ID },
+    select: { id: true },
+  });
+  if (!ted) throw new Error("Ted Sarandos not found");
 
   const metadata = JSON.stringify({
     insights: TED_INSIGHTS,
@@ -140,38 +210,78 @@ async function lockTed() {
   });
   const generatedEmail = JSON.stringify(TED_EMAIL);
 
-  if (!nudge) {
-    // The original was hard-deleted. Recreate it.
-    nudge = await prisma.nudge.create({
-      data: {
-        id: TED_NUDGE_ID,
-        contactId: ted.id,
-        ruleType: "FOLLOW_UP",
-        priority: "HIGH",
-        status: "OPEN",
-        reason: TED_REASON,
-        metadata,
-        generatedEmail,
-      },
-    });
-    console.log("  Ted nudge re-created from scratch");
-  } else {
+  const followUp = await prisma.nudge.findFirst({
+    where: { contactId: ted.id, status: "OPEN", ruleType: "FOLLOW_UP" },
+    select: { id: true },
+  });
+
+  if (followUp) {
     await prisma.nudge.update({
-      where: { id: TED_NUDGE_ID },
+      where: { id: followUp.id },
       data: {
-        contactId: ted.id,
-        status: "OPEN",
-        ruleType: "FOLLOW_UP",
         priority: "HIGH",
         reason: TED_REASON,
         metadata,
         generatedEmail,
       },
     });
-    console.log(`  Ted nudge reset → status=OPEN  (was ${nudge.status})`);
+    console.log(`  Ted FOLLOW_UP nudge patched → ${followUp.id.slice(0, 8)}`);
+  } else {
+    // Engine didn't surface Ted as FOLLOW_UP this pass (rule disabled or
+    // unusual config). Manufacture one so the demo never silently loses
+    // Ted from the briefing.
+    const created = await prisma.nudge.create({
+      data: {
+        contactId: ted.id,
+        ruleType: "FOLLOW_UP",
+        priority: "HIGH",
+        status: "OPEN",
+        reason: TED_REASON,
+        metadata,
+        generatedEmail,
+      },
+      select: { id: true },
+    });
+    console.log(`  Ted FOLLOW_UP nudge created → ${created.id.slice(0, 8)}`);
   }
 
-  console.log(`  Ted lastContacted → ${TED_TARGET_DAYS} days ago`);
+  // Mark every other OPEN Ted nudge DONE so the briefing never picks
+  // a competing one over the canonical FOLLOW_UP.
+  const otherOpen = await prisma.nudge.updateMany({
+    where: {
+      contactId: ted.id,
+      status: "OPEN",
+      ruleType: { not: "FOLLOW_UP" },
+    },
+    data: { status: "DONE" },
+  });
+  if (otherOpen.count > 0) {
+    console.log(`  Ted: closed ${otherOpen.count} other OPEN nudge(s)`);
+  }
+}
+
+// ── Meetings: anchor demo to safe future windows ────────────────────
+async function lockMeetings() {
+  const metaTarget = pickTodayOrBumpForward(todayAt(17, 0)); // today 5:00 PM
+  const appleTarget = tomorrowAt(10, 0); // tomorrow 10:00 AM
+
+  const m1 = await prisma.meeting.update({
+    where: { id: META_MEETING_ID },
+    data: { startTime: metaTarget },
+    select: { title: true, startTime: true },
+  });
+  console.log(
+    `  ${META_MEETING_ID} "${m1.title}" → ${m1.startTime.toLocaleString()}`,
+  );
+
+  const m2 = await prisma.meeting.update({
+    where: { id: APPLE_MEETING_ID },
+    data: { startTime: appleTarget },
+    select: { title: true, startTime: true },
+  });
+  console.log(
+    `  ${APPLE_MEETING_ID} "${m2.title}" → ${m2.startTime.toLocaleString()}`,
+  );
 }
 
 // ── 2. Eddy Cue stays dismissed, no stale drafts ────────────────────
@@ -226,14 +336,31 @@ async function clearStaleClosedDrafts() {
 
 async function main() {
   console.log(`Locking demo state for ${PARTNER_ID}…\n`);
-  await lockTed();
+
+  console.log("[1/6] Anchoring meeting times to safe future windows");
+  await lockMeetings();
+
+  console.log("\n[2/6] Aging Ted's lastContacted before refresh");
+  await ageTedLastContacted();
+
+  console.log("\n[3/6] Refreshing nudges (engine wipes + recreates OPEN set)");
+  const tRefresh = Date.now();
+  await refreshNudgesForPartner(PARTNER_ID);
+  console.log(`      done in ${((Date.now() - tRefresh) / 1000).toFixed(1)}s`);
+
+  console.log("\n[4/6] Patching Ted's fresh nudge with canonical email");
+  await patchTedNudge();
+
+  console.log("\n[5/6] Re-dismissing Eddy + clearing his stale drafts");
   await lockEddy();
+
+  console.log("\n[6/6] Resetting campaign approval + clearing stale drafts");
   await lockCampaignApproval();
   await clearStaleClosedDrafts();
-  console.log("\nDone. Now run prewarm to bust the briefing cache:");
-  console.log(
-    "  npx tsx scripts/prewarm-partner.ts --partner=p-morgan-chen --no-refresh",
-  );
+
+  console.log("\nDone. Briefing cache will rebuild on next request.");
+  console.log("Recommended next: `npx tsx scripts/demo-prep.ts` to also");
+  console.log("warm the briefing response cache + the mobile TTS audio.");
   await prisma.$disconnect();
 }
 

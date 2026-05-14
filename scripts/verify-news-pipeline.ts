@@ -13,7 +13,7 @@ import { prisma } from "../src/lib/db/prisma";
 import { partnerRepo } from "../src/lib/repositories";
 
 async function main() {
-  console.log("=== CRM Nudge Platform — News Pipeline Verification ===\n");
+  console.log("=== ClientIQ — News Pipeline Verification ===\n");
 
   // 1. Get partner
   const partner = await partnerRepo.findByEmail("ava.patel@firm.com");

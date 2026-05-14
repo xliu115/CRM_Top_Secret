@@ -15,6 +15,7 @@ import {
 import { generateSequenceData } from "./seed-data/sequences";
 import { generateContentLibrary } from "./seed-data/content-library";
 import { generateMockCampaigns } from "./seed-data/campaigns";
+import { seedPipelineDemo } from "./seed-data/pipeline";
 
 const adapter = new PrismaBetterSqlite3({
   url: process.env.DATABASE_URL ?? "file:./dev.db",
@@ -40,6 +41,11 @@ async function main() {
   await prisma.nudge.deleteMany();
   await prisma.externalSignal.deleteMany();
   await prisma.interaction.deleteMany();
+  await prisma.pipelineAttachment.deleteMany();
+  await prisma.pipelineEvent.deleteMany();
+  await prisma.pipelineSuggestion.deleteMany();
+  await prisma.pipelineRow.deleteMany();
+  await prisma.pipelineTabState.deleteMany();
   await prisma.contact.deleteMany();
   await prisma.companyBrief.deleteMany();
   await prisma.company.deleteMany();
@@ -124,6 +130,9 @@ async function main() {
       },
     });
   }
+
+  console.log("Creating pipeline demo data...");
+  await seedPipelineDemo(prisma);
 
   // Engagement data: Events, Articles, Campaigns
   const engagementContactRefs = contacts.map((c) => ({

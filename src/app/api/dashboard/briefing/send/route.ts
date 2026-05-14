@@ -19,7 +19,7 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const FROM_ADDRESS =
-  process.env.RESEND_FROM || "Activate <onboarding@resend.dev>";
+  process.env.RESEND_FROM || "ClientIQ <onboarding@resend.dev>";
 
 const MDS = {
   deepBlue: "#051C2C",
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
         <tr>
           <td style="background:${MDS.deepBlue};padding:28px 32px;">
             <div style="font-size:22px;font-weight:700;color:${MDS.white};letter-spacing:-0.3px;">
-              ✦ Activate Morning Brief
+              ✦ ClientIQ Morning Brief
             </div>
             <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:6px;">
               ${esc(dateStr)} · ${esc(partnerName)}
@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
           <td style="padding:28px 32px;" align="center">
             <a href="${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/mobile"
                style="display:inline-block;padding:12px 32px;background:${MDS.electricBlue};color:${MDS.white};font-size:14px;font-weight:600;text-decoration:none;border-radius:8px;">
-              Open Activate
+              Open ClientIQ
             </a>
           </td>
         </tr>
@@ -255,7 +255,7 @@ export async function POST(request: NextRequest) {
         <!-- Footer -->
         <tr>
           <td style="padding:16px 32px 24px;text-align:center;font-size:12px;color:${MDS.textLight};">
-            Sent by Activate · Your AI-powered CRM assistant
+            Sent by ClientIQ · Your AI-powered CRM assistant
           </td>
         </tr>
 

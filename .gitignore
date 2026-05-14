@@ -49,4 +49,8 @@ next-env.d.ts
 
 # Cached TTS output (voice briefings)
 public/generated/
+
+# Local pipeline uploads (dev)
+uploads/pipeline/
+
 .gstack/

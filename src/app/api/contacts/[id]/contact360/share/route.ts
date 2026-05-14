@@ -10,7 +10,7 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const FROM_ADDRESS =
-  process.env.RESEND_FROM || "Activate <onboarding@resend.dev>";
+  process.env.RESEND_FROM || "ClientIQ <onboarding@resend.dev>";
 
 export async function POST(
   request: NextRequest,

@@ -714,7 +714,7 @@ export default function ContactDetailPage() {
     setTimeout(() => setCopySuccess(false), 2000);
   }
 
-  async function handleDraftSendViaActivate() {
+  async function handleDraftSendViaClientIQ() {
     if (!draftSubject || !draftBody || !contact) return;
     setDraftSending(true);
     try {
@@ -1470,7 +1470,7 @@ export default function ContactDetailPage() {
                   <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
                   <span>
                     {draftSendResult.sequenceStarted
-                      ? `Sent! Activate will track follow-ups and remind you if ${contact?.name.split(" ")[0]} doesn\u2019t respond.`
+                      ? `Sent! ClientIQ will track follow-ups and remind you if ${contact?.name.split(" ")[0]} doesn\u2019t respond.`
                       : "Sent! Marked as done."}
                   </span>
                 </div>
@@ -1495,7 +1495,7 @@ export default function ContactDetailPage() {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button onClick={handleDraftSendViaActivate} disabled={draftSending}>
+                    <Button onClick={handleDraftSendViaClientIQ} disabled={draftSending}>
                       {draftSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                       {draftSending ? "Sending..." : "Send Now"}
                     </Button>
@@ -1801,7 +1801,7 @@ export default function ContactDetailPage() {
                   <div>
                     <CardTitle className="text-base">Campaign Activity</CardTitle>
                     <CardDescription>
-                      Activate campaigns including this contact
+                      ClientIQ campaigns including this contact
                     </CardDescription>
                   </div>
                 </div>
@@ -2630,7 +2630,7 @@ function ContactNudgeDraftPanel({
     }
   }
 
-  async function handleSendViaActivate() {
+  async function handleSendViaClientIQ() {
     if (!draft) return;
     setSending(true);
     setDraftError(null);
@@ -2692,7 +2692,7 @@ function ContactNudgeDraftPanel({
           <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
           <span>
             {sendResult.sequenceStarted
-              ? `Sent! Activate will track follow-ups and remind you if ${contactFirst} doesn\u2019t respond.`
+              ? `Sent! ClientIQ will track follow-ups and remind you if ${contactFirst} doesn\u2019t respond.`
               : "Sent! Marked as done."}
           </span>
         </div>
@@ -2721,7 +2721,7 @@ function ContactNudgeDraftPanel({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={handleSendViaActivate} disabled={sending}>
+            <Button size="sm" onClick={handleSendViaClientIQ} disabled={sending}>
               {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
               {sending ? "Sending..." : "Send Now"}
             </Button>

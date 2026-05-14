@@ -5,7 +5,7 @@
 
 ## Overview
 
-Two voice interaction improvements to the Activate platform:
+Two voice interaction improvements to the ClientIQ platform:
 
 1. **Live streaming transcription** — words appear as the user speaks (across all voice-input surfaces), replacing the current record-then-transcribe flow.
 2. **Mobile briefing voice-over** — tap-to-play TTS narration of the daily briefing on the mobile interface, adding a "listen" interaction model alongside the existing text.

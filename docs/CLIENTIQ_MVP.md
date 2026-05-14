@@ -1,4 +1,4 @@
-# CRM Nudge Platform MVP Implementation Plan
+# ClientIQ MVP Implementation Plan
 
 ## Architecture Overview
 
@@ -12,7 +12,7 @@ The platform is built with:
 ## Project Structure
 
 ```
-crm-nudge-platform/
+clientiq/
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/

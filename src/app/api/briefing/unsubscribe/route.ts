@@ -48,14 +48,14 @@ function unsubscribePage(message: string, success: boolean): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Activate — Briefing Preferences</title>
+  <title>ClientIQ — Briefing Preferences</title>
 </head>
 <body style="margin: 0; padding: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh;">
   <div style="max-width: 400px; text-align: center; padding: 40px 24px;">
-    <div style="font-size: 14px; font-weight: 600; color: #2251FF; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 16px;">Activate</div>
+    <div style="font-size: 14px; font-weight: 600; color: #2251FF; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 16px;">ClientIQ</div>
     <p style="font-size: 18px; font-weight: 600; color: ${color}; margin: 0 0 12px 0;">${message}</p>
     ${success ? '<p style="font-size: 14px; color: #64748b; margin: 0 0 24px 0;">You can re-enable briefings anytime from your dashboard settings.</p>' : ""}
-    <a href="${appUrl}/dashboard" style="display: inline-block; padding: 10px 24px; background: #051C2C; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 4px;">Open Activate</a>
+    <a href="${appUrl}/dashboard" style="display: inline-block; padding: 10px 24px; background: #051C2C; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 4px;">Open ClientIQ</a>
   </div>
 </body>
 </html>`;

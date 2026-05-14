@@ -3,7 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ActivateLogo } from "@/components/ui/activate-logo";
+import { ClientIQLogo } from "@/components/ui/clientiq-logo";
 
 const demoPartners = [
   { name: "Ava Patel", email: "ava.patel@firm.com" },
@@ -43,10 +43,10 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8 px-4">
         <div className="text-center">
           <div className="mx-auto mb-4">
-            <ActivateLogo size="lg" />
+            <ClientIQLogo size="lg" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Activate
+            ClientIQ
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Select a partner to sign in

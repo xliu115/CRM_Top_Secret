@@ -146,7 +146,7 @@ function ChatPageContent() {
                     <div className="min-w-0 flex-1 space-y-2">
                       <p className="text-xs font-medium text-muted-foreground-subtle">
                         {msg.role === "assistant"
-                          ? "Activate"
+                          ? "ClientIQ"
                           : session?.user?.name || "You"}
                       </p>
                       <div
@@ -282,7 +282,7 @@ function ChatPageContent() {
                 </span>
               ) : (
                 <>
-                  Activate searches your CRM data and the live web to answer
+                  ClientIQ searches your CRM data and the live web to answer
                   questions.
                 </>
               )}

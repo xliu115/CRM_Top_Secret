@@ -77,7 +77,7 @@ flowchart TB
 **File:** `[src/lib/services/llm-service.ts](src/lib/services/llm-service.ts)` (add to existing)
 
 - Accepts `{ partnerName, nudges, meetings, clientNews }` context
-- System prompt: "You are Activate. Generate a concise, warm morning briefing (3-5 sentences) for a Partner. Highlight the most important nudges, upcoming meetings, and notable client news. Be conversational and actionable."
+- System prompt: "You are ClientIQ. Generate a concise, warm morning briefing (3-5 sentences) for a Partner. Highlight the most important nudges, upcoming meetings, and notable client news. Be conversational and actionable."
 - Template fallback: deterministic summary built from the same data (e.g. "You have 3 open nudges today — the highest priority is reconnecting with Jane Doe at Acme Corp. You also have a meeting with...")
 
 ### 3. Restructure dashboard layout — conversational panel as hero

@@ -62,7 +62,7 @@ export async function GET(
       _count: { _all: true },
     });
 
-    const activateCampaigns = campaignStats.length > 0
+    const clientIQCampaigns = campaignStats.length > 0
       ? await prisma.campaign.findMany({
           where: {
             id: { in: campaignStats.map((s) => s.campaignId) },
@@ -271,7 +271,7 @@ export async function GET(
       },
       campaignActivity: {
         totalCampaigns: campaignStats.length,
-        campaigns: activateCampaigns.map((c) => ({
+        campaigns: clientIQCampaigns.map((c) => ({
           id: c.id,
           name: c.name,
           status: c.status,

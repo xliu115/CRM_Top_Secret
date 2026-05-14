@@ -187,7 +187,7 @@ function DraftEmailPanel({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function handleSendViaActivate() {
+  async function handleSendViaClientIQ() {
     if (!draft) return;
     setSending(true);
     setError(null);
@@ -252,7 +252,7 @@ function DraftEmailPanel({
           <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
           <span>
             {sendResult.sequenceStarted
-              ? `Sent! Activate will track follow-ups and remind you if ${contactFirst} doesn\u2019t respond.`
+              ? `Sent! ClientIQ will track follow-ups and remind you if ${contactFirst} doesn\u2019t respond.`
               : "Sent! Marked as done."}
           </span>
         </div>
@@ -281,7 +281,7 @@ function DraftEmailPanel({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={handleSendViaActivate} disabled={sending}>
+            <Button size="sm" onClick={handleSendViaClientIQ} disabled={sending}>
               {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
               {sending ? "Sending..." : "Send Now"}
             </Button>

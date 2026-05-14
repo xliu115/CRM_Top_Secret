@@ -1,6 +1,6 @@
-# Activate CRM — Product Requirements: Four New Features
+# ClientIQ CRM — Product Requirements: Four New Features
 
-This document specifies detailed product requirements for four new features on the Activate CRM platform. It is written for developers to implement with minimal ambiguity. All references to existing code paths, models, and services are accurate as of the codebase exploration.
+This document specifies detailed product requirements for four new features on the ClientIQ CRM platform. It is written for developers to implement with minimal ambiguity. All references to existing code paths, models, and services are accurate as of the codebase exploration.
 
 ---
 

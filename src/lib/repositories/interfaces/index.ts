@@ -32,3 +32,12 @@ export type {
   CampaignWithStats,
   CampaignDetail,
 } from "./campaign-repository";
+export type {
+  IPipelineRepository,
+  PipelineRowDTO,
+  PipelineSuggestionDTO,
+  PipelineTabStateDTO,
+  PipelineEventDTO,
+  CreatePipelineRowInput,
+  UpsertSuggestionInput,
+} from "./pipeline-repository";

@@ -1,4 +1,4 @@
-# Activate — Deferred & Future Work
+# ClientIQ — Deferred & Future Work
 
 Last updated: 2026-03-28 (CEO Review Phase 2)
 

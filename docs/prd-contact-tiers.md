@@ -1,4 +1,4 @@
-# PRD: Contact tiers (Activate)
+# PRD: Contact tiers (ClientIQ)
 
 **Status:** Draft · **Last updated:** 2026-03-19  
 

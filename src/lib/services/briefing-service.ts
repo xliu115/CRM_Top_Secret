@@ -22,7 +22,7 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const NUDGE_RECIPIENT = process.env.NUDGE_EMAIL_TO || "";
-const FROM_ADDRESS = process.env.RESEND_FROM || "Activate <onboarding@resend.dev>";
+const FROM_ADDRESS = process.env.RESEND_FROM || "ClientIQ <onboarding@resend.dev>";
 
 export function generateUnsubscribeToken(partnerId: string): string {
   const secret = process.env.CRON_SECRET || "dev-secret";
@@ -286,8 +286,8 @@ export async function sendMorningBriefing(
 
     const firstName = partner.name.split(" ")[0];
     const subject = topNudges.length > 0
-      ? `${firstName}, your top move today — Activate`
-      : `Your morning briefing — Activate`;
+      ? `${firstName}, your top move today — ClientIQ`
+      : `Your morning briefing — ClientIQ`;
 
     const { error } = await resend.emails.send({
       from: FROM_ADDRESS,

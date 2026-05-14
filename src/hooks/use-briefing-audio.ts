@@ -188,21 +188,36 @@ export function useBriefingAudio(): UseBriefingAudioReturn {
               const { done, value } = await reader.read();
 
               if (done) {
+                // Calling endOfStream() while ANY SourceBuffer is still
+                // updating throws InvalidStateError. The single-listener
+                // pattern below was racy on Chromium when the entire
+                // body landed in one chunk (cache-hit path returns the
+                // full MP3 in a single ~80ms read, so the final append
+                // and `done` arrive in the same microtask). Re-check on
+                // every call and self-defer until updating is clear,
+                // then guard endOfStream itself for any remaining race.
                 const finalize = () => {
-                  if (mediaSource.readyState === "open") {
-                    mediaSource.endOfStream();
+                  if (sourceBuffer.updating) {
+                    sourceBuffer.addEventListener("updateend", finalize, {
+                      once: true,
+                    });
+                    return;
                   }
-                  if (Number.isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+                  if (mediaSource.readyState !== "open") return;
+                  try {
+                    mediaSource.endOfStream();
+                  } catch {
+                    // Already closed or transitioned — playback is fine.
+                  }
+                  if (
+                    Number.isFinite(audio.duration) &&
+                    audio.duration > 0 &&
+                    audio.duration < 86400
+                  ) {
                     setDuration(Math.floor(audio.duration));
                   }
                 };
-                if (mediaSource.readyState === "open") {
-                  if (sourceBuffer.updating) {
-                    sourceBuffer.addEventListener("updateend", finalize, { once: true });
-                  } else {
-                    finalize();
-                  }
-                }
+                finalize();
                 resolve();
                 return;
               }

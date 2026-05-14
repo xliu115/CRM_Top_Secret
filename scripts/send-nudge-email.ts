@@ -49,7 +49,7 @@ if (!recipient) {
 }
 
 const fromAddress =
-  process.env.RESEND_FROM || "Activate <onboarding@resend.dev>";
+  process.env.RESEND_FROM || "ClientIQ <onboarding@resend.dev>";
 const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -436,7 +436,7 @@ async function main() {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Activate — Nudge Digest</title>
+  <title>ClientIQ — Nudge Digest</title>
 </head>
 <body style="margin: 0; padding: 0; background: #F5F5F5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background: #F5F5F5;">
@@ -450,7 +450,7 @@ async function main() {
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
                   <td>
-                    <div style="font-size: 14px; font-weight: 600; color: #2251FF; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">Activate</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #2251FF; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">ClientIQ</div>
                     <div style="font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.3px; font-family: Georgia, 'Times New Roman', serif;">
                       Your Daily Nudge Digest
                     </div>
@@ -484,7 +484,7 @@ async function main() {
           <tr>
             <td style="background: #ffffff; padding: 24px 28px; text-align: center; border-top: 1px solid #E0E0E0;">
               <a href="${appUrl}/nudges" style="display: inline-block; padding: 12px 32px; background: #051C2C; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 3px; letter-spacing: -0.1px;">
-                Open Activate
+                Open ClientIQ
               </a>
             </td>
           </tr>
@@ -493,7 +493,7 @@ async function main() {
           <tr>
             <td style="padding: 20px 28px; text-align: center;">
               <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
-                Automated digest from Activate &middot;
+                Automated digest from ClientIQ &middot;
                 <a href="${appUrl}/nudges/settings" style="color: #0070AD; text-decoration: none;">Manage preferences</a>
               </p>
             </td>
@@ -509,8 +509,8 @@ async function main() {
   // Send
   const subject =
     urgentCount > 0
-      ? `${urgentCount} urgent + ${nudgesForEmail.length - urgentCount} more — Activate`
-      : `${nudgesForEmail.length} nudge${nudgesForEmail.length !== 1 ? "s" : ""} to review — Activate`;
+      ? `${urgentCount} urgent + ${nudgesForEmail.length - urgentCount} more — ClientIQ`
+      : `${nudgesForEmail.length} nudge${nudgesForEmail.length !== 1 ? "s" : ""} to review — ClientIQ`;
 
   console.log(`\n📧  Sending digest to ${recipient}...`);
   console.log(`   Subject: ${subject}`);

@@ -63,9 +63,9 @@ describe("prepareBriefingForTTS", () => {
           deeplink: "/c",
         },
       ],
-      { spokenOpening: "Alex, here's your morning briefing from Activate." },
+      { spokenOpening: "Alex, here's your morning briefing from ClientIQ." },
     );
-    expect(result.startsWith("Alex, here's your morning briefing from Activate.")).toBe(true);
+    expect(result.startsWith("Alex, here's your morning briefing from ClientIQ.")).toBe(true);
     expect(result).toContain("Here's the full briefing.");
     expect(result).toContain("Main body.");
     expect(result).not.toContain("Here are your priorities for today.");

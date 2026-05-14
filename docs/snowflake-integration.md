@@ -2,7 +2,7 @@
 
 ## Overview
 
-Activate is designed with a **repository abstraction layer** that makes swapping the underlying data store straightforward. This document describes how to migrate from the current SQLite/Postgres local database to Snowflake.
+ClientIQ is designed with a **repository abstraction layer** that makes swapping the underlying data store straightforward. This document describes how to migrate from the current SQLite/Postgres local database to Snowflake.
 
 ## Architecture
 

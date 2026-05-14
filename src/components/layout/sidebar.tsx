@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Avatar } from "@/components/ui/avatar";
-import { ActivateLogo } from "@/components/ui/activate-logo";
+import { ClientIQLogo } from "@/components/ui/clientiq-logo";
 
 type NavItem = {
   href: string;
@@ -76,10 +76,10 @@ export function Sidebar({
           collapsed ? "justify-center px-2 py-5" : "gap-3 px-6 py-5"
         )}
       >
-        <ActivateLogo size="sm" />
+        <ClientIQLogo size="sm" />
         {!collapsed && (
           <h1 className="text-lg font-bold whitespace-nowrap overflow-hidden">
-            Activate
+            ClientIQ
           </h1>
         )}
       </div>

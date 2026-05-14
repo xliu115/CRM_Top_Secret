@@ -82,7 +82,7 @@ function buildDigestSms(
 
   const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
   lines.push("");
-  lines.push(`Open Activate: ${appUrl}/nudges`);
+  lines.push(`Open ClientIQ: ${appUrl}/nudges`);
 
   return lines.join("\n");
 }

@@ -44,6 +44,7 @@ Tabs have a **fixed name** plus a **live numeric triple** that always reflects *
   - **Ordering:** Recommendations first, then changes; cap visible items with **“Show more”** to avoid inbox fatigue.
   - **Dismiss:** Collapse or “Got it”; highlights are informational, not blocking.
 - **First visit:** No highlights; concise empty guidance in **operational** language only (e.g. “Add your first item”).
+- **Partner guardrails:** Explicit **mark as seen**, conservative idle behavior, and **neutral heading copy** for the band — §13.
 
 ### 3.3 Recommendations — logic, presentation, partner actions
 
@@ -67,7 +68,7 @@ Additional types (e.g. “schedule a touch”) stay **out of v1** unless product
 
 - **Container:** A single **panel** directly under the tab strip: light **tinted background** (e.g. subtle brand-tinted or neutral `muted` panel), **rounded** corners, **clear heading**: “Since your last visit” + **relative timestamp** (this tab’s `lastViewedAt` reference).
 - **Ordering:** (1) **Suggestions** first, sorted by rank; (2) **Activity** lines (rows added/removed, stage changes, drop-off reason if logged) after. Cap **5–7** lines; **“Show more”** reveals the rest in-panel or on a simple full-list view.
-- **Per line — suggestions:** Small **“Suggested”** pill (or icon) + **one-line title** + optional **subtitle** (client, study name). Do not use scary reds for normal suggestions; reserve **warning** styling only for hygiene that implies data loss (archive), with confirm anyway.
+- **Per line — suggestions:** Small **“Suggested”** pill (or icon) + **one-line title** + optional **subtitle** (client, study name). Each line includes a **one-line “why”** (signals/rules; LLM may phrase without inventing facts) and an **always-visible Dismiss** (see §13). Do not use scary reds for normal suggestions; reserve **warning** styling only for hygiene that implies data loss (archive), with confirm anyway.
 - **Per line — activity:** Neutral icon or dot; factual copy (“Jamie Lee moved to LOPs,” “Acme study removed”).
 - **Dismiss bar:** **“Got it”** collapses the whole panel for this visit; individual lines can still be acted on from **Add → Recommendations** if needed.
 
@@ -93,7 +94,7 @@ Additional types (e.g. “schedule a touch”) stay **out of v1** unless product
 
 - **Three lanes** (sections): active engagements · LOPs in discussion · serious discussions.
 - Each lane: **sortable list** of rows (e.g. client, working title, next step, last touch). No aggregate “2/4/8” vs-target row in v1.
-- **Lane filters:** Filters scoped to this lens (e.g. institution, practice, search, optional **theme / workstream tags**) so large boards stay usable—addresses recurring Activate feedback on **filtering**, **business-unit scope**, and **theme** grouping without sounding methodological.
+- **Lane filters:** Filters scoped to this lens (e.g. institution, practice, search, optional **theme / workstream tags**) so large boards stay usable—addresses recurring Activate feedback on **filtering**, **business-unit scope**, and **theme** grouping without sounding methodological. **Default:** filters/tags **collapsed** until expanded (§13).
 - **Stage moves:** Partners can move a row **forward or backward** between stages with the same **confirm** affordance as today; consider **undo last move** within a short window when feasible (Activate: “move back in funnel,” reduce rigid rules).
 - Rows support **linked attachments** and provenance: `manual` | `system` | `voice` | `upload` for audit.
 
@@ -116,7 +117,7 @@ Additional types (e.g. “schedule a touch”) stay **out of v1** unless product
 Primary **Add** affordance per tab opens a **chooser**:
 
 - Recommendations for me (system-suggested rows or stage changes — **confirm to apply**).
-- **Voice:** capture → transcript → **structured draft** → partner **confirms** before commit. (Platform scope: desktop and/or mobile to be decided in implementation plan; spec assumes both are allowed unless product narrows.)
+- **Voice:** capture → transcript → **structured draft** → partner **confirms** before commit. **Mobile:** voice add is **v1-required** unless product documents a pilot exception (§13). Desktop scope per implementation plan.
 - **Upload:** files attached to a new or existing row; virus scan, size/type limits, and retention policy defined at implementation.
 - **Manual:** form for precise entry when voice/upload is insufficient.
 
@@ -155,7 +156,7 @@ Primary **Add** affordance per tab opens a **chooser**:
 - Exact **idle threshold** for updating `lastViewedAt`.
 - **Voice** capture reuse vs new component; ASR error handling and PII in transcripts.
 - **Upload** allowed MIME types, max size, storage backend, and malware scanning.
-- **Scope model** for “whose rows appear by default” (e.g. mine vs broader team) and **export** of the current lens for CST meetings (CSV/snapshot)—priority post-v1 unless pilot demands sooner.
+- **Scope model** for “whose rows appear by default” (e.g. mine vs broader team) and **export** of the current lens for CST meetings (CSV/snapshot)—priority post-v1 unless pilot demands sooner. If export slips v1, ship **copy summary / read-only share** per §13.
 
 ## 12. Crosswalk — Activate ad-hoc feedback tracker (2026-05-09)
 
@@ -174,6 +175,22 @@ Source workbook: `Activate Ad-hoc feedback tracker_20260509.xlsx` (Activate / Sa
 | **Financial / metric display bugs ($0)** | If Pipeline shows **value** fields later, only when **data-complete**; never placeholder zeros that read as truth. |
 | **Link todos to engagements** | Implementation: allow **tasks/nudges** elsewhere to **link** to a pipeline row id when product supports it. |
 
+## 13. Partner path — v1 guardrails (design review)
+
+Busy-partner constraints folded from review: **low cognitive load**, **trust**, **mobile capture**, **CST escape hatch**, **no “surveillance” read**.
+
+1. **Suggestion transparency** — Every recommendation line shows a **one-line “why”** (rule- or signal-based where possible; LLM may phrase but must not invent facts). **Dismiss** remains **always visible** on the line (not only inside a sheet). Partners can reject a wrong suggestion without opening a modal first.
+
+2. **Progressive disclosure** — **Lane filters** and **theme/workstream tags** ship **collapsed by default** (e.g. single “Filter” / “Tags” control expanding a panel). Avoid a first screen that looks like a cockpit.
+
+3. **Mark as seen** — Offer an explicit **“Mark updates as seen”** (or equivalent) in addition to idle/leave rules for `lastViewedAt` (§3.2). Partners who keep the tab open across meetings should not lose highlights unpredictably; conservative idle thresholds alone are insufficient for trust.
+
+4. **Mobile voice** — Treat **voice capture for add** as **v1-required on mobile** (phone and tablet), not deferred to “implementation plan only,” unless product explicitly documents a pilot exception. Desktop voice can follow; **manual + upload** cover desktop if needed.
+
+5. **Share / copy when export slips** — If full **export** (§11) misses v1, ship a **minimal escape hatch**: e.g. **“Copy summary to clipboard”** (plain text: lanes, counts, top N row titles + next steps) and/or a **read-only share link** for CST prep. Stops parallel Excel becoming the system of record.
+
+6. **Copy tone for the highlight band** — Prefer **neutral-operational** headings (e.g. “**Updates**” or “**Changes since you were last here**”) over phrasing that can read as monitoring. Optional subtitle: “On your board only.”
+
 ---
 
 ## Spec self-review (inline)
@@ -181,4 +198,4 @@ Source workbook: `Activate Ad-hoc feedback tracker_20260509.xlsx` (Activate / Sa
 - **Placeholders:** Open decisions listed in §11; none left as “TBD” inside locked scope without a home.
 - **Consistency:** Surface avoids playbook and vs-target; backend may use playbook-shaped logic only for ranking/recommendations — stated explicitly.
 - **Scope:** Single feature area (Pipeline page + capture + highlights); dashboard and briefing are touchpoints only.
-- **Ambiguity:** Tab digits are **live counts** per partner per lane order; **2-4-8 / 4-8-16** are **not** shown on tabs — they remain internal targets for recommendations only. **§3.3** ties recommendation UX to the highlight band and Add flow. **§12** maps legacy Activate pilot feedback.
+- **Ambiguity:** Tab digits are **live counts** per partner per lane order; **2-4-8 / 4-8-16** are **not** shown on tabs — they remain internal targets for recommendations only. **§3.3** ties recommendation UX to the highlight band and Add flow. **§12** maps legacy Activate pilot feedback. **§13** locks busy-partner v1 guardrails from design review.

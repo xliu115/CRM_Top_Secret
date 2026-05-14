@@ -1267,7 +1267,7 @@ export default function DashboardPage() {
                         <Sparkles className="h-4 w-4 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1 space-y-3">
-                        <p className="text-xs font-medium text-muted-foreground-subtle">Activate</p>
+                        <p className="text-xs font-medium text-muted-foreground-subtle">ClientIQ</p>
                         {briefing && (
                           <MarkdownContent content={briefing} className="text-sm text-foreground" />
                         )}
@@ -2043,10 +2043,22 @@ export default function DashboardPage() {
 
             {/* Pipeline Pulse */}
             {cardPrefs?.pipelinePulse && (
-              <ComingSoonCard
-                title="Pipeline Pulse"
-                description="Open opportunities sorted by stage gate, close date, or staleness — with next step and last touch."
-              />
+              <Card className="border-border/60">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Pipeline Pulse</CardTitle>
+                  <CardDescription>
+                    Open opportunities and client lenses with next steps — continue on the Pipeline board.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link
+                    href="/pipeline?lens=pipeline"
+                    className="inline-flex items-center text-sm font-medium text-primary hover:underline"
+                  >
+                    Open Pipeline board
+                  </Link>
+                </CardContent>
+              </Card>
             )}
 
             {/* Campaign & Content Dissemination Momentum */}

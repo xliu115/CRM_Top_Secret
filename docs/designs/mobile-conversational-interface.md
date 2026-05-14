@@ -1,8 +1,8 @@
-# Mobile Conversational Interface for Activate
+# Mobile Conversational Interface for ClientIQ
 
 ## The Bet
 
-Mobile Activate is a single conversational surface. No tabs, no navigation hierarchy. The briefing is the first message, the LLM is the navigation. Partners check their phone before a meeting, read the briefing, tap a quick action or ask a question, and pocket it. 60 seconds.
+Mobile ClientIQ is a single conversational surface. No tabs, no navigation hierarchy. The briefing is the first message, the LLM is the navigation. Partners check their phone before a meeting, read the briefing, tap a quick action or ask a question, and pocket it. 60 seconds.
 
 Desktop (above `md` / 768px) stays exactly as it is today. Every change is additive, scoped to the `md:` breakpoint.
 
@@ -42,7 +42,7 @@ flowchart TD
 - **Affinity Q2 2025**: Relationship status badges, deep linking, enhanced search. Traditional list/detail nav.
 - **HubSpot Breeze**: Dedicated AI assistant mobile app with voice input, meeting prep, artifact review. Closest to our approach but as a separate app, not the primary interface.
 
-**What makes Activate different:** No CRM puts the AI briefing as the literal home screen with conversation as the only navigation. This is a bet that the LLM quality is high enough to replace traditional nav for the mobile use case.
+**What makes ClientIQ different:** No CRM puts the AI briefing as the literal home screen with conversation as the only navigation. This is a bet that the LLM quality is high enough to replace traditional nav for the mobile use case.
 
 ## Files to Create
 
@@ -51,7 +51,7 @@ flowchart TD
 The mobile-only app chrome. Replaces `DashboardShell` below `md`.
 
 - Full viewport height (`h-[100dvh]`)
-- **Header**: Activate logo (left) + avatar/hamburger (right)
+- **Header**: ClientIQ logo (left) + avatar/hamburger (right)
 - **Slide-over menu** (triggered by hamburger): all 8 nav items from current sidebar + Sign out. Uses a `<dialog>` or fixed overlay with backdrop blur. Links to existing pages (which will also use `MobileShell` on mobile).
 - **Children slot** for page content
 - Safe area insets for notched phones: `env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`
@@ -61,7 +61,7 @@ The mobile-only app chrome. Replaces `DashboardShell` below `md`.
 The unified mobile home. Combines briefing + chat in one feed.
 
 - On mount: fetch briefing from `/api/briefing/today` (same endpoint dashboard uses)
-- Render briefing as the first "assistant" message with Activate avatar
+- Render briefing as the first "assistant" message with ClientIQ avatar
 - Below briefing: contextual quick action pills (time-aware, briefing-aware)
 - Chat input bar pinned to bottom (above safe area)
 - After user sends a message or taps a quick action, the conversation continues using the existing `/api/chat` endpoint
@@ -166,10 +166,10 @@ Future phases can add:
 
 ```
 +----------------------------------+
-| [Logo]  Activate    [Avatar/Menu]|  <- 48px header, safe-area-top padding
+| [Logo]  ClientIQ    [Avatar/Menu]|  <- 48px header, safe-area-top padding
 +----------------------------------+
 |                                  |
-| [Activate avatar]                |
+| [ClientIQ avatar]                |
 | Good Morning, Morgan             |
 |                                  |
 | Your most important move today   |
@@ -186,7 +186,7 @@ Future phases can add:
 | [user] Show me the full 360     |
 |        on Anat Ashkenazi         |
 |                                  |
-| [Activate avatar]                |
+| [ClientIQ avatar]                |
 | ## Insight Summary               |
 | Anat is Google's CFO...          |
 | ## Talking Points                |

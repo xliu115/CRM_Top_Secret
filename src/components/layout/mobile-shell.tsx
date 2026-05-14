@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Avatar } from "@/components/ui/avatar";
-import { ActivateLogo } from "@/components/ui/activate-logo";
+import { ClientIQLogo } from "@/components/ui/clientiq-logo";
 
 const navItems = [
   { href: "/mobile/history", label: "Chat history", icon: History },
@@ -59,7 +59,7 @@ export function MobileShell({
       {/* Page content fills the entire frame so the scrollable feed below
           can pass *under* the floating header — that's what gives the
           frosted-glass blur something to act on. */}
-      <div className="absolute inset-0 flex flex-col">{children}</div>
+      <div className="absolute inset-0 flex min-h-0 flex-col">{children}</div>
 
       {/* Compact header — iOS-style frosted glass with a gradient blur.
           The frosted surface lives in an absolute background layer that's
@@ -105,8 +105,8 @@ export function MobileShell({
           aria-haspopup="menu"
           aria-expanded={menuOpen}
         >
-          <ActivateLogo size="sm" tone="dark" />
-          <span className="text-base font-bold text-foreground">Activate</span>
+          <ClientIQLogo size="sm" tone="dark" />
+          <span className="text-base font-bold text-foreground">ClientIQ</span>
         </button>
 
         <div className="relative flex items-center gap-2">{headerAction}</div>
@@ -126,8 +126,8 @@ export function MobileShell({
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
               <div className="flex items-center gap-2">
-                <ActivateLogo size="sm" tone="dark" />
-                <span className="text-base font-bold">Activate</span>
+                <ClientIQLogo size="sm" tone="dark" />
+                <span className="text-base font-bold">ClientIQ</span>
               </div>
               <button
                 type="button"

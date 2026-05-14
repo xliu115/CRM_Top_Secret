@@ -1,4 +1,4 @@
-# Design: Activate Executive Landing Page
+# Design: ClientIQ Executive Landing Page
 
 Status: APPROVED
 Date: 2026-04-03
@@ -7,19 +7,19 @@ Audience: Internal — firm leadership and executives
 
 ## 1. Overview
 
-A single-scroll, executive-polished landing page that pitches Activate to firm leadership. Pure static HTML/CSS/JS — zero dependencies, single `index.html`, deployable anywhere. No screenshots, no CTA buttons. The content and design authority do the persuading.
+A single-scroll, executive-polished landing page that pitches ClientIQ to firm leadership. Pure static HTML/CSS/JS — zero dependencies, single `index.html`, deployable anywhere. No screenshots, no CTA buttons. The content and design authority do the persuading.
 
 The page reads like a strategy brief brought to life: McKinsey-quality visual language, structured visual elements (icon-paired cards, comparison grids, flow diagrams), and subtle scroll animations — all in CSS with minimal vanilla JS.
 
 ## 2. Audience
 
-Internal firm leadership: practice leaders, senior leadership, managing directors. People who approve budgets, assign pilot Partners, and decide whether Activate becomes a firm-wide initiative. They value substance, credibility, and clear articulation of business impact. They do not want a SaaS marketing page.
+Internal firm leadership: practice leaders, senior leadership, managing directors. People who approve budgets, assign pilot Partners, and decide whether ClientIQ becomes a firm-wide initiative. They value substance, credibility, and clear articulation of business impact. They do not want a SaaS marketing page.
 
 ## 3. Visual Design System
 
 ### Palette
 
-Drawn from the MDS email palette already used in Activate:
+Drawn from the MDS email palette already used in ClientIQ:
 
 | Role | Color | Hex |
 |------|-------|-----|
@@ -44,7 +44,7 @@ Drawn from the MDS email palette already used in Activate:
 - Max content width: 960px, centered.
 - Vertical section padding: 80-120px.
 - No sidebar, no navigation bar — continuous scroll only.
-- "Activate" wordmark at top (Georgia, text-only, not an image).
+- "ClientIQ" wordmark at top (Georgia, text-only, not an image).
 - Alternating white / light grey (`#F5F5F5`) section backgrounds for visual rhythm.
 
 ### Animation
@@ -58,7 +58,7 @@ Drawn from the MDS email palette already used in Activate:
 ### Section 1: Hero — "The Opening Statement"
 
 - **Background:** Deep Blue (`#051C2C`), full-width.
-- **Top-left:** "Activate" wordmark (Georgia, white, ~20px).
+- **Top-left:** "ClientIQ" wordmark (Georgia, white, ~20px).
 - **Headline (centered, white, Georgia, ~48px):** "Proactive Relationship Intelligence for Partners"
 - **Subtitle (centered, white/80% opacity, sans-serif, ~20px):** "Surfacing who to contact, when, and why — with AI-drafted outreach ready to send and no relationship left to go cold."
 - **No CTA, no image.** Just the statement.
@@ -77,17 +77,17 @@ Drawn from the MDS email palette already used in Activate:
   - "~70%" / "CRM adoption failure in professional services"
   - "0" / "systematic relationship monitoring today"
 
-### Section 3: Design Principles — "How Activate Thinks"
+### Section 3: Design Principles — "How ClientIQ Thinks"
 
 - **Background:** Light Grey (`#F5F5F5`).
 - **Section label:** "DESIGN PRINCIPLES"
 - **6 principle cards** in a vertical list, each with a bold Georgia heading and one-sentence explanation:
 
 1. **Zero-Effort Value** — Every interaction must deliver more than it asks. The morning briefing email is the proof: open it, read it, tap send. Done.
-2. **Push Beats Pull** — The existing CRM failed because it waited for Partners to come to it. Activate goes to the Partner. Email first, notification second, app third.
+2. **Push Beats Pull** — The existing CRM failed because it waited for Partners to come to it. ClientIQ goes to the Partner. Email first, notification second, app third.
 3. **Insights Over Data** — Partners don't want a table of interactions. They want a story: who to contact, why now, and a draft ready to send. Context, not columns.
 4. **One Contact, One Truth** — Contact 360 is the canonical view. Every surface — dashboard, chat, email, mobile — draws from the same intelligence graph.
-5. **The System Thinks, The Partner Decides** — Activate recommends, drafts, sequences, and surfaces signals. The Partner retains full control. All AI content is presented as a draft for human review.
+5. **The System Thinks, The Partner Decides** — ClientIQ recommends, drafts, sequences, and surfaces signals. The Partner retains full control. All AI content is presented as a draft for human review.
 6. **Proper Visibility** — Information is scoped to what each Partner should see. Sensitive relationship data, coverage maps, and client intelligence respect firm access boundaries. No one sees what they shouldn't.
 
 ### Section 4: Capabilities — "Five Pillars"
@@ -110,17 +110,17 @@ Drawn from the MDS email palette already used in Activate:
 
 5. **Multi-Channel Access** — Desktop dashboard with full-featured web application. Mobile conversational interface: chat-first design where the briefing is the homepage. Email: morning briefings, mini-360 snippets, and shareable dossiers delivered directly to the inbox. Primary value requires no app login.
 
-### Section 5: Use Cases — "A Day with Activate"
+### Section 5: Use Cases — "A Day with ClientIQ"
 
 - **Background:** Light Grey (`#F5F5F5`).
 - **Section label:** "USE CASES"
 - **4 scenario cards**, each a short narrative (2-3 sentences) with a bold scenario title:
 
-1. **The Morning Briefing** — A Partner opens their email over morning coffee. Activate tells them: top contacts to reach out to today with reasons, upcoming meetings with context, and client news they should know about. They tap "send" on a pre-drafted note to a contact they haven't spoken to in 3 weeks. No CRM login required.
+1. **The Morning Briefing** — A Partner opens their email over morning coffee. ClientIQ tells them: top contacts to reach out to today with reasons, upcoming meetings with context, and client news they should know about. They tap "send" on a pre-drafted note to a contact they haven't spoken to in 3 weeks. No CRM login required.
 
 2. **Pre-Meeting Intelligence** — A Partner has a client meeting in 30 minutes. They open Contact 360 on their phone: a 7-section dossier covering background, relationship history, firm connections, recent news, and AI-generated talking points. They walk in prepared. The contact notices.
 
-3. **"Ask Anything"** — A Partner remembers a contact but can't recall the details. They open the chat and ask "What's the latest with Sarah Chen?" Activate returns a Quick 360: insight summary, talking points, and quick actions. They tap "Draft Email" and a context-aware message is generated. No page navigation.
+3. **"Ask Anything"** — A Partner remembers a contact but can't recall the details. They open the chat and ask "What's the latest with Sarah Chen?" ClientIQ returns a Quick 360: insight summary, talking points, and quick actions. They tap "Draft Email" and a context-aware message is generated. No page navigation.
 
 4. **Automated Cadence** — A Partner initiated outreach to a prospect 5 days ago with no response. The cadence engine generates a follow-up with a different angle. If the contact responds, the sequence pauses. If no response after 3 touches, it escalates with a suggested warm introduction. The Partner never has to remember to follow up.
 
@@ -130,18 +130,18 @@ Drawn from the MDS email palette already used in Activate:
 - **Section label:** "DELIVERY CHANNELS"
 - **Horizontal flow diagram** (pure CSS — boxes connected by lines/arrows):
   - **Email** (primary, largest box, Electric Blue border) → **Notification** → **Desktop Web** → **Mobile Chat**
-- **Body paragraph below the diagram:** "Primary value is push-based. The morning briefing and nudge notifications require no app login. The web dashboard and mobile interface are power surfaces for Partners who want to go deeper. Activate goes to the Partner — the Partner never has to come to Activate."
+- **Body paragraph below the diagram:** "Primary value is push-based. The morning briefing and nudge notifications require no app login. The web dashboard and mobile interface are power surfaces for Partners who want to go deeper. ClientIQ goes to the Partner — the Partner never has to come to ClientIQ."
 
-### Section 7: The Delta — "Status Quo vs. Activate"
+### Section 7: The Delta — "Status Quo vs. ClientIQ"
 
 - **Background:** Light Grey (`#F5F5F5`).
 - **Section label:** "THE DIFFERENCE"
 - **Comparison grid** (CSS grid, no images):
   - Left column header: "Status Quo" (muted text)
-  - Right column header: "With Activate" (Electric Blue left-border accent)
+  - Right column header: "With ClientIQ" (Electric Blue left-border accent)
   - Rows:
 
-| Dimension | Status Quo | With Activate |
+| Dimension | Status Quo | With ClientIQ |
 |-----------|-----------|---------------|
 | Meeting prep | Manual research across 5+ isolated tools | Single Contact 360 briefing with talking points |
 | Relationship monitoring | Reactive — notice when it's too late | Proactive — nudged before it goes cold |
@@ -153,15 +153,15 @@ Drawn from the MDS email palette already used in Activate:
 ### Section 8: Closing — "The Assignment"
 
 - **Background:** Deep Blue (`#051C2C`), full-width (mirrors hero).
-- **Centered text (white, Georgia, ~28px):** "Activate is ready for one Partner to start using it daily. The question is not whether this should exist. The question is who goes first."
-- **Below:** "Activate" wordmark centered, white, ~16px, with generous bottom padding.
+- **Centered text (white, Georgia, ~28px):** "ClientIQ is ready for one Partner to start using it daily. The question is not whether this should exist. The question is who goes first."
+- **Below:** "ClientIQ" wordmark centered, white, ~16px, with generous bottom padding.
 
 ## 5. Technical Spec
 
 ### Project Structure
 
 ```
-activate-landing/
+clientiq-landing/
 ├── index.html          # Single HTML file with all content
 ├── styles.css          # All styles (could be inlined, but separate for maintainability)
 ├── script.js           # IntersectionObserver for scroll animations (~20 lines)
